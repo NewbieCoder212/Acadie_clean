@@ -176,9 +176,10 @@ export default function ManagerDashboard() {
     setIsCheckingAuth(false);
   };
 
-  // Generate QR code URL
+  // Generate QR code URL - uses environment variable for production URL
   const getLocationUrl = (locationId: string) => {
-    return `https://acadia-clean.vibecode.app/scan/${locationId}`;
+    const baseUrl = process.env.EXPO_PUBLIC_APP_URL || 'https://acadia-clean.vibecode.app';
+    return `${baseUrl}/washroom/${locationId}`;
   };
 
   // Fetch data when authenticated
