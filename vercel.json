@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/washroom/:id",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/scan/:id",
+      "destination": "/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
