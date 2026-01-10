@@ -37,6 +37,9 @@ import {
   getLogsForBusiness,
   getIssuesForBusiness,
   insertLocation,
+  insertWashroom,
+  getWashroomsForBusiness,
+  WashroomRow,
 } from '@/lib/supabase';
 
 const COLORS = {
@@ -59,7 +62,7 @@ export default function BusinessDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [business, setBusiness] = useState<BusinessRow | null>(null);
-  const [locations, setLocations] = useState<LocationRow[]>([]);
+  const [washrooms, setWashrooms] = useState<WashroomRow[]>([]);
   const [allLogs, setAllLogs] = useState<CleaningLogRow[]>([]);
   const [allIssues, setAllIssues] = useState<ReportedIssueRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -84,13 +87,13 @@ export default function BusinessDetailScreen() {
         const foundBusiness = businessesResult.data.find(b => b.id === id);
         if (foundBusiness) {
           setBusiness(foundBusiness);
-        }
-      }
 
-      // Get locations for this business
-      const locationsResult = await getLocationsForBusiness(id!);
-      if (locationsResult.success && locationsResult.data) {
-        setLocations(locationsResult.data);
+          // Get washrooms for this business using business name
+          const washroomsResult = await getWashroomsForBusiness(foundBusiness.name);
+          if (washroomsResult.success && washroomsResult.data) {
+            setWashrooms(washroomsResult.data);
+          }
+        }
       }
 
       // Get logs for this business (all locations)
@@ -118,17 +121,18 @@ export default function BusinessDetailScreen() {
   const generatePin = () => Math.floor(1000 + Math.random() * 9000).toString();
 
   const handleAddLocation = async () => {
-    if (!newLocationName.trim()) {
+    if (!newLocationName.trim() || !business) {
       Alert.alert('Error', 'Please enter a location name');
       return;
     }
 
     setIsCreating(true);
     try {
-      const result = await insertLocation({
+      // Insert into washrooms table (not locations table)
+      const result = await insertWashroom({
         id: generateId(),
-        business_id: id!,
-        name: newLocationName.trim(),
+        business_name: business.name,
+        room_name: newLocationName.trim(),
         pin_code: generatePin(),
       });
 
@@ -136,7 +140,7 @@ export default function BusinessDetailScreen() {
         setShowAddModal(false);
         setNewLocationName('');
         loadData();
-        Alert.alert('Success', 'Location created successfully');
+        Alert.alert('Success', 'Washroom location created successfully');
       } else {
         Alert.alert('Error', result.error || 'Failed to create location');
       }
@@ -241,7 +245,7 @@ export default function BusinessDetailScreen() {
             >
               <MapPin size={24} color={COLORS.primary} />
               <Text className="text-3xl font-bold mt-2" style={{ color: COLORS.textDark }}>
-                {locations.length}
+                {washrooms.length}
               </Text>
               <Text className="text-sm" style={{ color: COLORS.textMuted }}>
                 Locations
@@ -287,7 +291,7 @@ export default function BusinessDetailScreen() {
             >
               <Plus size={20} color={COLORS.white} />
               <Text className="font-bold ml-2" style={{ color: COLORS.white }}>
-                Add Location
+                Add Washroom Location
               </Text>
             </Pressable>
           </Animated.View>
@@ -298,20 +302,20 @@ export default function BusinessDetailScreen() {
               className="text-lg font-bold mb-3"
               style={{ color: COLORS.textDark }}
             >
-              Locations
+              Washroom Locations
             </Text>
 
-            {locations.length === 0 ? (
+            {washrooms.length === 0 ? (
               <View
                 className="p-6 rounded-2xl items-center"
                 style={{ backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder }}
               >
                 <MapPin size={48} color={COLORS.textMuted} />
                 <Text className="text-base font-medium mt-3" style={{ color: COLORS.textMuted }}>
-                  No locations yet
+                  No washroom locations yet
                 </Text>
                 <Text className="text-sm text-center mt-1" style={{ color: COLORS.textMuted }}>
-                  Add your first location for this business
+                  Add your first washroom location for this business
                 </Text>
               </View>
             ) : (
@@ -319,12 +323,12 @@ export default function BusinessDetailScreen() {
                 className="rounded-2xl overflow-hidden"
                 style={{ backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder }}
               >
-                {locations.map((location, index) => (
+                {washrooms.map((washroom, index) => (
                   <View
-                    key={location.id}
+                    key={washroom.id}
                     className="flex-row items-center justify-between p-4"
                     style={{
-                      borderBottomWidth: index < locations.length - 1 ? 1 : 0,
+                      borderBottomWidth: index < washrooms.length - 1 ? 1 : 0,
                       borderBottomColor: COLORS.glassBorder,
                     }}
                   >
@@ -337,17 +341,17 @@ export default function BusinessDetailScreen() {
                       </View>
                       <View className="ml-3 flex-1">
                         <Text className="text-base font-semibold" style={{ color: COLORS.textDark }}>
-                          {location.name}
+                          {washroom.room_name}
                         </Text>
                         <View className="flex-row items-center mt-1">
                           <Text className="text-xs" style={{ color: COLORS.success }}>
-                            {getLogsForLocation(location.id)} logs
+                            {getLogsForLocation(washroom.id)} logs
                           </Text>
-                          {getOpenIssuesForLocation(location.id) > 0 && (
+                          {getOpenIssuesForLocation(washroom.id) > 0 && (
                             <View className="flex-row items-center ml-3">
                               <AlertTriangle size={12} color={COLORS.warning} />
                               <Text className="text-xs ml-1" style={{ color: COLORS.warning }}>
-                                {getOpenIssuesForLocation(location.id)} issues
+                                {getOpenIssuesForLocation(washroom.id)} issues
                               </Text>
                             </View>
                           )}
@@ -355,7 +359,7 @@ export default function BusinessDetailScreen() {
                       </View>
                     </View>
                     <Pressable
-                      onPress={() => handleViewPublicPage(location.id)}
+                      onPress={() => handleViewPublicPage(washroom.id)}
                       className="p-2 rounded-lg active:opacity-70"
                       style={{ backgroundColor: COLORS.primaryLight }}
                     >
@@ -413,7 +417,7 @@ export default function BusinessDetailScreen() {
             >
               <View className="flex-row items-center justify-between mb-6">
                 <Text className="text-xl font-bold" style={{ color: COLORS.textDark }}>
-                  Add Location
+                  Add Washroom Location
                 </Text>
                 <Pressable onPress={() => setShowAddModal(false)} className="p-1">
                   <X size={24} color={COLORS.textMuted} />

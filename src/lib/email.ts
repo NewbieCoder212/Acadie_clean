@@ -5,7 +5,7 @@ const DEFAULT_FROM_EMAIL = 'Acadia Clean <onboarding@resend.dev>';
 const RESEND_TEST_EMAIL = 'microsaasnb@proton.me';
 
 // Base URL for email links - uses environment variable for production
-const BASE_URL = process.env.EXPO_PUBLIC_APP_URL || 'https://acadieclean.vercel.app';
+const BASE_URL = process.env.EXPO_PUBLIC_APP_URL || 'https://acadiacleaniq.vercel.app';
 
 // Debug log to verify key is loaded (remove in production)
 if (__DEV__) {

@@ -178,7 +178,7 @@ export default function ManagerDashboard() {
 
   // Generate QR code URL - uses environment variable for production URL
   const getLocationUrl = (locationId: string) => {
-    const baseUrl = process.env.EXPO_PUBLIC_APP_URL || 'https://acadieclean.vercel.app';
+    const baseUrl = process.env.EXPO_PUBLIC_APP_URL || 'https://acadiacleaniq.vercel.app';
     return `${baseUrl}/washroom/${locationId}`;
   };
 
@@ -756,20 +756,25 @@ export default function ManagerDashboard() {
             >
               <Plus size={16} color="#ffffff" />
               <View className="ml-1">
-                <Text className="text-white font-medium text-xs">Add Location</Text>
+                <Text className="text-white font-medium text-xs">Add Washroom</Text>
                 <Text className="text-white/80 text-[10px]">Ajouter un emplacement</Text>
               </View>
             </Pressable>
           </View>
 
           <View className="items-center py-4">
-            <Image
-              source={require('../../assets/image-1767959752.png')}
-              style={{ width: 80, height: 80 }}
-              resizeMode="contain"
-            />
+            <View
+              className="rounded-2xl p-3"
+              style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+            >
+              <Image
+                source={require('../../assets/image-1767959752.png')}
+                style={{ width: 100, height: 100 }}
+                resizeMode="contain"
+              />
+            </View>
             <Text
-              className="text-2xl font-black text-center mt-1"
+              className="text-2xl font-black text-center mt-3"
               style={{ color: COLORS.white, letterSpacing: 0.5 }}
             >
               {currentBusiness?.name || 'Acadia Clean'}
@@ -795,7 +800,7 @@ export default function ManagerDashboard() {
             >
               <MapPin size={40} color={COLORS.slate400} />
               <Text className="text-base text-center mt-3" style={{ color: COLORS.slate500 }}>
-                No locations yet. Tap "Add Location" to create your first.
+                No washroom locations yet. Tap "Add Washroom" to create your first.
               </Text>
               <Text className="text-sm text-center mt-1" style={{ color: COLORS.slate400 }}>
                 Aucun emplacement. Appuyez sur "Ajouter un emplacement" pour créer le premier.
