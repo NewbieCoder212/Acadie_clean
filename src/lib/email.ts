@@ -4,9 +4,8 @@ const DEFAULT_FROM_EMAIL = 'Acadia Clean <onboarding@resend.dev>';
 // For testing with unverified domain, emails can only go to this address
 const RESEND_TEST_EMAIL = 'microsaasnb@proton.me';
 
-// Base URL for email links - change this when pointing to a custom domain
-// e.g., 'https://dashboard.acadiaclean.ca'
-const BASE_URL = 'https://acadia-clean.vibecode.app';
+// Base URL for email links - uses environment variable for production
+const BASE_URL = process.env.EXPO_PUBLIC_APP_URL || 'https://acadieclean.vercel.app';
 
 // Debug log to verify key is loaded (remove in production)
 if (__DEV__) {
