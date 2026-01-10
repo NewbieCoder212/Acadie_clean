@@ -812,7 +812,7 @@ export default function ManagerDashboard() {
                 const status = getLocationStatus(location.id);
                 const statusColor = status === 'clean' ? COLORS.primary : status === 'attention' ? COLORS.amber : COLORS.slate400;
                 const statusBg = status === 'clean' ? COLORS.primaryLight : status === 'attention' ? COLORS.amberLight : COLORS.slate100;
-                const statusText = status === 'clean' ? 'CLEAN' : status === 'attention' ? 'ATTENTION' : 'NO DATA';
+                const statusText = status === 'clean' ? 'CLEAN' : status === 'attention' ? 'ATTENTION REQUIRED' : 'NO DATA';
 
                 return (
                   <Pressable
@@ -865,6 +865,12 @@ export default function ManagerDashboard() {
                         style={{ color: statusColor }}
                       >
                         {statusText}
+                      </Text>
+                      <Text
+                        className="text-[10px]"
+                        style={{ color: statusColor }}
+                      >
+                        {status === 'clean' ? 'Propre' : status === 'attention' ? 'Attention requise' : 'Pas de données'}
                       </Text>
                     </View>
                   </Pressable>
@@ -939,7 +945,7 @@ export default function ManagerDashboard() {
                     <View className="items-end">
                       {needsAttention ? (
                         <>
-                          <Text className="text-xs font-bold" style={{ color: COLORS.amber }}>ATTENTION</Text>
+                          <Text className="text-xs font-bold" style={{ color: COLORS.amber }}>ATTENTION REQUIRED</Text>
                           <Text className="text-[10px]" style={{ color: COLORS.amber }}>Attention requise</Text>
                         </>
                       ) : (

@@ -368,8 +368,9 @@ export default function WashroomPublicScreen() {
       const insertedIssueId = supabaseResult.data?.id;
 
       // Send email notification with issueId for deep linking
+      // Note: With unverified Resend domain, emails only go to test email (microsaasnb@proton.me)
       const result = await sendIssueReportEmail({
-        to: 'sportsfansummer@hotmail.com',
+        to: 'microsaasnb@proton.me', // Will be overridden to test email until domain is verified
         locationName: location?.name || 'Unknown Location',
         locationId: id || '',
         issueType: selectedIssueType,
