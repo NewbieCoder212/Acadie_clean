@@ -71,6 +71,7 @@ export default function BusinessDetailScreen() {
 
   // New location form
   const [newLocationName, setNewLocationName] = useState('');
+  const [newLocationPin, setNewLocationPin] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -117,12 +118,14 @@ export default function BusinessDetailScreen() {
   // Generate a unique ID
   const generateId = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
 
-  // Generate a random 4-digit PIN
-  const generatePin = () => Math.floor(1000 + Math.random() * 9000).toString();
-
   const handleAddLocation = async () => {
     if (!newLocationName.trim() || !business) {
       Alert.alert('Error', 'Please enter a location name');
+      return;
+    }
+
+    if (!newLocationPin || newLocationPin.length !== 4 || !/^\d{4}$/.test(newLocationPin)) {
+      Alert.alert('Error', 'Please enter a valid 4-digit PIN');
       return;
     }
 
@@ -133,14 +136,15 @@ export default function BusinessDetailScreen() {
         id: generateId(),
         business_name: business.name,
         room_name: newLocationName.trim(),
-        pin_code: generatePin(),
+        pin_code: newLocationPin,
       });
 
       if (result.success) {
         setShowAddModal(false);
         setNewLocationName('');
+        setNewLocationPin('');
         loadData();
-        Alert.alert('Success', 'Washroom location created successfully');
+        Alert.alert('Success', `Washroom "${newLocationName.trim()}" created with PIN: ${newLocationPin}`);
       } else {
         Alert.alert('Error', result.error || 'Failed to create location');
       }
@@ -160,7 +164,7 @@ export default function BusinessDetailScreen() {
   };
 
   const handleViewPublicPage = (locationId: string) => {
-    router.push(`/washroom/${locationId}`);
+    router.push(`/washroom/${locationId}?admin=true`);
   };
 
   const todayLogs = allLogs.filter(log => {
@@ -424,7 +428,7 @@ export default function BusinessDetailScreen() {
                 </Pressable>
               </View>
 
-              <View className="mb-6">
+              <View className="mb-4">
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                   Location Name
                 </Text>
@@ -440,6 +444,30 @@ export default function BusinessDetailScreen() {
                     color: COLORS.textDark,
                   }}
                 />
+              </View>
+
+              <View className="mb-6">
+                <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
+                  Staff PIN (4 digits)
+                </Text>
+                <TextInput
+                  value={newLocationPin}
+                  onChangeText={(text) => setNewLocationPin(text.replace(/[^0-9]/g, '').slice(0, 4))}
+                  placeholder="e.g., 1234"
+                  placeholderTextColor={COLORS.textMuted}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                  className="rounded-xl px-4 py-3"
+                  style={{
+                    backgroundColor: COLORS.primaryLight,
+                    fontSize: 16,
+                    color: COLORS.textDark,
+                    letterSpacing: 8,
+                  }}
+                />
+                <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                  Staff will use this PIN to submit cleaning logs
+                </Text>
               </View>
 
               <Pressable

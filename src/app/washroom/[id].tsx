@@ -114,8 +114,9 @@ const TIMELINE_ITEMS = [
 ];
 
 export default function WashroomPublicScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, admin } = useLocalSearchParams<{ id: string; admin?: string }>();
   const router = useRouter();
+  const isAdminView = admin === 'true';
   const [showSuccess, setShowSuccess] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
@@ -297,8 +298,12 @@ export default function WashroomPublicScreen() {
       withSpring(0.95, { damping: 10 }),
       withSpring(1, { damping: 10 })
     );
-    // Always require PIN for staff access - prevents public from accidentally logging
-    setShowPinModal(true);
+    // Skip PIN for admin users, require for regular staff access
+    if (isAdminView) {
+      setShowChecklist(true);
+    } else {
+      setShowPinModal(true);
+    }
   };
 
   const handlePinSubmit = async () => {

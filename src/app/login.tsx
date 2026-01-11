@@ -20,8 +20,8 @@ import { loginBusiness } from '@/lib/supabase';
 const COLORS = {
   primary: '#10b981',
   primaryDark: '#059669',
-  background: '#f0fdf4',
-  backgroundLight: '#dcfce7',
+  background: '#e8f5e9',
+  backgroundLight: '#c8e6c9',
   white: '#ffffff',
   textDark: '#064e3b',
   textMuted: '#6b7280',

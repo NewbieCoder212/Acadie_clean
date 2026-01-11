@@ -484,7 +484,16 @@ export default function ManagerDashboard() {
     setIsGeneratingReport(true);
 
     try {
-      const result = await getLogsForDateRange(auditStartDate, auditEndDate);
+      // Ensure dates have proper time boundaries
+      const startDate = new Date(auditStartDate);
+      startDate.setHours(0, 0, 0, 0);
+
+      const endDate = new Date(auditEndDate);
+      endDate.setHours(23, 59, 59, 999);
+
+      console.log('[Manager] Generating report for date range:', startDate.toISOString(), 'to', endDate.toISOString());
+
+      const result = await getLogsForDateRange(startDate, endDate);
       if (!result.success || !result.data || result.data.length === 0) {
         Alert.alert('No Data', 'No cleaning logs found for the selected date range');
         setIsGeneratingReport(false);
@@ -608,7 +617,8 @@ export default function ManagerDashboard() {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf' });
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to generate PDF report');
+      console.error('[Manager] PDF generation error:', error);
+      Alert.alert('Error / Erreur', 'Failed to generate PDF report. Please try again. / Échec de la génération du rapport PDF. Veuillez réessayer.');
     } finally {
       setIsGeneratingReport(false);
     }
@@ -1408,10 +1418,14 @@ export default function ManagerDashboard() {
               <DateTimePicker
                 value={auditStartDate}
                 mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={(_, date) => {
-                  if (Platform.OS === 'android') setShowStartPicker(false);
-                  if (date) setAuditStartDate(date);
+                display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
+                onChange={(event, date) => {
+                  if (Platform.OS === 'android') {
+                    setShowStartPicker(false);
+                  }
+                  if (date && event.type !== 'dismissed') {
+                    setAuditStartDate(date);
+                  }
                 }}
                 maximumDate={auditEndDate}
                 style={{ height: 200, width: '100%' }}
@@ -1435,10 +1449,14 @@ export default function ManagerDashboard() {
               <DateTimePicker
                 value={auditEndDate}
                 mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={(_, date) => {
-                  if (Platform.OS === 'android') setShowEndPicker(false);
-                  if (date) setAuditEndDate(date);
+                display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
+                onChange={(event, date) => {
+                  if (Platform.OS === 'android') {
+                    setShowEndPicker(false);
+                  }
+                  if (date && event.type !== 'dismissed') {
+                    setAuditEndDate(date);
+                  }
                 }}
                 minimumDate={auditStartDate}
                 maximumDate={new Date()}

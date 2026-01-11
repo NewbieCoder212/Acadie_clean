@@ -701,6 +701,7 @@ export interface BusinessRow {
   email: string;
   password_hash: string;
   is_admin: boolean;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -709,6 +710,7 @@ export interface InsertBusiness {
   email: string;
   password: string;
   is_admin?: boolean;
+  is_active?: boolean;
 }
 
 // Insert a new business
@@ -723,6 +725,7 @@ export async function insertBusiness(business: InsertBusiness): Promise<{ succes
         email: business.email.toLowerCase(),
         password_hash: business.password, // Simple password for now
         is_admin: business.is_admin ?? false,
+        is_active: business.is_active ?? true,
         created_at: new Date().toISOString(),
       }])
       .select()
@@ -754,10 +757,16 @@ export async function loginBusiness(email: string, password: string): Promise<{ 
 
     if (error) {
       if (error.code === 'PGRST116') {
-        return { success: false, error: 'Invalid email or password' };
+        return { success: false, error: 'Invalid email or password / Courriel ou mot de passe invalide' };
       }
       console.error('[Supabase] Login error:', error);
       return { success: false, error: error.message };
+    }
+
+    // Check if business is active
+    if (data && data.is_active === false) {
+      console.log('[Supabase] Business account is deactivated:', data.name);
+      return { success: false, error: 'Your account has been deactivated. Please contact support. / Votre compte a été désactivé. Veuillez contacter le support.' };
     }
 
     console.log('[Supabase] Login successful:', data?.name);
@@ -1023,6 +1032,28 @@ export async function resolveReportedIssue(issueId: string): Promise<{ success: 
     return { success: true };
   } catch (error) {
     console.error('[Supabase] Resolve issue exception:', error);
+    return { success: false, error: String(error) };
+  }
+}
+
+// Toggle business active status (admin only)
+export async function toggleBusinessActive(businessId: string, isActive: boolean): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log('[Supabase] Toggling business active status:', businessId, 'to', isActive);
+    const { error } = await supabase
+      .from('businesses')
+      .update({ is_active: isActive })
+      .eq('id', businessId);
+
+    if (error) {
+      console.error('[Supabase] Toggle business active error:', error);
+      return { success: false, error: error.message };
+    }
+
+    console.log('[Supabase] Business active status updated successfully:', businessId);
+    return { success: true };
+  } catch (error) {
+    console.error('[Supabase] Toggle business active exception:', error);
     return { success: false, error: String(error) };
   }
 }

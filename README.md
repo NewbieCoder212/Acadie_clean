@@ -164,6 +164,15 @@ Data is persisted using **Supabase** cloud database. The app uses two tables:
 
 **Note**: Location settings are stored both locally and in Supabase for redundancy.
 
+### businesses table
+- `id` - Unique identifier
+- `name` - Business name
+- `email` - Business email address (for login)
+- `password_hash` - Hashed password for authentication
+- `is_admin` - Boolean flag for admin access
+- `is_active` - Boolean flag to enable/disable business access (when false, business cannot log in but data is preserved)
+- `created_at` - Record creation timestamp
+
 ### Supabase Setup
 
 The app connects to Supabase at:
