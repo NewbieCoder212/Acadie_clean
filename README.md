@@ -1,6 +1,18 @@
-# Acadia Clean
+# Acadia Clean IQ
 
 A mobile-first washroom cleaning compliance tracking app for business owners and their staff.
+
+## Brand Colors
+
+The app uses a consistent color palette across all screens:
+
+| Color | Hex | Usage |
+|-------|-----|-------|
+| Mint Background | `#F0FFF7` | Main background for all screens |
+| Dark Emerald | `#065F46` | Headers, primary admin buttons, "Acadia" logo text |
+| Action Green | `#10B981` | User action buttons (Sign In, Complete Cleaning, Submit) |
+| Text Primary | `#064E3B` | High-contrast text (HIG compliant) |
+| Error Red | `#EF4444` | Error states, issue reporting borders |
 
 ## Features
 
@@ -48,6 +60,9 @@ A mobile-first washroom cleaning compliance tracking app for business owners and
 
 ## Design
 
+- **Consistent Brand Identity**: All screens use the same color palette (Mint background #F0FFF7, Dark Emerald #065F46 for headers, Action Green #10B981 for user buttons)
+- **Reusable Header Component**: `AppHeader` component with centered Acadia Clean IQ logo, radial gradient (#CFFFE5 to #F0FFF7), bilingual navigation labels
+- **Custom Logo**: SVG logo featuring a QR code pattern with a water drop containing a white checkmark. "Acadia" in Dark Emerald, "Clean IQ" in Action Green
 - **Lightweight Public QR Landing Page**: Optimized for fast loading in low-bandwidth environments (e.g., restrooms with poor Wi-Fi)
   - No heavy animations or gradients
   - Minimal JavaScript bundle
@@ -55,14 +70,16 @@ A mobile-first washroom cleaning compliance tracking app for business owners and
   - Simple solid backgrounds instead of LinearGradient
   - Reduced icon imports
 - **Hero Status Display**: Large, bold status text (CLEAN/PROPRE) as the primary visual element
-- **Mint & Emerald color palette**: Fresh, clean aesthetic
+- **Consistent Card Design**: All cards have 12-16px border-radius and soft shadows for depth
 - **Status indicators**:
   - Green "CLEAN/PROPRE": Complete cleanings with simple checkmark icon
   - Yellow "ATTENTION/REQUISE": Attention Required cleanings (not yet resolved)
+- **Report Issue Modal**: White card with red border (#EF4444), bilingual Submit button in Action Green (#10B981), text input for issue description, photo upload button in Dark Emerald (#065F46)
+- **Recent Cleaning Logs Table**: Clean table layout with Dark Emerald header, Location and Status clearly separated, mint background for Compliant rows, gray for Empty states
 - **Public Actions**: Compact "Report an Issue" button (red) for visitors to report problems
 - **Staff-Only Access**: Subtle "Staff Only" button that always requires PIN to access cleaning log
 - **Compliance badge**: "Compliance Verified / Conformité vérifiée" badge at the bottom of every public page
-- **Powered by footer**: "Powered by Acadia Clean" pinned at the bottom
+- **Powered by footer**: "Powered by Acadia Clean IQ" pinned at the bottom
 - **Bilingual (EN/FR)**: All text displayed in English first, French second
 
 ## Business Portal Dashboard Features

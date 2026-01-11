@@ -8,6 +8,7 @@ import {
   Modal,
   TextInput,
   Alert,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,6 +25,7 @@ import {
   AlertTriangle,
   X,
   Check,
+  Power,
 } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -34,7 +36,10 @@ import {
   getOpenReportedIssues,
   insertBusiness,
   getAllLocations,
+  getAllWashrooms,
+  toggleBusinessActive,
   LocationRow,
+  WashroomRow,
   CleaningLogRow,
   ReportedIssueRow,
 } from '@/lib/supabase';
@@ -69,6 +74,7 @@ export default function AdminDashboardScreen() {
   const [currentAdmin, setCurrentAdmin] = useState<BusinessRow | null>(null);
   const [businesses, setBusinesses] = useState<BusinessRow[]>([]);
   const [locations, setLocations] = useState<LocationRow[]>([]);
+  const [washrooms, setWashrooms] = useState<WashroomRow[]>([]);
   const [logs, setLogs] = useState<CleaningLogRow[]>([]);
   const [issues, setIssues] = useState<ReportedIssueRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -105,9 +111,10 @@ export default function AdminDashboardScreen() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [businessesResult, locationsResult, logsResult, issuesResult] = await Promise.all([
+      const [businessesResult, locationsResult, washroomsResult, logsResult, issuesResult] = await Promise.all([
         getAllBusinesses(),
         getAllLocations(),
+        getAllWashrooms(),
         getAllLogs(),
         getOpenReportedIssues(),
       ]);
@@ -117,6 +124,9 @@ export default function AdminDashboardScreen() {
       }
       if (locationsResult.success) {
         setLocations(locationsResult.data ?? []);
+      }
+      if (washroomsResult.success) {
+        setWashrooms(washroomsResult.data ?? []);
       }
       if (logsResult.success) {
         setLogs(logsResult.data ?? []);
@@ -194,8 +204,37 @@ export default function AdminDashboardScreen() {
     );
   };
 
-  const getLocationCountForBusiness = (businessId: string) => {
-    return locations.filter(loc => loc.business_id === businessId).length;
+  const handleToggleBusinessActive = async (business: BusinessRow) => {
+    const newStatus = !business.is_active;
+    const actionText = newStatus ? 'enable' : 'disable';
+
+    Alert.alert(
+      `${newStatus ? 'Enable' : 'Disable'} Business`,
+      `Are you sure you want to ${actionText} "${business.name}"? ${!newStatus ? 'They will not be able to log in.' : 'They will be able to log in again.'}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: newStatus ? 'Enable' : 'Disable',
+          style: newStatus ? 'default' : 'destructive',
+          onPress: async () => {
+            const result = await toggleBusinessActive(business.id, newStatus);
+            if (result.success) {
+              await loadData();
+            } else {
+              Alert.alert('Error', result.error || 'Failed to update business status');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const getLocationCountForBusiness = (business: BusinessRow) => {
+    // Count locations linked by business_id
+    const locationCount = locations.filter(loc => loc.business_id === business.id).length;
+    // Count washrooms linked by business_name
+    const washroomCount = washrooms.filter(w => w.business_name === business.name).length;
+    return locationCount + washroomCount;
   };
 
   const openIssueCount = issues.filter(i => i.status === 'open').length;
@@ -323,12 +362,17 @@ export default function AdminDashboardScreen() {
 
           {/* Businesses List */}
           <Animated.View entering={FadeInDown.delay(200).duration(400)}>
-            <Text
-              className="text-lg font-bold mb-3"
-              style={{ color: COLORS.textDark }}
-            >
-              Businesses
-            </Text>
+            <View className="flex-row items-center justify-between mb-3">
+              <Text
+                className="text-lg font-bold"
+                style={{ color: COLORS.textDark }}
+              >
+                Businesses
+              </Text>
+              <Text className="text-xs" style={{ color: COLORS.textMuted }}>
+                Tap switch to enable/disable
+              </Text>
+            </View>
 
             {businesses.length === 0 ? (
               <View
@@ -349,36 +393,81 @@ export default function AdminDashboardScreen() {
                 style={{ backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder }}
               >
                 {businesses.map((business, index) => (
-                  <Pressable
+                  <View
                     key={business.id}
-                    onPress={() => router.push(`/admin/business/${business.id}`)}
-                    className="flex-row items-center justify-between p-4 active:bg-purple-50"
+                    className="p-4"
                     style={{
                       borderBottomWidth: index < businesses.length - 1 ? 1 : 0,
                       borderBottomColor: COLORS.glassBorder,
+                      backgroundColor: business.is_active ? 'transparent' : '#fef2f2',
                     }}
                   >
-                    <View className="flex-row items-center flex-1">
-                      <View
-                        className="w-12 h-12 rounded-xl items-center justify-center"
-                        style={{ backgroundColor: COLORS.primaryLight }}
-                      >
-                        <Building2 size={24} color={COLORS.primary} />
+                    {/* Top row: Business info and toggle */}
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-row items-center flex-1">
+                        <View
+                          className="w-12 h-12 rounded-xl items-center justify-center"
+                          style={{ backgroundColor: business.is_active ? COLORS.primaryLight : '#fee2e2' }}
+                        >
+                          <Building2 size={24} color={business.is_active ? COLORS.primary : COLORS.error} />
+                        </View>
+                        <View className="ml-3 flex-1">
+                          <View className="flex-row items-center">
+                            <Text
+                              className="text-base font-semibold"
+                              style={{
+                                color: business.is_active ? COLORS.textDark : COLORS.textMuted,
+                                textDecorationLine: business.is_active ? 'none' : 'line-through',
+                              }}
+                            >
+                              {business.name}
+                            </Text>
+                          </View>
+                          <Text className="text-sm" style={{ color: COLORS.textMuted }}>
+                            {business.email}
+                          </Text>
+                        </View>
                       </View>
-                      <View className="ml-3 flex-1">
-                        <Text className="text-base font-semibold" style={{ color: COLORS.textDark }}>
-                          {business.name}
-                        </Text>
-                        <Text className="text-sm" style={{ color: COLORS.textMuted }}>
-                          {business.email}
-                        </Text>
-                        <Text className="text-xs mt-1" style={{ color: COLORS.primary }}>
-                          {getLocationCountForBusiness(business.id)} locations
+
+                      {/* Switch Toggle */}
+                      <View className="items-center">
+                        <Switch
+                          value={business.is_active}
+                          onValueChange={() => handleToggleBusinessActive(business)}
+                          trackColor={{ false: '#fca5a5', true: '#86efac' }}
+                          thumbColor={business.is_active ? COLORS.success : COLORS.error}
+                          ios_backgroundColor="#fca5a5"
+                        />
+                        <Text
+                          className="text-xs mt-1 font-medium"
+                          style={{ color: business.is_active ? COLORS.success : COLORS.error }}
+                        >
+                          {business.is_active ? 'Active' : 'Disabled'}
                         </Text>
                       </View>
                     </View>
-                    <ChevronRight size={20} color={COLORS.textMuted} />
-                  </Pressable>
+
+                    {/* Bottom row: Stats and navigate button */}
+                    <View className="flex-row items-center justify-between mt-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
+                      <View className="flex-row items-center">
+                        <MapPin size={14} color={COLORS.textMuted} />
+                        <Text className="text-xs ml-1" style={{ color: COLORS.textMuted }}>
+                          {getLocationCountForBusiness(business)} locations
+                        </Text>
+                      </View>
+
+                      <Pressable
+                        onPress={() => router.push(`/admin/business/${business.id}`)}
+                        className="flex-row items-center px-3 py-2 rounded-lg active:opacity-70"
+                        style={{ backgroundColor: COLORS.primaryLight }}
+                      >
+                        <Text className="text-xs font-semibold mr-1" style={{ color: COLORS.primary }}>
+                          View Details
+                        </Text>
+                        <ChevronRight size={14} color={COLORS.primary} />
+                      </Pressable>
+                    </View>
+                  </View>
                 ))}
               </View>
             )}

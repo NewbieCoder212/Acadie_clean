@@ -58,22 +58,25 @@ import {
 } from '@/lib/supabase';
 import { sendAttentionRequiredEmail, getUncheckedItems, sendIssueReportEmail, ISSUE_TYPES } from '@/lib/email';
 
-// Mint & Emerald color palette
+// Use consistent brand colors
+import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
+
+// Legacy color mapping for backward compatibility
 const COLORS = {
-  mintWhite: '#f0fdf4',
-  mintLight: '#dcfce7',
-  mintMedium: '#bbf7d0',
-  emerald: '#10b981',
-  emeraldDark: '#059669',
-  glass: 'rgba(255, 255, 255, 0.95)',
-  glassBorder: 'rgba(16, 185, 129, 0.2)',
-  textDark: '#064e3b',
-  textMuted: '#6b7280',
-  white: '#ffffff',
-  amber: '#f59e0b',
-  amberLight: '#fef3c7',
-  red: '#dc2626',
-  redLight: '#fef2f2',
+  mintWhite: C.mintBackground,
+  mintLight: C.emeraldLight,
+  mintMedium: C.mintGradientStart,
+  emerald: C.actionGreen,
+  emeraldDark: C.emeraldDark,
+  glass: C.cardBackground,
+  glassBorder: C.borderMedium,
+  textDark: C.textPrimary,
+  textMuted: C.textMuted,
+  white: C.white,
+  amber: C.warning,
+  amberLight: C.warningBg,
+  red: C.error,
+  redLight: C.errorBg,
 };
 
 interface ChecklistState {
@@ -746,7 +749,7 @@ export default function WashroomPublicScreen() {
           )}
         </ScrollView>
 
-        {/* Issue Report Modal */}
+        {/* Issue Report Modal - Redesigned */}
         <Modal
           visible={showIssueModal}
           animationType="fade"
@@ -763,75 +766,84 @@ export default function WashroomPublicScreen() {
             >
               <Pressable
                 className="w-full max-w-sm rounded-2xl p-5"
-                style={{ backgroundColor: COLORS.white }}
+                style={{
+                  backgroundColor: C.white,
+                  borderWidth: 2,
+                  borderColor: C.error,
+                  ...D.shadow.lg,
+                }}
                 onPress={(e) => e.stopPropagation()}
               >
               {issueSuccess ? (
                 <View className="items-center py-6">
                   <View
                     className="w-16 h-16 rounded-full items-center justify-center mb-3"
-                    style={{ backgroundColor: COLORS.mintLight }}
+                    style={{ backgroundColor: C.emeraldLight }}
                   >
-                    <Check size={32} color={COLORS.emerald} strokeWidth={3} />
+                    <Check size={32} color={C.actionGreen} strokeWidth={3} />
                   </View>
-                  <Text className="text-lg font-bold" style={{ color: COLORS.emerald }}>
+                  <Text className="text-lg font-bold" style={{ color: C.actionGreen }}>
                     Report Sent!
                   </Text>
-                  <Text className="text-sm mt-1" style={{ color: COLORS.textMuted }}>
-                    Management notified
+                  <Text className="text-sm" style={{ color: C.textMuted }}>
+                    Rapport envoyé!
+                  </Text>
+                  <Text className="text-sm mt-1" style={{ color: C.textMuted }}>
+                    Management notified / Direction avisée
                   </Text>
                 </View>
               ) : (
                 <>
+                  {/* Header with icon */}
                   <View className="items-center mb-5">
                     <View
                       className="w-14 h-14 rounded-full items-center justify-center mb-2"
-                      style={{ backgroundColor: COLORS.redLight }}
+                      style={{ backgroundColor: C.errorBg, borderWidth: 2, borderColor: C.error }}
                     >
-                      <AlertOctagon size={28} color={COLORS.red} />
+                      <AlertOctagon size={28} color={C.error} />
                     </View>
-                    <Text className="text-lg font-bold" style={{ color: COLORS.textDark }}>
+                    <Text className="text-lg font-bold" style={{ color: C.textPrimary }}>
                       Report an Issue
                     </Text>
-                    <Text className="text-sm" style={{ color: COLORS.textMuted }}>
+                    <Text className="text-sm" style={{ color: C.textMuted }}>
                       Signaler un problème
                     </Text>
                   </View>
 
                   {/* Issue Type Dropdown */}
                   <View className="mb-4">
-                    <Text className="text-sm font-semibold mb-1" style={{ color: COLORS.textDark }}>
+                    <Text className="text-sm font-semibold mb-1" style={{ color: C.textPrimary }}>
                       Issue Type / Type de problème
                     </Text>
                     <Pressable
                       onPress={() => setShowIssueDropdown(!showIssueDropdown)}
                       className="flex-row items-center justify-between py-3 px-3 rounded-xl"
                       style={{
-                        backgroundColor: COLORS.mintWhite,
+                        backgroundColor: C.mintBackground,
                         borderWidth: 1,
-                        borderColor: COLORS.glassBorder,
+                        borderColor: C.borderMedium,
                       }}
                     >
                       <Text
                         style={{
-                          color: selectedIssueType ? COLORS.textDark : COLORS.textMuted,
+                          color: selectedIssueType ? C.textPrimary : C.textMuted,
                           fontSize: 15,
                         }}
                       >
                         {selectedIssueType
                           ? ISSUE_TYPES.find(t => t.value === selectedIssueType)?.label
-                          : 'Select...'}
+                          : 'Select... / Sélectionner...'}
                       </Text>
-                      <ChevronDown size={18} color={COLORS.textMuted} />
+                      <ChevronDown size={18} color={C.textMuted} />
                     </Pressable>
 
                     {showIssueDropdown && (
                       <View
                         className="mt-1 rounded-xl overflow-hidden"
                         style={{
-                          backgroundColor: COLORS.white,
+                          backgroundColor: C.white,
                           borderWidth: 1,
-                          borderColor: COLORS.glassBorder,
+                          borderColor: C.borderMedium,
                         }}
                       >
                         {ISSUE_TYPES.map((issueType, index) => (
@@ -844,13 +856,13 @@ export default function WashroomPublicScreen() {
                             className="py-2.5 px-3 active:bg-emerald-50"
                             style={{
                               borderBottomWidth: index < ISSUE_TYPES.length - 1 ? 1 : 0,
-                              borderBottomColor: COLORS.glassBorder,
-                              backgroundColor: selectedIssueType === issueType.value ? COLORS.mintLight : 'transparent',
+                              borderBottomColor: C.borderLight,
+                              backgroundColor: selectedIssueType === issueType.value ? C.emeraldLight : 'transparent',
                             }}
                           >
                             <Text
                               style={{
-                                color: COLORS.textDark,
+                                color: C.textPrimary,
                                 fontSize: 15,
                                 fontWeight: selectedIssueType === issueType.value ? '600' : '400',
                               }}
@@ -863,40 +875,57 @@ export default function WashroomPublicScreen() {
                     )}
                   </View>
 
-                  {/* Comment Field */}
+                  {/* Comment/Description Field */}
                   <View className="mb-4">
-                    <Text className="text-sm font-semibold mb-1" style={{ color: COLORS.textDark }}>
-                      Comment (optional)
+                    <Text className="text-sm font-semibold mb-1" style={{ color: C.textPrimary }}>
+                      Description (optional)
+                    </Text>
+                    <Text className="text-xs mb-2" style={{ color: C.textMuted }}>
+                      Décrivez le problème...
                     </Text>
                     <TextInput
                       value={issueComment}
                       onChangeText={setIssueComment}
                       placeholder="Describe the issue..."
-                      placeholderTextColor={COLORS.textMuted}
+                      placeholderTextColor={C.textMuted}
                       multiline
-                      numberOfLines={2}
+                      numberOfLines={3}
                       textAlignVertical="top"
                       style={{
-                        backgroundColor: COLORS.mintWhite,
+                        backgroundColor: C.mintBackground,
                         borderWidth: 1,
-                        borderColor: COLORS.glassBorder,
-                        borderRadius: 12,
+                        borderColor: C.borderMedium,
+                        borderRadius: D.borderRadius.md,
                         paddingHorizontal: 12,
                         paddingVertical: 10,
                         fontSize: 15,
-                        color: COLORS.textDark,
-                        minHeight: 60,
+                        color: C.textPrimary,
+                        minHeight: 80,
                       }}
                     />
                   </View>
 
-                  {/* Submit Button */}
+                  {/* Photo Upload Button - Dark Emerald */}
+                  <Pressable
+                    className="flex-row items-center justify-center py-3 rounded-xl mb-4"
+                    style={{
+                      backgroundColor: C.emeraldDark,
+                      borderRadius: D.borderRadius.md,
+                    }}
+                  >
+                    <AlertCircle size={18} color={C.white} />
+                    <Text className="text-sm font-semibold ml-2" style={{ color: C.white }}>
+                      Add Photo (Coming Soon)
+                    </Text>
+                  </Pressable>
+
+                  {/* Submit Button - Action Green */}
                   <Pressable
                     onPress={handleSubmitIssue}
                     disabled={!selectedIssueType || isSubmittingIssue}
                     style={{
-                      backgroundColor: selectedIssueType && !isSubmittingIssue ? COLORS.red : '#cbd5e1',
-                      borderRadius: 12,
+                      backgroundColor: selectedIssueType && !isSubmittingIssue ? C.actionGreen : '#cbd5e1',
+                      borderRadius: D.borderRadius.md,
                       paddingVertical: 14,
                       alignItems: 'center',
                     }}
@@ -904,18 +933,26 @@ export default function WashroomPublicScreen() {
                   >
                     {isSubmittingIssue ? (
                       <View className="flex-row items-center">
-                        <ActivityIndicator size="small" color={COLORS.white} />
-                        <Text className="text-base font-bold ml-2" style={{ color: COLORS.white }}>
-                          Sending...
+                        <ActivityIndicator size="small" color={C.white} />
+                        <Text className="text-base font-bold ml-2" style={{ color: C.white }}>
+                          Sending... / Envoi...
                         </Text>
                       </View>
                     ) : (
-                      <Text
-                        className="text-base font-bold"
-                        style={{ color: selectedIssueType ? COLORS.white : COLORS.textMuted }}
-                      >
-                        Submit / Soumettre
-                      </Text>
+                      <View className="items-center">
+                        <Text
+                          className="text-base font-bold"
+                          style={{ color: selectedIssueType ? C.white : C.textMuted }}
+                        >
+                          Submit Report
+                        </Text>
+                        <Text
+                          className="text-xs"
+                          style={{ color: selectedIssueType ? 'rgba(255,255,255,0.85)' : C.textMuted }}
+                        >
+                          Soumettre le rapport
+                        </Text>
+                      </View>
                     )}
                   </Pressable>
 
@@ -923,8 +960,8 @@ export default function WashroomPublicScreen() {
                     onPress={handleCloseIssueModal}
                     className="py-2.5 mt-2 items-center"
                   >
-                    <Text style={{ color: COLORS.textMuted }} className="font-medium">
-                      Cancel
+                    <Text style={{ color: C.textMuted }} className="font-medium">
+                      Cancel / Annuler
                     </Text>
                   </Pressable>
                 </>

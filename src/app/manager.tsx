@@ -11,7 +11,6 @@ import {
   ActivityIndicator,
   Share,
   Modal,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -38,14 +37,16 @@ import {
   getWashroomsForBusiness,
 } from '@/lib/supabase';
 import { hashPassword, verifyPassword } from '@/lib/password';
+import { AcadiaLogo } from '@/components/AcadiaLogo';
+import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
 
-// Color palette
+// Legacy color mapping for backward compatibility
 const COLORS = {
-  primary: '#059669',
-  primaryLight: '#d1fae5',
-  primaryDark: '#047857',
-  background: '#f8fafc',
-  white: '#ffffff',
+  primary: C.actionGreen,
+  primaryLight: C.emeraldLight,
+  primaryDark: C.emeraldDark,
+  background: C.mintBackground,
+  white: C.white,
   slate50: '#f8fafc',
   slate100: '#f1f5f9',
   slate200: '#e2e8f0',
@@ -54,15 +55,15 @@ const COLORS = {
   slate500: '#64748b',
   slate600: '#475569',
   slate700: '#334155',
-  slate800: '#1e293b',
+  slate800: C.textPrimary,
   slate900: '#0f172a',
-  red: '#dc2626',
-  redLight: '#fef2f2',
-  amber: '#f59e0b',
-  amberLight: '#fef3c7',
+  red: C.error,
+  redLight: C.errorBg,
+  amber: C.warning,
+  amberLight: C.warningBg,
   indigo: '#4f46e5',
   indigoLight: '#e0e7ff',
-  indigoDark: '#312e81',
+  indigoDark: C.emeraldDark,
 };
 
 export default function ManagerDashboard() {
@@ -732,13 +733,13 @@ export default function ManagerDashboard() {
 
   // Main Dashboard
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: COLORS.background }} edges={['top', 'bottom']}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: C.mintBackground }} edges={['top', 'bottom']}>
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        {/* HERO HEADER - Business Name */}
+        {/* HERO HEADER - Business Name with new colors */}
         <Animated.View
           entering={FadeInDown.duration(500)}
           className="px-5 pt-6 pb-4"
-          style={{ backgroundColor: COLORS.primary }}
+          style={{ backgroundColor: C.emeraldDark }}
         >
           <View className="flex-row items-center justify-between mb-4">
             <Pressable
@@ -748,8 +749,8 @@ export default function ManagerDashboard() {
             >
               <LogOut size={16} color="#ffffff" />
               <View>
-                <Text className="text-white font-medium text-xs">Logout</Text>
-                <Text className="text-white/80 text-[10px]">Déconnexion</Text>
+                <Text className="text-white font-medium text-xs ml-1">Logout</Text>
+                <Text className="text-white/80 text-[10px] ml-1">Déconnexion</Text>
               </View>
             </Pressable>
             <Pressable
@@ -767,7 +768,7 @@ export default function ManagerDashboard() {
               <Plus size={16} color="#ffffff" />
               <View className="ml-1">
                 <Text className="text-white font-medium text-xs">Add Washroom</Text>
-                <Text className="text-white/80 text-[10px]">Ajouter un emplacement</Text>
+                <Text className="text-white/80 text-[10px]">Ajouter</Text>
               </View>
             </Pressable>
           </View>
@@ -777,23 +778,19 @@ export default function ManagerDashboard() {
               className="rounded-2xl p-3"
               style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
             >
-              <Image
-                source={require('../../assets/image-1767959752.png')}
-                style={{ width: 100, height: 100 }}
-                resizeMode="contain"
-              />
+              <AcadiaLogo size={80} showText={false} />
             </View>
             <Text
               className="text-2xl font-black text-center mt-3"
-              style={{ color: COLORS.white, letterSpacing: 0.5 }}
+              style={{ color: C.white, letterSpacing: 0.5 }}
             >
-              {currentBusiness?.name || 'Acadia Clean'}
+              {currentBusiness?.name || 'Acadia Clean IQ'}
             </Text>
             <Text
               className="text-sm font-medium mt-1"
               style={{ color: 'rgba(255,255,255,0.8)' }}
             >
-              Business Portal Dashboard
+              Business Portal / Portail d'entreprise
             </Text>
           </View>
         </Animated.View>
@@ -890,80 +887,118 @@ export default function ManagerDashboard() {
           )}
         </Animated.View>
 
-        {/* RECENT CLEANING LOGS */}
+        {/* RECENT CLEANING LOGS - Redesigned Table */}
         <Animated.View
           entering={FadeInDown.delay(200).duration(500)}
           className="px-5 py-4"
         >
           <View className="mb-3">
-            <Text className="text-lg font-bold" style={{ color: COLORS.slate800 }}>
+            <Text className="text-lg font-bold" style={{ color: C.textPrimary }}>
               Recent Cleaning Logs
             </Text>
-            <Text className="text-xs" style={{ color: COLORS.slate400 }}>
+            <Text className="text-xs" style={{ color: C.textMuted }}>
               Journaux de nettoyage récents
             </Text>
           </View>
 
           {isLoadingLogs ? (
             <View className="items-center py-6">
-              <ActivityIndicator size="small" color={COLORS.primary} />
-              <Text className="text-sm mt-2" style={{ color: COLORS.slate500 }}>Loading logs...</Text>
+              <ActivityIndicator size="small" color={C.actionGreen} />
+              <Text className="text-sm mt-2" style={{ color: C.textMuted }}>Loading logs... / Chargement...</Text>
             </View>
           ) : recentLogs.length === 0 ? (
             <View
               className="rounded-xl p-6 items-center"
-              style={{ backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.slate200 }}
+              style={{ backgroundColor: C.emptyBg, borderWidth: 1, borderColor: C.borderLight }}
             >
-              <Text className="text-sm" style={{ color: COLORS.slate500 }}>Empty</Text>
-              <Text className="text-xs" style={{ color: COLORS.slate400 }}>Vide</Text>
+              <Text className="text-sm font-medium" style={{ color: C.textMuted }}>Empty / Vide</Text>
+              <Text className="text-xs mt-1" style={{ color: C.textMuted }}>No cleaning logs yet</Text>
             </View>
           ) : (
             <View
               className="rounded-xl overflow-hidden"
-              style={{ backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.slate200 }}
+              style={{
+                backgroundColor: C.white,
+                borderWidth: 1,
+                borderColor: C.borderMedium,
+                ...D.shadow.sm,
+              }}
             >
+              {/* Table Header */}
+              <View
+                className="flex-row items-center px-4 py-3"
+                style={{ backgroundColor: C.emeraldDark }}
+              >
+                <View className="flex-1">
+                  <Text className="text-xs font-bold" style={{ color: C.white }}>
+                    Location
+                  </Text>
+                </View>
+                <View className="flex-1 items-center">
+                  <Text className="text-xs font-bold" style={{ color: C.white }}>
+                    Staff
+                  </Text>
+                </View>
+                <View style={{ width: 80 }} className="items-end">
+                  <Text className="text-xs font-bold" style={{ color: C.white }}>
+                    Status
+                  </Text>
+                </View>
+              </View>
+
+              {/* Table Rows */}
               {recentLogs.map((log, index) => {
-                const isClean = log.status === 'complete';
+                const isCompliant = log.status === 'complete';
                 const needsAttention = log.status === 'attention_required';
+                const rowBg = isCompliant ? C.successBg : needsAttention ? C.warningBg : C.emptyBg;
+
                 return (
                   <View
                     key={log.id}
-                    className="flex-row items-center p-3"
+                    className="flex-row items-center px-4 py-3"
                     style={{
                       borderBottomWidth: index < recentLogs.length - 1 ? 1 : 0,
-                      borderBottomColor: COLORS.slate100,
+                      borderBottomColor: C.borderLight,
+                      backgroundColor: rowBg,
                     }}
                   >
-                    <View
-                      className="w-8 h-8 rounded-full items-center justify-center mr-3"
-                      style={{ backgroundColor: needsAttention ? COLORS.amberLight : COLORS.primaryLight }}
-                    >
-                      {needsAttention ? (
-                        <AlertTriangle size={16} color={COLORS.amber} />
-                      ) : (
-                        <CheckCircle2 size={16} color={COLORS.primary} />
-                      )}
-                    </View>
+                    {/* Location */}
                     <View className="flex-1">
-                      <Text className="text-sm font-semibold" style={{ color: COLORS.slate800 }}>
+                      <Text
+                        className="text-sm font-semibold"
+                        style={{ color: C.textPrimary }}
+                        numberOfLines={1}
+                      >
                         {log.location_name}
                       </Text>
-                      <Text className="text-xs" style={{ color: COLORS.slate500 }}>
-                        {log.staff_name} • {formatTimeAgo(log.timestamp)}
+                      <Text className="text-[10px]" style={{ color: C.textMuted }}>
+                        {formatTimeAgo(log.timestamp)}
                       </Text>
                     </View>
-                    <View className="items-end">
-                      {needsAttention ? (
-                        <>
-                          <Text className="text-xs font-bold" style={{ color: COLORS.amber }}>ATTENTION REQUIRED</Text>
-                          <Text className="text-[10px]" style={{ color: COLORS.amber }}>Attention requise</Text>
-                        </>
-                      ) : (
-                        <>
-                          <Text className="text-xs font-bold" style={{ color: COLORS.primary }}>CLEAN</Text>
-                          <Text className="text-[10px]" style={{ color: COLORS.primary }}>Propre</Text>
-                        </>
-                      )}
+
+                    {/* Staff */}
+                    <View className="flex-1 items-center">
+                      <Text
+                        className="text-xs font-medium"
+                        style={{ color: C.textPrimary }}
+                        numberOfLines={1}
+                      >
+                        {log.staff_name}
+                      </Text>
+                    </View>
+
+                    {/* Status Badge */}
+                    <View style={{ width: 80 }} className="items-end">
+                      <View
+                        className="px-2 py-1 rounded-full"
+                        style={{
+                          backgroundColor: isCompliant ? C.actionGreen : C.warning,
+                        }}
+                      >
+                        <Text className="text-[10px] font-bold" style={{ color: C.white }}>
+                          {isCompliant ? 'COMPLIANT' : 'ATTENTION'}
+                        </Text>
+                      </View>
                     </View>
                   </View>
                 );
@@ -972,7 +1007,7 @@ export default function ManagerDashboard() {
           )}
         </Animated.View>
 
-        {/* INSPECTOR MODE - At Bottom */}
+        {/* INSPECTOR MODE - Updated colors */}
         <Animated.View
           entering={FadeIn.delay(400).duration(500)}
           className="px-5 py-4 mb-4"
@@ -980,23 +1015,23 @@ export default function ManagerDashboard() {
           <Pressable
             onPress={() => setShowInspectorMode(!showInspectorMode)}
             className="rounded-xl p-4"
-            style={{ backgroundColor: COLORS.indigoDark }}
+            style={{ backgroundColor: C.emeraldDark }}
           >
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center">
-                <ClipboardList size={20} color="#a5b4fc" />
+                <ClipboardList size={20} color={C.emeraldLight} />
                 <View className="ml-2">
                   <Text className="text-base font-semibold text-white">
                     Send to Inspector
                   </Text>
-                  <Text className="text-xs" style={{ color: '#a5b4fc' }}>
+                  <Text className="text-xs" style={{ color: C.emeraldLight }}>
                     Envoyer à l'inspecteur
                   </Text>
                 </View>
               </View>
               <ChevronRight
                 size={20}
-                color="#a5b4fc"
+                color={C.emeraldLight}
                 style={{ transform: [{ rotate: showInspectorMode ? '90deg' : '0deg' }] }}
               />
             </View>
@@ -1004,34 +1039,34 @@ export default function ManagerDashboard() {
             {showInspectorMode && (
               <Pressable onPress={(e) => e.stopPropagation()}>
                 <View className="mt-4">
-                <Text className="text-sm mb-4" style={{ color: '#a5b4fc' }}>
+                <Text className="text-sm mb-4" style={{ color: C.emeraldLight }}>
                   Generate audit reports for NB Department of Health compliance.
                 </Text>
 
                 <View className="mb-3">
-                  <Text className="text-xs font-medium mb-2" style={{ color: '#a5b4fc' }}>
-                    Business Name
+                  <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>
+                    Business Name / Nom de l'entreprise
                   </Text>
                   <TextInput
                     value={businessName}
                     onChangeText={setBusinessName}
                     placeholder="Enter business name"
-                    placeholderTextColor="#818cf8"
+                    placeholderTextColor="rgba(255,255,255,0.5)"
                     className="rounded-lg px-4 py-3 text-base text-white"
-                    style={{ backgroundColor: '#4338ca', borderWidth: 1, borderColor: '#6366f1' }}
+                    style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
                   />
                 </View>
 
                 <View className="flex-row gap-3 mb-4">
                   <View className="flex-1">
-                    <Text className="text-xs font-medium mb-2" style={{ color: '#a5b4fc' }}>Start Date</Text>
+                    <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>Start Date</Text>
                     {Platform.OS === 'web' ? (
                       <input
                         type="date"
                         value={auditStartDate.toISOString().split('T')[0]}
                         onChange={(e) => setAuditStartDate(new Date(e.target.value))}
                         style={{
-                          backgroundColor: '#4338ca', border: '1px solid #6366f1', borderRadius: 8,
+                          backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8,
                           padding: 12, color: '#fff', fontSize: 14, width: '100%',
                         }}
                       />
@@ -1042,9 +1077,9 @@ export default function ManagerDashboard() {
                           setShowStartPicker(true);
                         }}
                         className="flex-row items-center rounded-lg px-4 py-3"
-                        style={{ backgroundColor: '#4338ca', borderWidth: 1, borderColor: '#6366f1' }}
+                        style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
                       >
-                        <Calendar size={16} color="#a5b4fc" />
+                        <Calendar size={16} color={C.emeraldLight} />
                         <Text className="text-white ml-2">
                           {auditStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </Text>
@@ -1052,14 +1087,14 @@ export default function ManagerDashboard() {
                     )}
                   </View>
                   <View className="flex-1">
-                    <Text className="text-xs font-medium mb-2" style={{ color: '#a5b4fc' }}>End Date</Text>
+                    <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>End Date</Text>
                     {Platform.OS === 'web' ? (
                       <input
                         type="date"
                         value={auditEndDate.toISOString().split('T')[0]}
                         onChange={(e) => setAuditEndDate(new Date(e.target.value))}
                         style={{
-                          backgroundColor: '#4338ca', border: '1px solid #6366f1', borderRadius: 8,
+                          backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8,
                           padding: 12, color: '#fff', fontSize: 14, width: '100%',
                         }}
                       />
@@ -1070,9 +1105,9 @@ export default function ManagerDashboard() {
                           setShowEndPicker(true);
                         }}
                         className="flex-row items-center rounded-lg px-4 py-3"
-                        style={{ backgroundColor: '#4338ca', borderWidth: 1, borderColor: '#6366f1' }}
+                        style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
                       >
-                        <Calendar size={16} color="#a5b4fc" />
+                        <Calendar size={16} color={C.emeraldLight} />
                         <Text className="text-white ml-2">
                           {auditEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </Text>
@@ -1085,7 +1120,7 @@ export default function ManagerDashboard() {
                   onPress={generateAuditReportPDF}
                   disabled={isGeneratingReport}
                   className="flex-row items-center justify-center py-4 rounded-lg"
-                  style={{ backgroundColor: '#6366f1' }}
+                  style={{ backgroundColor: C.actionGreen }}
                 >
                   {isGeneratingReport ? (
                     <><ActivityIndicator size="small" color="#fff" /><Text className="text-white font-bold ml-2">Generating...</Text></>
@@ -1106,24 +1141,24 @@ export default function ManagerDashboard() {
         >
           <View
             className="rounded-xl p-4 items-center"
-            style={{ backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.slate200 }}
+            style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.borderMedium }}
           >
             <View className="flex-row items-center">
-              <CheckCircle2 size={14} color={COLORS.primary} />
-              <Text className="text-sm font-semibold ml-1.5" style={{ color: COLORS.primary }}>
+              <CheckCircle2 size={14} color={C.actionGreen} />
+              <Text className="text-sm font-semibold ml-1.5" style={{ color: C.actionGreen }}>
                 Compliance Verified
               </Text>
             </View>
-            <Text className="text-xs mt-0.5" style={{ color: COLORS.slate400 }}>
+            <Text className="text-xs mt-0.5" style={{ color: C.textMuted }}>
               Conformité vérifiée
             </Text>
           </View>
         </Animated.View>
 
-        {/* Powered by Acadia Clean Footer */}
+        {/* Powered by Acadia Clean IQ Footer */}
         <View className="items-center pb-8">
-          <Text className="text-xs" style={{ color: COLORS.slate400 }}>
-            Powered by <Text className="font-semibold" style={{ color: COLORS.primary }}>Acadia Clean</Text>
+          <Text className="text-xs" style={{ color: C.textMuted }}>
+            Powered by <Text className="font-semibold" style={{ color: C.emeraldDark }}>Acadia Clean IQ</Text>
           </Text>
         </View>
       </ScrollView>
