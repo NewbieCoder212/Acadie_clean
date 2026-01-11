@@ -341,7 +341,7 @@ export default function ManagerDashboard() {
   const handleViewPublicPage = (locationId: string) => {
     setSelectedLocationId(null); // Close modal first
     setTimeout(() => {
-      router.push(`/washroom/${locationId}`);
+      router.push(`/washroom/${locationId}?admin=true`);
     }, 100);
   };
 
