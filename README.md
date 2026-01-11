@@ -48,18 +48,22 @@ A mobile-first washroom cleaning compliance tracking app for business owners and
 
 ## Design
 
-- **Public-facing QR landing page**: Clean, modern design optimized for public visitors
+- **Lightweight Public QR Landing Page**: Optimized for fast loading in low-bandwidth environments (e.g., restrooms with poor Wi-Fi)
+  - No heavy animations or gradients
+  - Minimal JavaScript bundle
+  - Essential information displayed immediately
+  - Simple solid backgrounds instead of LinearGradient
+  - Reduced icon imports
 - **Hero Status Display**: Large, bold status text (CLEAN/PROPRE) as the primary visual element
-- **Mint & Emerald color palette**: Fresh, clean aesthetic with glass-effect UI
+- **Mint & Emerald color palette**: Fresh, clean aesthetic
 - **Status indicators**:
-  - Green "CLEAN/PROPRE": Complete cleanings with animated sparkle icon
+  - Green "CLEAN/PROPRE": Complete cleanings with simple checkmark icon
   - Yellow "ATTENTION/REQUISE": Attention Required cleanings (not yet resolved)
-  - "Resolved" label: For attention items that have been addressed
 - **Public Actions**: Compact "Report an Issue" button (red) for visitors to report problems
 - **Staff-Only Access**: Subtle "Staff Only" button that always requires PIN to access cleaning log
 - **Compliance badge**: "Compliance Verified / Conformité vérifiée" badge at the bottom of every public page
 - **Powered by footer**: "Powered by Acadia Clean" pinned at the bottom
-- **Bilingual (EN/FR)**: All text displayed in English first, French second (French text styled slightly smaller)
+- **Bilingual (EN/FR)**: All text displayed in English first, French second
 
 ## Business Portal Dashboard Features
 
