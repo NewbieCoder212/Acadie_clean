@@ -1002,7 +1002,8 @@ export default function ManagerDashboard() {
             </View>
 
             {showInspectorMode && (
-              <View className="mt-4">
+              <Pressable onPress={(e) => e.stopPropagation()}>
+                <View className="mt-4">
                 <Text className="text-sm mb-4" style={{ color: '#a5b4fc' }}>
                   Generate audit reports for NB Department of Health compliance.
                 </Text>
@@ -1036,7 +1037,10 @@ export default function ManagerDashboard() {
                       />
                     ) : (
                       <Pressable
-                        onPress={() => setShowStartPicker(true)}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setShowStartPicker(true);
+                        }}
                         className="flex-row items-center rounded-lg px-4 py-3"
                         style={{ backgroundColor: '#4338ca', borderWidth: 1, borderColor: '#6366f1' }}
                       >
@@ -1061,7 +1065,10 @@ export default function ManagerDashboard() {
                       />
                     ) : (
                       <Pressable
-                        onPress={() => setShowEndPicker(true)}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setShowEndPicker(true);
+                        }}
                         className="flex-row items-center rounded-lg px-4 py-3"
                         style={{ backgroundColor: '#4338ca', borderWidth: 1, borderColor: '#6366f1' }}
                       >
@@ -1087,6 +1094,7 @@ export default function ManagerDashboard() {
                   )}
                 </Pressable>
               </View>
+              </Pressable>
             )}
           </Pressable>
         </Animated.View>
