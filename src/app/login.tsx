@@ -66,11 +66,8 @@ export default function LoginScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={[COLORS.background, COLORS.backgroundLight, COLORS.background]}
-      style={{ flex: 1 }}
-    >
-      <SafeAreaView style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#A8E6CF' }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#A8E6CF' }}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1"
@@ -82,7 +79,7 @@ export default function LoginScreen() {
               className="items-center mb-10"
             >
               <Image
-                source={require('../../assets/image-1767959752.png')}
+                source={require('../../assets/Gemini_Generated_Image_1uvu461uvu461uvu.png')}
                 style={{ width: 160, height: 160 }}
                 resizeMode="contain"
               />
@@ -287,6 +284,6 @@ export default function LoginScreen() {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
