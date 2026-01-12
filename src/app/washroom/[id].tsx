@@ -418,11 +418,8 @@ export default function WashroomPublicScreen() {
 
         if (!emailResult.success) {
           console.log('[Email] Alert failed:', emailResult.error);
-          Alert.alert(
-            'Note',
-            'Your cleaning log was saved successfully, but we could not send the email alert. A supervisor will still see this in the dashboard.',
-            [{ text: 'OK' }]
-          );
+          // Don't show alert - the log was saved successfully and supervisor will see it in dashboard
+          // Email alerts are a nice-to-have, not critical for compliance
         }
       }
 

@@ -583,8 +583,6 @@ export default function ManagerDashboard() {
 
       // Ensure all data is loaded before rendering
       const logs = [...result.data];
-      const completeCount = logs.filter(l => l.status === 'complete').length;
-      const complianceRate = Math.round((completeCount / logs.length) * 100);
 
       // Helper function to render checkmark or X
       const checkIcon = (checked: boolean) => checked
@@ -623,7 +621,7 @@ export default function ManagerDashboard() {
         <html>
           <head>
             <meta charset="utf-8">
-            <title>Audit Report</title>
+            <title>Cleaning Logs</title>
             <style>
               @page {
                 size: letter landscape;
@@ -652,68 +650,26 @@ export default function ManagerDashboard() {
           </head>
           <body>
             <div>
-              <div style="text-align: center; border-bottom: 3px solid #059669; padding-bottom: 12px; margin-bottom: 16px;">
-                <h1 style="font-size: 18px; margin: 0;">${businessName}</h1>
-                <p style="font-size: 11px; color: #1e293b; margin: 4px 0 2px 0;">Facility Maintenance Audit Report</p>
-                <p style="font-size: 9px; color: #64748b; margin: 0;">Rapport d'audit d'entretien des installations</p>
-                <p style="font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px 10px; border-radius: 4px; display: inline-block; margin-top: 8px;">
-                  ${auditStartDate.toLocaleDateString()} — ${auditEndDate.toLocaleDateString()}
-                </p>
-              </div>
+              <!-- Header: Business Name (top-left) -->
+              <h1 style="font-size: 18px; font-weight: bold; margin: 0 0 8px 0; text-align: left;">${businessName}</h1>
+              <h2 style="font-size: 14px; font-weight: 600; margin: 0 0 16px 0; color: #475569; text-align: left;">Recent Cleaning Logs</h2>
 
-              <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
-                <div style="flex: 1; min-width: 100px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; text-align: center;">
-                  <div style="font-size: 20px; font-weight: 700;">${logs.length}</div>
-                  <div style="font-size: 9px; color: #1e293b;">Cleaning Logs</div>
-                  <div style="font-size: 8px; color: #64748b;">Journaux</div>
-                </div>
-                <div style="flex: 1; min-width: 100px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 10px; text-align: center;">
-                  <div style="font-size: 20px; font-weight: 700; color: #059669;">${complianceRate}%</div>
-                  <div style="font-size: 9px; color: #1e293b;">Compliance</div>
-                  <div style="font-size: 8px; color: #64748b;">Conformité</div>
-                </div>
-                <div style="flex: 1; min-width: 100px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; text-align: center;">
-                  <div style="font-size: 20px; font-weight: 700; color: #059669;">${completeCount}</div>
-                  <div style="font-size: 9px; color: #1e293b;">Complete</div>
-                  <div style="font-size: 8px; color: #64748b;">Complet</div>
-                </div>
-                <div style="flex: 1; min-width: 100px; background: ${logs.length - completeCount > 0 ? '#fef3c7' : '#f8fafc'}; border: 1px solid ${logs.length - completeCount > 0 ? '#fcd34d' : '#e2e8f0'}; border-radius: 8px; padding: 10px; text-align: center;">
-                  <div style="font-size: 20px; font-weight: 700; color: ${logs.length - completeCount > 0 ? '#f59e0b' : '#64748b'};">${logs.length - completeCount}</div>
-                  <div style="font-size: 9px; color: #1e293b;">Attention</div>
-                  <div style="font-size: 8px; color: #64748b;">Requis</div>
-                </div>
-              </div>
-
-              <!-- Checklist Legend -->
-              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px;">
-                <div style="font-size: 9px; font-weight: 600; color: #334155; margin-bottom: 4px;">Checklist Legend / Légende:</div>
-                <div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 7px; color: #64748b;">
-                  <span><b>HS:</b> Handwashing</span>
-                  <span><b>TP:</b> Toilet Paper</span>
-                  <span><b>BN:</b> Bins</span>
-                  <span><b>SD:</b> Surfaces</span>
-                  <span><b>FX:</b> Fixtures</span>
-                  <span><b>WT:</b> Water Temp</span>
-                  <span><b>FL:</b> Floors</span>
-                  <span><b>VL:</b> Ventilation</span>
-                </div>
-              </div>
-
+              <!-- Clean Data Table -->
               <table style="width: 100%; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">
                 <thead>
                   <tr style="background: #f1f5f9;">
-                    <th style="padding: 6px 2px; text-align: left; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 70px;">Date/Time</th>
-                    <th style="padding: 6px 2px; text-align: left; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 80px;">Location</th>
-                    <th style="padding: 6px 2px; text-align: left; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 60px;">Staff</th>
-                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 22px;">HS</th>
-                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 22px;">TP</th>
-                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 22px;">BN</th>
-                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 22px;">SD</th>
-                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 22px;">FX</th>
-                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 22px;">WT</th>
-                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 22px;">FL</th>
-                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 22px;">VL</th>
-                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 30px;">Status</th>
+                    <th style="padding: 8px 4px; text-align: left; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">Date/Time</th>
+                    <th style="padding: 8px 4px; text-align: left; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">Location</th>
+                    <th style="padding: 8px 4px; text-align: left; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">Staff</th>
+                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">HS</th>
+                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">TP</th>
+                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">BN</th>
+                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">SD</th>
+                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">FX</th>
+                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">WT</th>
+                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">FL</th>
+                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">VL</th>
+                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -721,9 +677,9 @@ export default function ManagerDashboard() {
                 </tbody>
               </table>
 
-              <div style="margin-top: 16px; text-align: center; color: #64748b; font-size: 8px;">
-                <p style="margin: 4px 0;">Generated by Acadia Clean IQ • ${new Date().toLocaleString()}</p>
-                <p style="margin: 4px 0;">Total Records: ${logs.length} • Compliance Rate: ${complianceRate}%</p>
+              <!-- Footer: Date Range (bottom) -->
+              <div style="margin-top: 24px; text-align: center; color: #64748b; font-size: 10px;">
+                <p style="margin: 0;">Date Range: ${auditStartDate.toLocaleDateString()} — ${auditEndDate.toLocaleDateString()}</p>
               </div>
             </div>
           </body>
@@ -735,9 +691,14 @@ export default function ManagerDashboard() {
       if (canShare) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf' });
       }
+      // PDF generated and shared successfully - no alert needed
     } catch (error) {
       console.error('[Manager] PDF generation error:', error);
-      Alert.alert('Error / Erreur', 'Failed to generate PDF report. Please try again. / Échec de la génération du rapport PDF. Veuillez réessayer.');
+      // Only show error if PDF truly failed to generate
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (!errorMessage.includes('cancel') && !errorMessage.includes('dismissed')) {
+        Alert.alert('Error / Erreur', 'Failed to generate PDF report. Please try again. / Échec de la génération du rapport PDF. Veuillez réessayer.');
+      }
     } finally {
       setIsGeneratingReport(false);
     }
