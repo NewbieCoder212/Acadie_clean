@@ -38,6 +38,7 @@ import {
   getWashroomsForBusiness,
   updateWashroomAlertEmail,
   toggleWashroomActive,
+  updateBusinessAddress,
 } from '@/lib/supabase';
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
@@ -100,12 +101,14 @@ export default function ManagerDashboard() {
 
   // Inspector Mode state
   const [showInspectorMode, setShowInspectorMode] = useState(false);
-  const [auditStartDate, setAuditStartDate] = useState<Date>(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+  const [auditStartDate, setAuditStartDate] = useState<Date>(new Date());
   const [auditEndDate, setAuditEndDate] = useState<Date>(new Date());
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [businessName, setBusinessName] = useState('Acadia Facilities');
+  const [businessAddress, setBusinessAddress] = useState('');
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
 
   // Location settings modal
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
@@ -175,6 +178,7 @@ export default function ManagerDashboard() {
           if (business?.id && business?.name) {
             setCurrentBusiness(business);
             setBusinessName(business.name);
+            setBusinessAddress(business.address || '');
             // Fetch business-specific washrooms
             const washroomsResult = await getWashroomsForBusiness(business.name);
             if (washroomsResult.success && washroomsResult.data) {
@@ -377,6 +381,27 @@ export default function ManagerDashboard() {
       Alert.alert('Error', 'Network error. Please try again.');
     } finally {
       setIsSavingEmail(false);
+    }
+  };
+
+  const handleSaveBusinessAddress = async () => {
+    if (!currentBusiness?.id) return;
+    setIsSavingAddress(true);
+    try {
+      const result = await updateBusinessAddress(currentBusiness.id, businessAddress.trim());
+      if (result.success) {
+        // Update local storage with new address
+        const updatedBusiness = { ...currentBusiness, address: businessAddress.trim() };
+        await AsyncStorage.setItem('currentBusiness', JSON.stringify(updatedBusiness));
+        setCurrentBusiness(updatedBusiness);
+        Alert.alert('Success', 'Business address saved!\nAdresse enregistrée!');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to save address');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setIsSavingAddress(false);
     }
   };
 
@@ -597,21 +622,21 @@ export default function ManagerDashboard() {
 
       const tableRows = logs.map((log) => `
         <tr>
-          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; white-space: nowrap; width: 70px; overflow: hidden; text-overflow: ellipsis;">${formatDateTime(log.timestamp)}</td>
-          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; width: 80px; overflow: hidden; text-overflow: ellipsis; max-width: 80px;">${truncate(log.location_name, 15)}</td>
-          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; width: 60px; overflow: hidden; text-overflow: ellipsis; max-width: 60px;">${truncate(log.staff_name, 10)}</td>
-          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 22px;">${checkIcon(log.checklist_supplies)}</td>
-          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 22px;">${checkIcon(log.checklist_supplies)}</td>
-          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 22px;">${checkIcon(log.checklist_trash)}</td>
-          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 22px;">${checkIcon(log.checklist_surfaces)}</td>
-          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 22px;">${checkIcon(log.checklist_fixtures)}</td>
-          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 22px;">${checkIcon(log.checklist_fixtures)}</td>
-          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 22px;">${checkIcon(log.checklist_floor)}</td>
-          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 22px;">${checkIcon(log.checklist_fixtures)}</td>
-          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 30px;">
-            <span style="padding: 1px 4px; border-radius: 4px; font-weight: 600; font-size: 7px; ${
+          <td style="text-align: center;">${formatDateTime(log.timestamp)}</td>
+          <td>${truncate(log.location_name, 20)}</td>
+          <td>${truncate(log.staff_name, 15)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_supplies)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_supplies)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_trash)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_surfaces)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_floor)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">
+            <span style="padding: 1px 4px; border-radius: 3px; font-weight: 600; font-size: 9px; ${
               log.status === 'complete' ? 'background-color: #dcfce7; color: #166534;' : 'background-color: #fef3c7; color: #92400e;'
-            }">${log.status === 'complete' ? '✓' : '!'}</span>
+            }">${log.status === 'complete' ? 'OK' : 'ATT'}</span>
           </td>
         </tr>
       `).join('');
@@ -621,81 +646,166 @@ export default function ManagerDashboard() {
         <html>
           <head>
             <meta charset="utf-8">
-            <title>Cleaning Logs</title>
+            <title>Cleaning Logs - ${businessName}</title>
             <style>
               @page {
                 size: letter landscape;
-                margin: 15mm;
+                margin: 8mm;
               }
-              * {
-                box-sizing: border-box;
+              @media print {
+                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                .footer { page-break-inside: avoid; }
               }
+              * { box-sizing: border-box; margin: 0; padding: 0; }
               body {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                 color: #1e293b;
-                margin: 0;
-                padding: 20px;
-                font-size: 10px;
+                padding: 12px 16px;
+                font-size: 11px;
+                background: white;
               }
               table {
                 width: 100%;
                 border-collapse: collapse;
-                table-layout: fixed;
               }
-              th, td {
-                word-wrap: break-word;
-                overflow-wrap: break-word;
+              th {
+                background-color: #f1f5f9;
+                padding: 6px 4px;
+                text-align: left;
+                font-size: 9px;
+                font-weight: 600;
+                color: #475569;
+                border-bottom: 2px solid #e2e8f0;
+              }
+              th.center { text-align: center; }
+              td {
+                padding: 5px 4px;
+                border-bottom: 1px solid #e2e8f0;
+                font-size: 10px;
+              }
+              .legend {
+                margin-top: 10px;
+                padding: 8px;
+                background: #f8fafc;
+                border-radius: 4px;
+                font-size: 8px;
+                color: #475569;
+              }
+              .legend-title { font-weight: 600; margin-bottom: 4px; }
+              .legend-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+              .footer {
+                margin-top: 12px;
+                text-align: center;
+              }
+              .footer-logo {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
               }
             </style>
           </head>
           <body>
-            <div>
-              <!-- Header: Business Name (top-left) -->
-              <h1 style="font-size: 18px; font-weight: bold; margin: 0 0 8px 0; text-align: left;">${businessName}</h1>
-              <h2 style="font-size: 14px; font-weight: 600; margin: 0 0 16px 0; color: #475569; text-align: left;">Recent Cleaning Logs</h2>
+            <h1 style="font-size: 20px; font-weight: bold; margin: 0 0 2px 0;">${businessName}</h1>
+            ${businessAddress ? `<p style="font-size: 11px; color: #64748b; margin: 0 0 2px 0;">${businessAddress}</p>` : ''}
+            <h2 style="font-size: 10px; font-weight: 600; margin: 0 0 10px 0; color: #64748b;">Recent Cleaning Logs / Journaux de nettoyage récents</h2>
 
-              <!-- Clean Data Table -->
-              <table style="width: 100%; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">
-                <thead>
-                  <tr style="background: #f1f5f9;">
-                    <th style="padding: 8px 4px; text-align: left; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">Date/Time</th>
-                    <th style="padding: 8px 4px; text-align: left; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">Location</th>
-                    <th style="padding: 8px 4px; text-align: left; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">Staff</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">HS</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">TP</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">BN</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">SD</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">FX</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">WT</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">FL</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">VL</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${tableRows}
-                </tbody>
-              </table>
+            <table style="border: 1px solid #e2e8f0;">
+              <thead>
+                <tr>
+                  <th>Date/Time</th>
+                  <th>Location</th>
+                  <th>Staff</th>
+                  <th class="center">HS</th>
+                  <th class="center">TP</th>
+                  <th class="center">BN</th>
+                  <th class="center">SD</th>
+                  <th class="center">FX</th>
+                  <th class="center">WT</th>
+                  <th class="center">FL</th>
+                  <th class="center">VL</th>
+                  <th class="center">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows}
+              </tbody>
+            </table>
 
-              <!-- Footer: Date Range (bottom) -->
-              <div style="margin-top: 24px; text-align: center; color: #64748b; font-size: 10px;">
-                <p style="margin: 0;">Date Range: ${auditStartDate.toLocaleDateString()} — ${auditEndDate.toLocaleDateString()}</p>
+            <div class="legend">
+              <div class="legend-title">Legend / Légende:</div>
+              <div class="legend-grid">
+                <span><strong>HS</strong>=Hand Soap / Savon</span>
+                <span><strong>TP</strong>=Toilet Paper / Papier</span>
+                <span><strong>BN</strong>=Bins / Poubelles</span>
+                <span><strong>SD</strong>=Surfaces Disinfected / Surfaces désinfectées</span>
+                <span><strong>FX</strong>=Fixtures / Accessoires</span>
+                <span><strong>WT</strong>=Water Temp / Température</span>
+                <span><strong>FL</strong>=Floors / Planchers</span>
+                <span><strong>VL</strong>=Ventilation/Lighting / Éclairage</span>
+                <span style="margin-left: 8px;"><span style="color: #059669;">✓</span>=Complete / Complété</span>
+                <span><span style="color: #dc2626;">✗</span>=Incomplete / Incomplet</span>
+              </div>
+            </div>
+
+            <div style="margin-top: 8px; text-align: center; color: #64748b; font-size: 9px;">
+              Date Range: ${auditStartDate.toLocaleDateString()} — ${auditEndDate.toLocaleDateString()}
+            </div>
+
+            <div class="footer">
+              <div class="footer-logo">
+                <svg width="32" height="32" viewBox="0 0 100 100">
+                  <rect x="5" y="5" width="25" height="25" rx="4" fill="#065f46"/>
+                  <rect x="9" y="9" width="17" height="17" rx="2" fill="#fff"/>
+                  <rect x="13" y="13" width="9" height="9" rx="1" fill="#065f46"/>
+                  <rect x="70" y="5" width="25" height="25" rx="4" fill="#065f46"/>
+                  <rect x="74" y="9" width="17" height="17" rx="2" fill="#fff"/>
+                  <rect x="78" y="13" width="9" height="9" rx="1" fill="#065f46"/>
+                  <rect x="5" y="70" width="25" height="25" rx="4" fill="#065f46"/>
+                  <rect x="9" y="74" width="17" height="17" rx="2" fill="#fff"/>
+                  <rect x="13" y="78" width="9" height="9" rx="1" fill="#065f46"/>
+                  <path d="M50 28 C50 28 35 45 35 58 C35 68 41 75 50 75 C59 75 65 68 65 58 C65 45 50 28 50 28 Z" fill="#059669"/>
+                  <path d="M42 55 L47 62 L58 48" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                </svg>
+                <div style="text-align: left;">
+                  <div style="font-size: 11px; font-weight: 800; color: #065f46; letter-spacing: 0.5px;">Acadia</div>
+                  <div style="font-size: 10px; font-weight: 700; color: #059669;">Clean IQ</div>
+                </div>
               </div>
             </div>
           </body>
         </html>
       `;
 
-      const { uri } = await Print.printToFileAsync({ html });
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf' });
-        // Show success message after sharing
+      // Handle web platform differently
+      if (Platform.OS === 'web') {
+        // Open HTML in new window and trigger print
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(html);
+          printWindow.document.close();
+          printWindow.focus();
+          setTimeout(() => {
+            printWindow.print();
+          }, 250);
+        }
         Alert.alert(
           'Success',
-          'PDF exported successfully!\nPDF exporté avec succès!',
+          'PDF print dialog opened!\nBoîte de dialogue d\'impression ouverte!',
           [{ text: 'OK' }]
         );
+      } else {
+        // Native platforms use expo-print
+        const { uri } = await Print.printToFileAsync({ html });
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(uri, { mimeType: 'application/pdf' });
+          Alert.alert(
+            'Success',
+            'PDF exported successfully!\nPDF exporté avec succès!',
+            [{ text: 'OK' }]
+          );
+        }
       }
     } catch (error) {
       console.error('[Manager] PDF generation error:', error);
@@ -1145,6 +1255,37 @@ export default function ManagerDashboard() {
                     className="rounded-lg px-4 py-3 text-base text-white"
                     style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
                   />
+                </View>
+
+                <View className="mb-3">
+                  <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>
+                    Business Address / Adresse de l'entreprise
+                  </Text>
+                  <View className="flex-row items-center gap-2">
+                    <TextInput
+                      value={businessAddress}
+                      onChangeText={setBusinessAddress}
+                      placeholder="Enter business address"
+                      placeholderTextColor="rgba(255,255,255,0.5)"
+                      className="flex-1 rounded-lg px-4 py-3 text-base text-white"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
+                    />
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleSaveBusinessAddress();
+                      }}
+                      disabled={isSavingAddress}
+                      className="rounded-lg px-3 py-3"
+                      style={{ backgroundColor: C.actionGreen }}
+                    >
+                      {isSavingAddress ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Save size={18} color="#fff" />
+                      )}
+                    </Pressable>
+                  </View>
                 </View>
 
                 <View className="flex-row gap-3 mb-4">

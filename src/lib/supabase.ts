@@ -599,6 +599,7 @@ export interface BusinessRow {
   name: string;
   email: string;
   password_hash: string;
+  address: string | null;
   is_admin: boolean;
   is_active: boolean;
   created_at: string;
@@ -609,6 +610,7 @@ export interface SafeBusinessRow {
   id: string;
   name: string;
   email: string;
+  address: string | null;
   is_admin: boolean;
   is_active: boolean;
   created_at: string;
@@ -700,6 +702,7 @@ export async function loginBusiness(email: string, password: string): Promise<{ 
       id: data.id,
       name: data.name,
       email: data.email,
+      address: data.address ?? null,
       is_admin: data.is_admin,
       is_active: data.is_active,
       created_at: data.created_at,
@@ -724,6 +727,24 @@ export async function getAllBusinesses(): Promise<{ success: boolean; data?: Bus
     }
 
     return { success: true, data: data ?? [] };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Update business address
+export async function updateBusinessAddress(businessId: string, address: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('businesses')
+      .update({ address })
+      .eq('id', businessId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
   } catch (error) {
     return { success: false, error: String(error) };
   }
