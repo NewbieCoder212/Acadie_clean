@@ -132,7 +132,7 @@ export default function ManagerDashboard() {
         id: loc.id,
         name: loc.room_name,
         businessName: loc.business_name,
-        pinCode: loc.pin_code,
+        pinCode: loc.pin_display || loc.pin_code, // Use pin_display if available, fallback to pin_code
         supervisorEmail: loc.alert_email ?? undefined,
         isActive: loc.is_active,
         createdAt: new Date(loc.created_at).getTime(),

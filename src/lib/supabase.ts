@@ -262,6 +262,7 @@ export interface WashroomRow {
   room_name: string;
   last_cleaned: string | null;
   pin_code: string;
+  pin_display: string | null; // Plain PIN for manager display
   alert_email: string | null;
   is_active: boolean;
   created_at: string;
@@ -516,6 +517,7 @@ export async function insertWashroom(washroom: InsertWashroom): Promise<{ succes
         business_name: washroom.business_name,
         room_name: washroom.room_name,
         pin_code: hashedPin,
+        pin_display: washroom.pin_code, // Store plain PIN for manager display
         is_active: washroom.is_active ?? true,
         created_at: new Date().toISOString(),
       }])
