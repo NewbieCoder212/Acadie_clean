@@ -690,8 +690,13 @@ export default function ManagerDashboard() {
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf' });
+        // Show success message after sharing
+        Alert.alert(
+          'Success',
+          'PDF exported successfully!\nPDF exporté avec succès!',
+          [{ text: 'OK' }]
+        );
       }
-      // PDF generated and shared successfully - no alert needed
     } catch (error) {
       console.error('[Manager] PDF generation error:', error);
       // Only show error if PDF truly failed to generate
