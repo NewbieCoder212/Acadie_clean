@@ -262,6 +262,7 @@ export interface WashroomRow {
   room_name: string;
   last_cleaned: string | null;
   pin_code: string;
+  alert_email: string | null;
   is_active: boolean;
   created_at: string;
 }
@@ -946,6 +947,42 @@ export async function toggleBusinessActive(businessId: string, isActive: boolean
       .from('businesses')
       .update({ is_active: isActive })
       .eq('id', businessId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Update alert email for a washroom
+export async function updateWashroomAlertEmail(washroomId: string, alertEmail: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('washrooms')
+      .update({ alert_email: alertEmail })
+      .eq('id', washroomId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Toggle washroom active status (soft delete)
+export async function toggleWashroomActive(washroomId: string, isActive: boolean): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('washrooms')
+      .update({ is_active: isActive })
+      .eq('id', washroomId);
 
     if (error) {
       return { success: false, error: error.message };

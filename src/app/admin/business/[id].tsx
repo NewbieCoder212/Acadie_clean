@@ -124,8 +124,8 @@ export default function BusinessDetailScreen() {
       return;
     }
 
-    if (!newLocationPin || newLocationPin.length !== 4 || !/^\d{4}$/.test(newLocationPin)) {
-      Alert.alert('Error', 'Please enter a valid 4-digit PIN');
+    if (!newLocationPin || newLocationPin.length < 4 || newLocationPin.length > 5 || !/^\d{4,5}$/.test(newLocationPin)) {
+      Alert.alert('Error', 'Please enter a valid 4 or 5-digit PIN');
       return;
     }
 
@@ -448,15 +448,15 @@ export default function BusinessDetailScreen() {
 
               <View className="mb-6">
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
-                  Staff PIN (4 digits)
+                  Staff PIN (4-5 digits)
                 </Text>
                 <TextInput
                   value={newLocationPin}
-                  onChangeText={(text) => setNewLocationPin(text.replace(/[^0-9]/g, '').slice(0, 4))}
-                  placeholder="e.g., 1234"
+                  onChangeText={(text) => setNewLocationPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
+                  placeholder="e.g., 1234 or 12345"
                   placeholderTextColor={COLORS.textMuted}
                   keyboardType="number-pad"
-                  maxLength={4}
+                  maxLength={5}
                   className="rounded-xl px-4 py-3"
                   style={{
                     backgroundColor: COLORS.primaryLight,

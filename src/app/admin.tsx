@@ -41,6 +41,7 @@ import {
   CleaningLogRow,
   ReportedIssueRow,
 } from '@/lib/supabase';
+import { AcadiaLogo } from '@/components/AcadiaLogo';
 
 const COLORS = {
   primary: '#7c3aed',
@@ -240,7 +241,7 @@ export default function AdminDashboardScreen() {
           style={{ backgroundColor: COLORS.primary }}
         >
           <View className="flex-row items-center">
-            <Shield size={24} color={COLORS.white} />
+            <AcadiaLogo size={40} showText={false} />
             <Text className="text-xl font-bold ml-2" style={{ color: COLORS.white }}>
               Admin Dashboard
             </Text>

@@ -18,7 +18,7 @@ The app uses a consistent color palette across all screens:
 
 - **Location Management**: Business owners can create and manage multiple washroom locations
 - **Supervisor Email**: Each location can have a supervisor email for alert notifications (managed in Manager Dashboard only)
-- **Staff PIN Protection**: Each location has a 4-digit PIN that staff must enter before logging a cleaning (prevents fake log submissions)
+- **Staff PIN Protection**: Each location has a 4-5 digit PIN that staff must enter before logging a cleaning (prevents fake log submissions)
 - **Unique Public URLs**: Each location has a unique URL (`/washroom/[location_id]`) for staff to log cleanings via QR code
 - **Bilingual Checklist**: Staff complete an 8-item checklist organized in 3 sections (English/French):
 
@@ -49,9 +49,11 @@ The app uses a consistent color palette across all screens:
 
 ## Security
 
-- **PIN-Protected Cleaning Forms**: Each location requires a 4-digit PIN to submit cleaning logs, preventing unauthorized submissions from people who guess URLs
+- **PIN-Protected Cleaning Forms**: Each location requires a 4-5 digit PIN to submit cleaning logs, preventing unauthorized submissions from people who guess URLs
 - **PIN Verification**: PINs are stored in Supabase and verified against the database, with fallback to local verification
 - **PIN Display for Managers**: The Manager Dashboard displays the plain PIN for each location so managers can share it with authorized staff
+- **Editable Alert Email**: Location alert emails can be edited and saved directly from the Location Management modal
+- **Soft Delete (Active Toggle)**: Locations can be deactivated instead of deleted, preserving data while hiding them from the cleaning app
 - **Public Badge**: The washroom public page showing the last two cleanings is accessible without authentication
 - **Staff Form**: Staff only see PIN entry, checklist and notes field - no access to email or settings
 - **Manager Access**: The shield icon on the main page requires password authentication to access settings and the Manager Dashboard
@@ -63,6 +65,7 @@ The app uses a consistent color palette across all screens:
 
 ## Design
 
+- **Unified Branding**: All screens use the AcadiaLogo component for consistent logo display (Business Login, Cleaning Page, Admin Dashboard)
 - **Consistent Brand Identity**: All screens use the same color palette (Mint background #F0FFF7, Dark Emerald #065F46 for headers, Action Green #10B981 for user buttons)
 - **Reusable Header Component**: `AppHeader` component with centered Acadia Clean IQ logo, radial gradient (#CFFFE5 to #F0FFF7), bilingual navigation labels
 - **Custom Logo**: SVG logo featuring a QR code pattern with a water drop containing a white checkmark. "Acadia" in Dark Emerald, "Clean IQ" in Action Green
@@ -173,7 +176,17 @@ Data is persisted using **Supabase** cloud database. The app uses two tables:
 - `id` - Unique identifier (same as local store ID)
 - `name` - Location name
 - `supervisor_email` - Email address for alerts
-- `pin_code` - 4-digit PIN for staff access (stored as plain text for verification)
+- `pin_code` - 4-5 digit PIN for staff access (stored as plain text for verification)
+- `created_at` - Record creation timestamp
+
+### washrooms table
+- `id` - Unique identifier
+- `business_name` - Name of the business
+- `room_name` - Name of the washroom location
+- `last_cleaned` - Timestamp of last cleaning
+- `pin_code` - 4-5 digit PIN for staff access
+- `alert_email` - Email address for alerts (editable from manager dashboard)
+- `is_active` - Boolean flag for soft delete (when false, location is hidden from cleaning app)
 - `created_at` - Record creation timestamp
 
 ### reported_issues table
@@ -249,11 +262,13 @@ The Manager Dashboard includes an **Inspector Mode** for generating professional
 **PDF Report Features:**
 - Professional header with business name and audit period
 - Summary statistics: Total Logs, Complete, Attention Required, Compliance Rate
-- Detailed table with Timestamp, Location, Staff Name, and Status
-- Color-coded status badges (Green: Complete, Yellow: Attention Required, Blue: Resolved)
-- WorkSafeNB compliance notice
+- Detailed table with fixed column widths to prevent text cut-off
+- Checklist legend with abbreviations (HS, TP, BN, SD, FX, WT, FL, VL)
+- Color-coded status badges (Green: Complete, Yellow: Attention Required)
+- Page padding and proper formatting for print
+- Data fully loaded before PDF generation to prevent export errors
 - Footer with generation timestamp
-- Formatted for standard 8.5" x 11" paper (letter size)
+- Formatted for landscape letter size paper
 
 ## Testing Email Alerts
 

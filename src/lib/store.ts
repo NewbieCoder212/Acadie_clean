@@ -40,6 +40,8 @@ export interface WashroomLocation {
   supervisorEmail?: string;
   pinHash?: string; // Hashed 4-digit PIN for staff access (legacy)
   pinCode?: string; // Plain 4-digit PIN for display in manager dashboard
+  businessName?: string;
+  isActive?: boolean;
 }
 
 // Section headers for grouping checklist items

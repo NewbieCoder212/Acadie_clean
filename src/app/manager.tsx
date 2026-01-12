@@ -11,10 +11,11 @@ import {
   ActivityIndicator,
   Share,
   Modal,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Shield, Lock, Eye, EyeOff, Download, MapPin, AlertTriangle, CheckCircle2, Mail, ExternalLink, Plus, Link, Copy, LogOut, Trash2, Key, FileText, Calendar, ClipboardList, RefreshCw, Sparkles, ChevronRight } from 'lucide-react-native';
+import { Shield, Lock, Eye, EyeOff, Download, MapPin, AlertTriangle, CheckCircle2, Mail, ExternalLink, Plus, Link, Copy, LogOut, Trash2, Key, FileText, Calendar, ClipboardList, RefreshCw, Sparkles, ChevronRight, Save, Power } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
@@ -35,6 +36,8 @@ import {
   WashroomRow,
   getAllWashrooms,
   getWashroomsForBusiness,
+  updateWashroomAlertEmail,
+  toggleWashroomActive,
 } from '@/lib/supabase';
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
@@ -106,6 +109,9 @@ export default function ManagerDashboard() {
 
   // Location settings modal
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+  const [editAlertEmail, setEditAlertEmail] = useState('');
+  const [isSavingEmail, setIsSavingEmail] = useState(false);
+  const [isTogglingActive, setIsTogglingActive] = useState(false);
 
   const managerPasswordHash = useStore((s) => s.managerPasswordHash);
   const setManagerPasswordHash = useStore((s) => s.setManagerPasswordHash);
@@ -127,6 +133,8 @@ export default function ManagerDashboard() {
         name: loc.room_name,
         businessName: loc.business_name,
         pinCode: loc.pin_code,
+        supervisorEmail: loc.alert_email ?? undefined,
+        isActive: loc.is_active,
         createdAt: new Date(loc.created_at).getTime(),
       }))
     : locations;
@@ -283,8 +291,8 @@ export default function ManagerDashboard() {
       Alert.alert('Error', 'Please enter a location name');
       return;
     }
-    if (!newLocationPin || newLocationPin.length !== 4 || !/^\d{4}$/.test(newLocationPin)) {
-      Alert.alert('Error', 'Please enter a valid 4-digit PIN');
+    if (!newLocationPin || newLocationPin.length < 4 || newLocationPin.length > 5 || !/^\d{4,5}$/.test(newLocationPin)) {
+      Alert.alert('Error', 'Please enter a valid 4 or 5-digit PIN');
       return;
     }
     if (!newLocationEmail.trim() || !newLocationEmail.includes('@')) {
@@ -350,6 +358,63 @@ export default function ManagerDashboard() {
     setTimeout(() => {
       router.push(`/washroom/${locationId}?admin=true`);
     }, 100);
+  };
+
+  const handleSaveAlertEmail = async (locationId: string) => {
+    setIsSavingEmail(true);
+    try {
+      const result = await updateWashroomAlertEmail(locationId, editAlertEmail.trim());
+      if (result.success) {
+        // Update local state
+        setBusinessLocations(prev => prev.map(w =>
+          w.id === locationId ? { ...w, alert_email: editAlertEmail.trim() } : w
+        ));
+        Alert.alert('Success', 'Alert email updated successfully');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to update alert email');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setIsSavingEmail(false);
+    }
+  };
+
+  const handleToggleLocationActive = async (location: WashroomLocation) => {
+    const newStatus = !location.isActive;
+    const actionText = newStatus ? 'activate' : 'deactivate';
+
+    Alert.alert(
+      `${newStatus ? 'Activate' : 'Deactivate'} Location`,
+      `Are you sure you want to ${actionText} "${location.name}"?\n\n${!newStatus ? 'This location will no longer appear in the cleaning app.' : 'This location will appear in the cleaning app again.'}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: newStatus ? 'Activate' : 'Deactivate',
+          style: newStatus ? 'default' : 'destructive',
+          onPress: async () => {
+            setIsTogglingActive(true);
+            try {
+              const result = await toggleWashroomActive(location.id, newStatus);
+              if (result.success) {
+                // Update local state
+                setBusinessLocations(prev => prev.map(w =>
+                  w.id === location.id ? { ...w, is_active: newStatus } : w
+                ));
+                // Close the modal after toggling
+                setSelectedLocationId(null);
+              } else {
+                Alert.alert('Error', result.error || 'Failed to update location status');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Network error. Please try again.');
+            } finally {
+              setIsTogglingActive(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleDeleteLocation = (location: WashroomLocation) => {
@@ -501,14 +566,23 @@ export default function ManagerDashboard() {
 
       console.log('[Manager] Generating report for date range:', startDate.toISOString(), 'to', endDate.toISOString());
 
+      // Fetch data and wait for it to complete
       const result = await getLogsForDateRange(startDate, endDate);
-      if (!result.success || !result.data || result.data.length === 0) {
+
+      if (!result.success) {
+        Alert.alert('Error', result.error || 'Failed to load cleaning logs');
+        setIsGeneratingReport(false);
+        return;
+      }
+
+      if (!result.data || result.data.length === 0) {
         Alert.alert('No Data', 'No cleaning logs found for the selected date range');
         setIsGeneratingReport(false);
         return;
       }
 
-      const logs = result.data;
+      // Ensure all data is loaded before rendering
+      const logs = [...result.data];
       const completeCount = logs.filter(l => l.status === 'complete').length;
       const complianceRate = Math.round((completeCount / logs.length) * 100);
 
@@ -517,21 +591,27 @@ export default function ManagerDashboard() {
         ? '<span style="color: #059669; font-weight: bold;">✓</span>'
         : '<span style="color: #dc2626; font-weight: bold;">✗</span>';
 
+      // Helper to truncate text to prevent overflow
+      const truncate = (text: string, maxLength: number) => {
+        if (!text) return '-';
+        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+      };
+
       const tableRows = logs.map((log) => `
         <tr>
-          <td style="padding: 6px 4px; border-bottom: 1px solid #e2e8f0; font-size: 9px; white-space: nowrap;">${formatDateTime(log.timestamp)}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px solid #e2e8f0; font-size: 9px;">${log.location_name}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px solid #e2e8f0; font-size: 9px;">${log.staff_name}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px solid #e2e8f0; font-size: 9px; text-align: center;">${checkIcon(log.checklist_supplies)}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px solid #e2e8f0; font-size: 9px; text-align: center;">${checkIcon(log.checklist_supplies)}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px solid #e2e8f0; font-size: 9px; text-align: center;">${checkIcon(log.checklist_trash)}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px solid #e2e8f0; font-size: 9px; text-align: center;">${checkIcon(log.checklist_surfaces)}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px solid #e2e8f0; font-size: 9px; text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px solid #e2e8f0; font-size: 9px; text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px solid #e2e8f0; font-size: 9px; text-align: center;">${checkIcon(log.checklist_floor)}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px solid #e2e8f0; font-size: 9px; text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px solid #e2e8f0; font-size: 9px; text-align: center;">
-            <span style="padding: 2px 6px; border-radius: 8px; font-weight: 600; font-size: 8px; ${
+          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; white-space: nowrap; width: 70px; overflow: hidden; text-overflow: ellipsis;">${formatDateTime(log.timestamp)}</td>
+          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; width: 80px; overflow: hidden; text-overflow: ellipsis; max-width: 80px;">${truncate(log.location_name, 15)}</td>
+          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; width: 60px; overflow: hidden; text-overflow: ellipsis; max-width: 60px;">${truncate(log.staff_name, 10)}</td>
+          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 22px;">${checkIcon(log.checklist_supplies)}</td>
+          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 22px;">${checkIcon(log.checklist_supplies)}</td>
+          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 22px;">${checkIcon(log.checklist_trash)}</td>
+          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 22px;">${checkIcon(log.checklist_surfaces)}</td>
+          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 22px;">${checkIcon(log.checklist_fixtures)}</td>
+          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 22px;">${checkIcon(log.checklist_fixtures)}</td>
+          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 22px;">${checkIcon(log.checklist_floor)}</td>
+          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 22px;">${checkIcon(log.checklist_fixtures)}</td>
+          <td style="padding: 4px 2px; border-bottom: 1px solid #e2e8f0; font-size: 8px; text-align: center; width: 30px;">
+            <span style="padding: 1px 4px; border-radius: 4px; font-weight: 600; font-size: 7px; ${
               log.status === 'complete' ? 'background-color: #dcfce7; color: #166534;' : 'background-color: #fef3c7; color: #92400e;'
             }">${log.status === 'complete' ? '✓' : '!'}</span>
           </td>
@@ -541,79 +621,110 @@ export default function ManagerDashboard() {
       const html = `
         <!DOCTYPE html>
         <html>
-          <head><meta charset="utf-8"><title>Audit Report</title></head>
-          <body style="font-family: -apple-system, sans-serif; color: #1e293b; margin: 0; padding: 30px; min-height: 100vh; display: flex; flex-direction: column;">
-            <div style="flex: 1;">
-              <div style="text-align: center; border-bottom: 3px solid #059669; padding-bottom: 16px; margin-bottom: 20px;">
-                <h1 style="font-size: 22px; margin: 0;">${businessName}</h1>
-                <p style="font-size: 13px; color: #1e293b; margin: 6px 0 2px 0;">Facility Maintenance Audit Report</p>
-                <p style="font-size: 11px; color: #64748b; margin: 0;">Rapport d'audit d'entretien des installations</p>
-                <p style="font-size: 12px; color: #475569; background: #f1f5f9; padding: 6px 12px; border-radius: 6px; display: inline-block; margin-top: 10px;">
+          <head>
+            <meta charset="utf-8">
+            <title>Audit Report</title>
+            <style>
+              @page {
+                size: letter landscape;
+                margin: 15mm;
+              }
+              * {
+                box-sizing: border-box;
+              }
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                color: #1e293b;
+                margin: 0;
+                padding: 20px;
+                font-size: 10px;
+              }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+              }
+              th, td {
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+              }
+            </style>
+          </head>
+          <body>
+            <div>
+              <div style="text-align: center; border-bottom: 3px solid #059669; padding-bottom: 12px; margin-bottom: 16px;">
+                <h1 style="font-size: 18px; margin: 0;">${businessName}</h1>
+                <p style="font-size: 11px; color: #1e293b; margin: 4px 0 2px 0;">Facility Maintenance Audit Report</p>
+                <p style="font-size: 9px; color: #64748b; margin: 0;">Rapport d'audit d'entretien des installations</p>
+                <p style="font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px 10px; border-radius: 4px; display: inline-block; margin-top: 8px;">
                   ${auditStartDate.toLocaleDateString()} — ${auditEndDate.toLocaleDateString()}
                 </p>
               </div>
 
-              <div style="display: flex; gap: 12px; margin-bottom: 20px;">
-                <div style="flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; text-align: center;">
-                  <div style="font-size: 24px; font-weight: 700;">${logs.length}</div>
-                  <div style="font-size: 10px; color: #1e293b;">Cleaning Logs</div>
-                  <div style="font-size: 9px; color: #64748b;">Journaux de nettoyage</div>
+              <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 100px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; text-align: center;">
+                  <div style="font-size: 20px; font-weight: 700;">${logs.length}</div>
+                  <div style="font-size: 9px; color: #1e293b;">Cleaning Logs</div>
+                  <div style="font-size: 8px; color: #64748b;">Journaux</div>
                 </div>
-                <div style="flex: 1; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; padding: 12px; text-align: center;">
-                  <div style="font-size: 24px; font-weight: 700; color: #059669;">${complianceRate}%</div>
-                  <div style="font-size: 10px; color: #1e293b;">Compliance Rate</div>
-                  <div style="font-size: 9px; color: #64748b;">Taux de conformité</div>
+                <div style="flex: 1; min-width: 100px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 10px; text-align: center;">
+                  <div style="font-size: 20px; font-weight: 700; color: #059669;">${complianceRate}%</div>
+                  <div style="font-size: 9px; color: #1e293b;">Compliance</div>
+                  <div style="font-size: 8px; color: #64748b;">Conformité</div>
                 </div>
-                <div style="flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; text-align: center;">
-                  <div style="font-size: 24px; font-weight: 700; color: #059669;">${completeCount}</div>
-                  <div style="font-size: 10px; color: #1e293b;">Complete</div>
-                  <div style="font-size: 9px; color: #64748b;">Complet</div>
+                <div style="flex: 1; min-width: 100px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; text-align: center;">
+                  <div style="font-size: 20px; font-weight: 700; color: #059669;">${completeCount}</div>
+                  <div style="font-size: 9px; color: #1e293b;">Complete</div>
+                  <div style="font-size: 8px; color: #64748b;">Complet</div>
                 </div>
-                <div style="flex: 1; background: ${logs.length - completeCount > 0 ? '#fef3c7' : '#f8fafc'}; border: 1px solid ${logs.length - completeCount > 0 ? '#fcd34d' : '#e2e8f0'}; border-radius: 10px; padding: 12px; text-align: center;">
-                  <div style="font-size: 24px; font-weight: 700; color: ${logs.length - completeCount > 0 ? '#f59e0b' : '#64748b'};">${logs.length - completeCount}</div>
-                  <div style="font-size: 10px; color: #1e293b;">Attention</div>
-                  <div style="font-size: 9px; color: #64748b;">Attention requise</div>
+                <div style="flex: 1; min-width: 100px; background: ${logs.length - completeCount > 0 ? '#fef3c7' : '#f8fafc'}; border: 1px solid ${logs.length - completeCount > 0 ? '#fcd34d' : '#e2e8f0'}; border-radius: 8px; padding: 10px; text-align: center;">
+                  <div style="font-size: 20px; font-weight: 700; color: ${logs.length - completeCount > 0 ? '#f59e0b' : '#64748b'};">${logs.length - completeCount}</div>
+                  <div style="font-size: 9px; color: #1e293b;">Attention</div>
+                  <div style="font-size: 8px; color: #64748b;">Requis</div>
                 </div>
               </div>
 
               <!-- Checklist Legend -->
-              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px;">
-                <div style="font-size: 10px; font-weight: 600; color: #334155; margin-bottom: 6px;">Checklist Items / Éléments de la liste de contrôle:</div>
-                <div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 8px; color: #64748b;">
-                  <span><b>HS:</b> Handwashing Station / Poste de lavage</span>
-                  <span><b>TP:</b> Toilet Paper / Papier hygiénique</span>
-                  <span><b>BN:</b> Bins / Poubelles</span>
-                  <span><b>SD:</b> Surfaces Disinfected / Surfaces désinfectées</span>
-                  <span><b>FX:</b> Fixtures / Installations</span>
-                  <span><b>WT:</b> Water Temperature / Température de l'eau</span>
-                  <span><b>FL:</b> Floors / Planchers</span>
-                  <span><b>VL:</b> Ventilation & Lighting / Ventilation et éclairage</span>
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px;">
+                <div style="font-size: 9px; font-weight: 600; color: #334155; margin-bottom: 4px;">Checklist Legend / Légende:</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 7px; color: #64748b;">
+                  <span><b>HS:</b> Handwashing</span>
+                  <span><b>TP:</b> Toilet Paper</span>
+                  <span><b>BN:</b> Bins</span>
+                  <span><b>SD:</b> Surfaces</span>
+                  <span><b>FX:</b> Fixtures</span>
+                  <span><b>WT:</b> Water Temp</span>
+                  <span><b>FL:</b> Floors</span>
+                  <span><b>VL:</b> Ventilation</span>
                 </div>
               </div>
 
-              <table style="width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 9px;">
+              <table style="width: 100%; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">
                 <thead>
-                  <tr style="background: #0f172a; color: #fff;">
-                    <th style="padding: 8px 4px; text-align: left; font-size: 8px;">Timestamp</th>
-                    <th style="padding: 8px 4px; text-align: left; font-size: 8px;">Location</th>
-                    <th style="padding: 8px 4px; text-align: left; font-size: 8px;">Staff</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 8px;">HS</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 8px;">TP</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 8px;">BN</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 8px;">SD</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 8px;">FX</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 8px;">WT</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 8px;">FL</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 8px;">VL</th>
-                    <th style="padding: 8px 4px; text-align: center; font-size: 8px;">Status</th>
+                  <tr style="background: #f1f5f9;">
+                    <th style="padding: 6px 2px; text-align: left; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 70px;">Date/Time</th>
+                    <th style="padding: 6px 2px; text-align: left; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 80px;">Location</th>
+                    <th style="padding: 6px 2px; text-align: left; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 60px;">Staff</th>
+                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 22px;">HS</th>
+                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 22px;">TP</th>
+                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 22px;">BN</th>
+                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 22px;">SD</th>
+                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 22px;">FX</th>
+                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 22px;">WT</th>
+                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 22px;">FL</th>
+                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 22px;">VL</th>
+                    <th style="padding: 6px 2px; text-align: center; font-size: 7px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; width: 30px;">Status</th>
                   </tr>
                 </thead>
-                <tbody>${tableRows}</tbody>
+                <tbody>
+                  ${tableRows}
+                </tbody>
               </table>
-            </div>
-            <div style="margin-top: 30px; padding-top: 16px; border-top: 1px solid #e2e8f0; text-align: center;">
-              <p style="font-size: 11px; color: #059669; font-weight: 600; margin: 0;">Powered by Acadia Clean</p>
-              <p style="font-size: 9px; color: #64748b; margin: 4px 0 0 0;">Generated on ${new Date().toLocaleDateString()} / Généré le ${new Date().toLocaleDateString('fr-CA')}</p>
+
+              <div style="margin-top: 16px; text-align: center; color: #64748b; font-size: 8px;">
+                <p style="margin: 4px 0;">Generated by Acadia Clean IQ • ${new Date().toLocaleString()}</p>
+                <p style="margin: 4px 0;">Total Records: ${logs.length} • Compliance Rate: ${complianceRate}%</p>
+              </div>
             </div>
           </body>
         </html>
@@ -823,17 +934,21 @@ export default function ManagerDashboard() {
           ) : (
             <View className="flex-row flex-wrap" style={{ marginHorizontal: -4 }}>
               {displayLocations.map((location) => {
+                const isInactive = location.isActive === false;
                 const status = getLocationStatus(location.id);
-                const statusColor = status === 'clean' ? COLORS.primary : status === 'attention' ? COLORS.amber : COLORS.slate400;
-                const statusBg = status === 'clean' ? COLORS.primaryLight : status === 'attention' ? COLORS.amberLight : COLORS.slate100;
-                const statusText = status === 'clean' ? 'CLEAN' : status === 'attention' ? 'ATTENTION REQUIRED' : 'NO DATA';
+                const statusColor = isInactive ? COLORS.slate400 : status === 'clean' ? COLORS.primary : status === 'attention' ? COLORS.amber : COLORS.slate400;
+                const statusBg = isInactive ? COLORS.slate100 : status === 'clean' ? COLORS.primaryLight : status === 'attention' ? COLORS.amberLight : COLORS.slate100;
+                const statusText = isInactive ? 'INACTIVE' : status === 'clean' ? 'CLEAN' : status === 'attention' ? 'ATTENTION REQUIRED' : 'NO DATA';
 
                 return (
                   <Pressable
                     key={location.id}
-                    onPress={() => setSelectedLocationId(location.id)}
+                    onPress={() => {
+                      setSelectedLocationId(location.id);
+                      setEditAlertEmail(location.supervisorEmail || '');
+                    }}
                     className="active:opacity-80"
-                    style={{ width: '50%', padding: 4 }}
+                    style={{ width: '50%', padding: 4, opacity: isInactive ? 0.6 : 1 }}
                   >
                     <View
                       className="rounded-xl p-4"
@@ -848,7 +963,9 @@ export default function ManagerDashboard() {
                           className="w-10 h-10 rounded-full items-center justify-center"
                           style={{ backgroundColor: statusBg }}
                         >
-                          {status === 'clean' ? (
+                          {isInactive ? (
+                            <Power size={22} color={statusColor} />
+                          ) : status === 'clean' ? (
                             <CheckCircle2 size={22} color={statusColor} />
                           ) : status === 'attention' ? (
                             <AlertTriangle size={22} color={statusColor} />
@@ -884,7 +1001,7 @@ export default function ManagerDashboard() {
                         className="text-[10px]"
                         style={{ color: statusColor }}
                       >
-                        {status === 'clean' ? 'Propre' : status === 'attention' ? 'Attention requise' : 'Pas de données'}
+                        {isInactive ? 'Inactif' : status === 'clean' ? 'Propre' : status === 'attention' ? 'Attention requise' : 'Pas de données'}
                       </Text>
                     </View>
                   </Pressable>
@@ -1202,19 +1319,19 @@ export default function ManagerDashboard() {
               />
             </View>
             <View className="mb-4">
-              <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.slate700 }}>PIN / NIP</Text>
+              <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.slate700 }}>PIN / NIP (4-5 digits)</Text>
               <TextInput
                 value={newLocationPin}
-                onChangeText={(text) => setNewLocationPin(text.replace(/[^0-9]/g, '').slice(0, 4))}
-                placeholder="e.g., 1234"
+                onChangeText={(text) => setNewLocationPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
+                placeholder="e.g., 1234 or 12345"
                 placeholderTextColor={COLORS.slate400}
                 keyboardType="number-pad"
-                maxLength={4}
+                maxLength={5}
                 className="rounded-xl px-4 py-4 text-base"
                 style={{ backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.slate200, color: COLORS.slate800 }}
               />
-              <Text className="text-xs mt-1" style={{ color: COLORS.slate500 }}>Enter PIN to submit cleaning logs</Text>
-              <Text className="text-xs" style={{ color: COLORS.slate400 }}>Entrez le NIP pour soumettre les journaux de nettoyage</Text>
+              <Text className="text-xs mt-1" style={{ color: COLORS.slate500 }}>Enter 4 or 5-digit PIN to submit cleaning logs</Text>
+              <Text className="text-xs" style={{ color: COLORS.slate400 }}>Entrez un NIP de 4 ou 5 chiffres pour soumettre les journaux</Text>
             </View>
             <View className="mb-6">
               <Text className="text-sm font-semibold" style={{ color: COLORS.slate700 }}>Alert Email</Text>
@@ -1350,7 +1467,7 @@ export default function ManagerDashboard() {
                     <Text className="text-xs" style={{ color: COLORS.primaryDark }}>Voir la page publique</Text>
                   </Pressable>
 
-                  {/* Supervisor Email */}
+                  {/* Supervisor Email - Editable */}
                   <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.slate200 }}>
                     <View className="mb-2">
                       <View className="flex-row items-center">
@@ -1359,12 +1476,37 @@ export default function ManagerDashboard() {
                       </View>
                       <Text className="text-xs ml-6" style={{ color: COLORS.slate400 }}>Courriel d'alerte</Text>
                     </View>
-                    <Text className="text-base" style={{ color: COLORS.slate800 }}>
-                      {location.supervisorEmail || 'No email set'}
-                    </Text>
-                    {!location.supervisorEmail && (
-                      <Text className="text-xs" style={{ color: COLORS.slate400 }}>Aucun courriel défini</Text>
-                    )}
+                    <TextInput
+                      value={editAlertEmail}
+                      onChangeText={setEditAlertEmail}
+                      placeholder="supervisor@example.com"
+                      placeholderTextColor={COLORS.slate400}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      className="rounded-lg px-4 py-3 mb-3"
+                      style={{
+                        backgroundColor: COLORS.slate100,
+                        borderWidth: 1,
+                        borderColor: COLORS.slate200,
+                        fontSize: 15,
+                        color: COLORS.slate800,
+                      }}
+                    />
+                    <Pressable
+                      onPress={() => handleSaveAlertEmail(location.id)}
+                      disabled={isSavingEmail}
+                      className="flex-row items-center justify-center py-3 rounded-lg"
+                      style={{ backgroundColor: isSavingEmail ? COLORS.slate400 : COLORS.primary }}
+                    >
+                      {isSavingEmail ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <>
+                          <Save size={16} color="#fff" />
+                          <Text className="text-white font-semibold ml-2">Save Email</Text>
+                        </>
+                      )}
+                    </Pressable>
                   </View>
 
                   {/* Export CSV */}
@@ -1385,22 +1527,39 @@ export default function ManagerDashboard() {
                     </Text>
                   </Pressable>
 
-                  {/* Delete */}
-                  <Pressable
-                    onPress={() => {
-                      setSelectedLocationId(null);
-                      setTimeout(() => handleDeleteLocation(location), 300);
-                    }}
-                    disabled={deletingLocationId === location.id}
-                    className="items-center justify-center py-4 rounded-xl"
-                    style={{ backgroundColor: COLORS.redLight, borderWidth: 1, borderColor: '#fecaca' }}
-                  >
-                    <View className="flex-row items-center">
-                      <Trash2 size={20} color={COLORS.red} />
-                      <Text className="font-bold ml-2" style={{ color: COLORS.red }}>Delete Location</Text>
+                  {/* Active Toggle */}
+                  <View className="rounded-xl p-4 mb-4" style={{
+                    backgroundColor: location.isActive !== false ? COLORS.primaryLight : COLORS.redLight,
+                    borderWidth: 1,
+                    borderColor: location.isActive !== false ? '#86efac' : '#fecaca'
+                  }}>
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-row items-center flex-1">
+                        <Power size={20} color={location.isActive !== false ? COLORS.primary : COLORS.red} />
+                        <View className="ml-3">
+                          <Text className="text-sm font-semibold" style={{ color: location.isActive !== false ? COLORS.primaryDark : COLORS.red }}>
+                            {location.isActive !== false ? 'Location Active' : 'Location Inactive'}
+                          </Text>
+                          <Text className="text-xs" style={{ color: location.isActive !== false ? COLORS.slate500 : COLORS.red }}>
+                            {location.isActive !== false ? 'Emplacement actif' : 'Emplacement inactif'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Switch
+                        value={location.isActive !== false}
+                        onValueChange={() => handleToggleLocationActive(location)}
+                        disabled={isTogglingActive}
+                        trackColor={{ false: '#fca5a5', true: '#86efac' }}
+                        thumbColor={location.isActive !== false ? COLORS.primary : COLORS.red}
+                        ios_backgroundColor="#fca5a5"
+                      />
                     </View>
-                    <Text className="text-xs" style={{ color: COLORS.red }}>Supprimer l'emplacement</Text>
-                  </Pressable>
+                    <Text className="text-xs mt-2" style={{ color: COLORS.slate500 }}>
+                      {location.isActive !== false
+                        ? 'Turn off to hide this location from the cleaning app'
+                        : 'Turn on to show this location in the cleaning app'}
+                    </Text>
+                  </View>
                 </ScrollView>
               </>
             );

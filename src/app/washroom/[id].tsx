@@ -11,7 +11,6 @@ import {
   ActivityIndicator,
   Alert,
   Keyboard,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -57,6 +56,7 @@ import {
   WashroomRow,
 } from '@/lib/supabase';
 import { sendAttentionRequiredEmail, getUncheckedItems, sendIssueReportEmail, ISSUE_TYPES } from '@/lib/email';
+import { AcadiaLogo } from '@/components/AcadiaLogo';
 
 // Use consistent brand colors
 import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
@@ -558,11 +558,7 @@ export default function WashroomPublicScreen() {
             <View className="items-center">
               {/* App Logo */}
               <Animated.View entering={FadeIn.duration(500)} className="mb-4">
-                <Image
-                  source={require('../../../assets/image-1767959752.png')}
-                  style={{ width: 100, height: 100 }}
-                  resizeMode="contain"
-                />
+                <AcadiaLogo size={100} />
               </Animated.View>
 
               {/* Main Status Card */}
@@ -1001,14 +997,14 @@ export default function WashroomPublicScreen() {
               <TextInput
                 value={staffPin}
                 onChangeText={(text) => {
-                  const cleaned = text.replace(/[^0-9]/g, '').slice(0, 4);
+                  const cleaned = text.replace(/[^0-9]/g, '').slice(0, 5);
                   setStaffPin(cleaned);
                   if (pinError) setPinError(null);
                 }}
                 placeholder="••••"
                 placeholderTextColor={COLORS.textMuted}
                 keyboardType="number-pad"
-                maxLength={4}
+                maxLength={5}
                 secureTextEntry
                 autoFocus
                 style={{
@@ -1036,9 +1032,9 @@ export default function WashroomPublicScreen() {
 
               <Pressable
                 onPress={handlePinSubmit}
-                disabled={staffPin.length !== 4 || isVerifyingPin}
+                disabled={staffPin.length < 4 || isVerifyingPin}
                 style={{
-                  backgroundColor: staffPin.length === 4 && !isVerifyingPin ? COLORS.emerald : '#cbd5e1',
+                  backgroundColor: staffPin.length >= 4 && !isVerifyingPin ? COLORS.emerald : '#cbd5e1',
                   borderRadius: 12,
                   paddingVertical: 14,
                   alignItems: 'center',
@@ -1058,7 +1054,7 @@ export default function WashroomPublicScreen() {
                 ) : (
                   <Text
                     className="text-base font-bold"
-                    style={{ color: staffPin.length === 4 ? COLORS.white : COLORS.textMuted }}
+                    style={{ color: staffPin.length >= 4 ? COLORS.white : COLORS.textMuted }}
                   >
                     Continue
                   </Text>

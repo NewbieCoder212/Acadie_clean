@@ -7,15 +7,15 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Lock, Mail, Building2, Shield, Sparkles } from 'lucide-react-native';
+import { Lock, Mail, Shield, Sparkles } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loginBusiness, BusinessRow } from '@/lib/supabase';
+import { AcadiaLogo } from '@/components/AcadiaLogo';
 
 // Professional color palette
 const COLORS = {
@@ -134,11 +134,7 @@ export default function BusinessPortalScreen() {
               entering={FadeInDown.duration(600).springify()}
               className="items-center mb-8"
             >
-              <Image
-                source={require('../../../assets/image-1767959752.png')}
-                style={{ width: 140, height: 140 }}
-                resizeMode="contain"
-              />
+              <AcadiaLogo size={120} />
               <View className="flex-row items-center mt-2">
                 <Sparkles size={14} color={COLORS.primary} />
                 <Text
