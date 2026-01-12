@@ -24,7 +24,6 @@ export async function verifyPassword(password: string, hashedPassword: string): 
     const isMatch = await bcrypt.compare(password, hashedPassword);
     return isMatch;
   } catch (error) {
-    console.error('[Password] Verification error:', error);
     return false;
   }
 }
@@ -36,3 +35,7 @@ export async function verifyPassword(password: string, hashedPassword: string): 
 export function isBcryptHash(str: string): boolean {
   return /^\$2[aby]\$\d{2}\$.{53}$/.test(str);
 }
+
+// Alias functions for PIN hashing (same as password but clearer naming)
+export const hashPin = hashPassword;
+export const verifyPin = verifyPassword;

@@ -57,6 +57,9 @@ The app uses a consistent color palette across all screens:
 - **Manager Access**: The shield icon on the main page requires password authentication to access settings and the Manager Dashboard
 - **Manager Dashboard**: Password-protected; shows unresolved attention items, location settings (including supervisor email and PIN), and allows resolution
 - **Secure Password Storage**: Manager passwords are hashed using bcrypt before storage. Plain-text passwords are never stored or displayed.
+- **Environment Variables**: Supabase credentials are stored in environment variables (`EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`), not hardcoded
+- **Safe Session Data**: Login sessions only store non-sensitive business data (no password hashes in AsyncStorage)
+- **Automatic Password Migration**: Legacy plain-text passwords are automatically upgraded to bcrypt hashes on successful login
 
 ## Design
 

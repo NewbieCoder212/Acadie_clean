@@ -20,12 +20,10 @@ import {
   Plus,
   LogOut,
   ChevronRight,
-  Users,
   ClipboardList,
   AlertTriangle,
   X,
   Check,
-  Power,
 } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -60,15 +58,6 @@ const COLORS = {
   glassBorder: 'rgba(124, 58, 237, 0.2)',
 };
 
-// Sample businesses for demo
-const DEMO_BUSINESSES = [
-  { name: 'Hotel & Spa Marais', email: 'manager@hotelmarais.com', password: 'hotel123' },
-  { name: 'Café Maritime', email: 'owner@cafemaritime.com', password: 'cafe123' },
-  { name: 'Arena Nord Sports', email: 'ops@arenanord.com', password: 'arena123' },
-  { name: 'Centre Commercial Acadie', email: 'facility@centreacadie.com', password: 'centre123' },
-  { name: 'Clinique Santé Plus', email: 'admin@cliniquesante.com', password: 'clinique123' },
-];
-
 export default function AdminDashboardScreen() {
   const router = useRouter();
   const [currentAdmin, setCurrentAdmin] = useState<BusinessRow | null>(null);
@@ -94,11 +83,16 @@ export default function AdminDashboardScreen() {
     try {
       const stored = await AsyncStorage.getItem('currentBusiness');
       if (stored) {
-        const business = JSON.parse(stored) as BusinessRow;
-        if (business.is_admin) {
-          setCurrentAdmin(business);
-          loadData();
-          return;
+        try {
+          const business = JSON.parse(stored) as BusinessRow;
+          if (business?.is_admin) {
+            setCurrentAdmin(business);
+            loadData();
+            return;
+          }
+        } catch (parseError) {
+          // Invalid JSON in storage, clear it
+          await AsyncStorage.removeItem('currentBusiness');
         }
       }
       // Not logged in or not admin
@@ -176,32 +170,6 @@ export default function AdminDashboardScreen() {
     } finally {
       setIsCreating(false);
     }
-  };
-
-  const handleSetupDemoBusinesses = async () => {
-    Alert.alert(
-      'Set Up Demo Businesses',
-      'This will create 5 sample businesses for testing. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Create',
-          onPress: async () => {
-            setIsLoading(true);
-            for (const demo of DEMO_BUSINESSES) {
-              await insertBusiness({
-                name: demo.name,
-                email: demo.email,
-                password: demo.password,
-                is_admin: false,
-              });
-            }
-            await loadData();
-            Alert.alert('Success', '5 demo businesses created!');
-          },
-        },
-      ]
-    );
   };
 
   const handleToggleBusinessActive = async (business: BusinessRow) => {
@@ -344,19 +312,6 @@ export default function AdminDashboardScreen() {
                   Add Business
                 </Text>
               </Pressable>
-
-              {businesses.length === 0 && (
-                <Pressable
-                  onPress={handleSetupDemoBusinesses}
-                  className="flex-1 flex-row items-center justify-center py-4 rounded-2xl active:opacity-80"
-                  style={{ backgroundColor: COLORS.success }}
-                >
-                  <Users size={20} color={COLORS.white} />
-                  <Text className="font-bold ml-2" style={{ color: COLORS.white }}>
-                    Setup 5 Demo
-                  </Text>
-                </Pressable>
-              )}
             </View>
           </Animated.View>
 
@@ -497,42 +452,6 @@ export default function AdminDashboardScreen() {
             </View>
           </Animated.View>
 
-          {/* Login Credentials for Demo */}
-          {businesses.length > 0 && (
-            <Animated.View entering={FadeInDown.delay(400).duration(400)} className="mt-6 mb-8">
-              <Text
-                className="text-lg font-bold mb-3"
-                style={{ color: COLORS.textDark }}
-              >
-                Business Login Credentials
-              </Text>
-              <View
-                className="rounded-2xl p-4"
-                style={{ backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder }}
-              >
-                <Text className="text-sm mb-2" style={{ color: COLORS.textMuted }}>
-                  Share these with business managers:
-                </Text>
-                {businesses.slice(0, 5).map((business, index) => (
-                  <View
-                    key={business.id}
-                    className="py-2"
-                    style={{
-                      borderBottomWidth: index < Math.min(businesses.length, 5) - 1 ? 1 : 0,
-                      borderBottomColor: COLORS.glassBorder,
-                    }}
-                  >
-                    <Text className="text-sm font-semibold" style={{ color: COLORS.textDark }}>
-                      {business.name}
-                    </Text>
-                    <Text className="text-xs" style={{ color: COLORS.textMuted }}>
-                      Email: {business.email} | Password: {business.password_hash}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </Animated.View>
-          )}
         </ScrollView>
 
         {/* Add Business Modal */}

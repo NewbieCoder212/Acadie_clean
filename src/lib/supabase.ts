@@ -1,9 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
+import { hashPassword, verifyPassword, isBcryptHash, hashPin, verifyPin } from './password';
 
-const SUPABASE_URL = 'https://duznbqmwcdpqjttdbpug.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_etfpW-Pzijoc-OS5mAlSjA_md78P8NR';
+// Use environment variables for Supabase credentials
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.warn('[Supabase] Missing credentials. Please add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your environment variables.');
+}
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Re-export password utilities for use in other files
+export { hashPassword, verifyPassword, isBcryptHash, hashPin, verifyPin };
 
 // Database types
 export interface CleaningLogRow {
@@ -14,7 +23,6 @@ export interface CleaningLogRow {
   timestamp: string;
   status: 'complete' | 'attention_required';
   notes: string;
-  // Legacy checklist fields (currently in database)
   checklist_supplies: boolean;
   checklist_surfaces: boolean;
   checklist_fixtures: boolean;
@@ -32,7 +40,6 @@ export interface InsertCleaningLog {
   timestamp: string;
   status: 'complete' | 'attention_required';
   notes: string;
-  // Legacy checklist fields (currently in database)
   checklist_supplies: boolean;
   checklist_surfaces: boolean;
   checklist_fixtures: boolean;
@@ -43,28 +50,18 @@ export interface InsertCleaningLog {
 }
 
 // Initialize the cleaning_logs table if it doesn't exist
-// Note: This uses Supabase's SQL API to create the table
 export async function initializeDatabase(): Promise<{ success: boolean; error?: string }> {
   try {
-    // Check if table exists by trying to query it
     const { error: checkError } = await supabase
       .from('cleaning_logs')
       .select('id')
       .limit(1);
 
-    // If no error, table exists
     if (!checkError) {
-      console.log('[Supabase] cleaning_logs table already exists');
       return { success: true };
     }
 
-    // If error is about table not existing, we need to create it
-    // Note: Table creation should be done via Supabase dashboard or migrations
-    // For now, we'll log the error and provide instructions
-    console.log('[Supabase] Table check error:', checkError.message);
-
     if (checkError.code === '42P01' || checkError.message.includes('does not exist')) {
-      console.log('[Supabase] cleaning_logs table does not exist. Please create it in Supabase dashboard.');
       return {
         success: false,
         error: 'Table does not exist. Please create the cleaning_logs table in your Supabase dashboard.'
@@ -73,7 +70,6 @@ export async function initializeDatabase(): Promise<{ success: boolean; error?: 
 
     return { success: true };
   } catch (error) {
-    console.error('[Supabase] Database initialization error:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -92,14 +88,11 @@ export async function insertCleaningLog(log: InsertCleaningLog): Promise<{ succe
       .single();
 
     if (error) {
-      console.error('[Supabase] Insert error:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('[Supabase] Log inserted successfully:', data?.id);
     return { success: true, data };
   } catch (error) {
-    console.error('[Supabase] Insert exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -114,13 +107,11 @@ export async function getLogsForLocation(locationId: string): Promise<{ success:
       .order('timestamp', { ascending: false });
 
     if (error) {
-      console.error('[Supabase] Fetch logs error:', error);
       return { success: false, error: error.message };
     }
 
     return { success: true, data: data ?? [] };
   } catch (error) {
-    console.error('[Supabase] Fetch logs exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -134,13 +125,11 @@ export async function getAllLogs(): Promise<{ success: boolean; data?: CleaningL
       .order('timestamp', { ascending: false });
 
     if (error) {
-      console.error('[Supabase] Fetch all logs error:', error);
       return { success: false, error: error.message };
     }
 
     return { success: true, data: data ?? [] };
   } catch (error) {
-    console.error('[Supabase] Fetch all logs exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -159,13 +148,11 @@ export async function getLogs6Months(locationId: string): Promise<{ success: boo
       .order('timestamp', { ascending: false });
 
     if (error) {
-      console.error('[Supabase] Fetch 6-month logs error:', error);
       return { success: false, error: error.message };
     }
 
     return { success: true, data: data ?? [] };
   } catch (error) {
-    console.error('[Supabase] Fetch 6-month logs exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -181,13 +168,11 @@ export async function getUnresolvedLogs(): Promise<{ success: boolean; data?: Cl
       .order('timestamp', { ascending: false });
 
     if (error) {
-      console.error('[Supabase] Fetch unresolved logs error:', error);
       return { success: false, error: error.message };
     }
 
     return { success: true, data: data ?? [] };
   } catch (error) {
-    console.error('[Supabase] Fetch unresolved logs exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -204,14 +189,11 @@ export async function resolveLog(logId: string): Promise<{ success: boolean; err
       .eq('id', logId);
 
     if (error) {
-      console.error('[Supabase] Resolve log error:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('[Supabase] Log resolved successfully:', logId);
     return { success: true };
   } catch (error) {
-    console.error('[Supabase] Resolve log exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -231,7 +213,6 @@ function generateUUID(): string {
 }
 
 // Convert database row to app format
-// Maps legacy DB fields to new app checklist structure
 export function rowToCleaningLog(row: CleaningLogRow) {
   return {
     id: row.id,
@@ -240,7 +221,6 @@ export function rowToCleaningLog(row: CleaningLogRow) {
     timestamp: new Date(row.timestamp).getTime(),
     staffName: row.staff_name,
     checklist: {
-      // Map legacy fields to new structure for display
       handwashingStation: row.checklist_supplies,
       toiletPaper: row.checklist_supplies,
       bins: row.checklist_trash,
@@ -255,82 +235,6 @@ export function rowToCleaningLog(row: CleaningLogRow) {
     resolved: row.resolved,
     resolvedAt: row.resolved_at ? new Date(row.resolved_at).getTime() : undefined,
   };
-}
-
-// Diagnostic function to test read access
-export async function testReadAccess(): Promise<{ success: boolean; error?: string }> {
-  try {
-    console.log('[Supabase Diagnostic] Testing READ access...');
-    const { data, error } = await supabase
-      .from('cleaning_logs')
-      .select('id')
-      .limit(1);
-
-    if (error) {
-      console.error('[Supabase Diagnostic] READ failed:', error.message);
-      return { success: false, error: error.message };
-    }
-
-    console.log('[Supabase Diagnostic] READ success. Records found:', data?.length ?? 0);
-    return { success: true };
-  } catch (error) {
-    console.error('[Supabase Diagnostic] READ exception:', error);
-    return { success: false, error: String(error) };
-  }
-}
-
-// Diagnostic function to test write access
-export async function testWriteAccess(): Promise<{ success: boolean; error?: string }> {
-  try {
-    console.log('[Supabase Diagnostic] Testing WRITE access...');
-    const testId = 'diagnostic_test_' + Date.now();
-
-    // Insert a test record
-    const { data: insertData, error: insertError } = await supabase
-      .from('cleaning_logs')
-      .insert([{
-        id: testId,
-        location_id: 'DIAGNOSTIC_TEST',
-        location_name: 'Diagnostic Test Location',
-        staff_name: 'Diagnostic System',
-        timestamp: new Date().toISOString(),
-        status: 'complete',
-        notes: 'This is a diagnostic test record - safe to delete',
-        checklist_supplies: true,
-        checklist_surfaces: true,
-        checklist_fixtures: true,
-        checklist_trash: true,
-        checklist_floor: true,
-        resolved: true,
-        created_at: new Date().toISOString(),
-      }])
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error('[Supabase Diagnostic] WRITE (insert) failed:', insertError.message);
-      return { success: false, error: insertError.message };
-    }
-
-    console.log('[Supabase Diagnostic] WRITE (insert) success:', insertData?.id);
-
-    // Clean up the test record
-    const { error: deleteError } = await supabase
-      .from('cleaning_logs')
-      .delete()
-      .eq('id', testId);
-
-    if (deleteError) {
-      console.warn('[Supabase Diagnostic] Cleanup failed (non-critical):', deleteError.message);
-    } else {
-      console.log('[Supabase Diagnostic] Cleanup success - test record deleted');
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error('[Supabase Diagnostic] WRITE exception:', error);
-    return { success: false, error: String(error) };
-  }
 }
 
 // Location table types (legacy)
@@ -370,10 +274,12 @@ export interface InsertWashroom {
   is_active?: boolean;
 }
 
-// Insert a new location to Supabase
+// Insert a new location to Supabase with hashed PIN
 export async function insertLocation(location: InsertLocation): Promise<{ success: boolean; data?: LocationRow; error?: string }> {
   try {
-    console.log('[Supabase] Inserting location:', location.id);
+    // Hash the PIN before storing
+    const hashedPin = await hashPin(location.pin_code);
+
     const { data, error } = await supabase
       .from('locations')
       .insert([{
@@ -381,21 +287,18 @@ export async function insertLocation(location: InsertLocation): Promise<{ succes
         name: location.name,
         business_id: location.business_id || null,
         supervisor_email: location.supervisor_email || null,
-        pin_code: location.pin_code,
+        pin_code: hashedPin,
         created_at: new Date().toISOString(),
       }])
       .select()
       .single();
 
     if (error) {
-      console.error('[Supabase] Insert location error:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('[Supabase] Location inserted successfully:', data?.id);
     return { success: true, data };
   } catch (error) {
-    console.error('[Supabase] Insert location exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -410,44 +313,52 @@ export async function getLocationById(locationId: string): Promise<{ success: bo
       .single();
 
     if (error) {
-      // If no rows found, it's not really an error for our use case
       if (error.code === 'PGRST116') {
         return { success: true, data: undefined };
       }
-      console.error('[Supabase] Get location error:', error);
       return { success: false, error: error.message };
     }
 
     return { success: true, data };
   } catch (error) {
-    console.error('[Supabase] Get location exception:', error);
     return { success: false, error: String(error) };
   }
 }
 
-// Verify PIN for a location against Supabase
+// Verify PIN for a location against Supabase (supports hashed and legacy plain-text PINs)
 export async function verifyLocationPin(locationId: string, pin: string): Promise<{ success: boolean; valid?: boolean; error?: string }> {
   try {
-    console.log('[Supabase] Verifying PIN for location:', locationId);
     const { data, error } = await supabase
       .from('locations')
-      .select('pin_code')
+      .select('id, pin_code')
       .eq('id', locationId)
       .single();
 
     if (error) {
       if (error.code === 'PGRST116') {
-        return { success: true, valid: false }; // Location not found
+        return { success: true, valid: false };
       }
-      console.error('[Supabase] Verify PIN error:', error);
       return { success: false, error: error.message };
     }
 
-    const valid = data?.pin_code === pin;
-    console.log('[Supabase] PIN verification result:', valid);
+    // Check if PIN is hashed or plain text
+    let valid = false;
+    if (isBcryptHash(data?.pin_code)) {
+      valid = await verifyPin(pin, data.pin_code);
+    } else {
+      // Legacy plain text PIN - verify and upgrade to hash
+      valid = data?.pin_code === pin;
+      if (valid) {
+        const hashedPin = await hashPin(pin);
+        await supabase
+          .from('locations')
+          .update({ pin_code: hashedPin })
+          .eq('id', locationId);
+      }
+    }
+
     return { success: true, valid };
   } catch (error) {
-    console.error('[Supabase] Verify PIN exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -468,24 +379,21 @@ export async function getWashroomById(washroomId: string): Promise<{ success: bo
       if (error.code === 'PGRST116') {
         return { success: true, data: undefined };
       }
-      console.error('[Supabase] Get washroom error:', error);
       return { success: false, error: error.message };
     }
 
     return { success: true, data };
   } catch (error) {
-    console.error('[Supabase] Get washroom exception:', error);
     return { success: false, error: String(error) };
   }
 }
 
-// Verify PIN for a washroom
+// Verify PIN for a washroom (supports hashed and legacy plain-text PINs)
 export async function verifyWashroomPin(washroomId: string, pin: string): Promise<{ success: boolean; valid?: boolean; error?: string }> {
   try {
-    console.log('[Supabase] Verifying PIN for washroom:', washroomId);
     const { data, error } = await supabase
       .from('washrooms')
-      .select('pin_code')
+      .select('id, pin_code')
       .eq('id', washroomId)
       .eq('is_active', true)
       .single();
@@ -494,15 +402,27 @@ export async function verifyWashroomPin(washroomId: string, pin: string): Promis
       if (error.code === 'PGRST116') {
         return { success: true, valid: false };
       }
-      console.error('[Supabase] Verify washroom PIN error:', error);
       return { success: false, error: error.message };
     }
 
-    const valid = data?.pin_code === pin;
-    console.log('[Supabase] Washroom PIN verification result:', valid);
+    // Check if PIN is hashed or plain text
+    let valid = false;
+    if (isBcryptHash(data?.pin_code)) {
+      valid = await verifyPin(pin, data.pin_code);
+    } else {
+      // Legacy plain text PIN - verify and upgrade to hash
+      valid = data?.pin_code === pin;
+      if (valid) {
+        const hashedPin = await hashPin(pin);
+        await supabase
+          .from('washrooms')
+          .update({ pin_code: hashedPin })
+          .eq('id', washroomId);
+      }
+    }
+
     return { success: true, valid };
   } catch (error) {
-    console.error('[Supabase] Verify washroom PIN exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -510,21 +430,17 @@ export async function verifyWashroomPin(washroomId: string, pin: string): Promis
 // Update last_cleaned timestamp for a washroom
 export async function updateWashroomLastCleaned(washroomId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log('[Supabase] Updating last_cleaned for washroom:', washroomId);
     const { error } = await supabase
       .from('washrooms')
       .update({ last_cleaned: new Date().toISOString() })
       .eq('id', washroomId);
 
     if (error) {
-      console.error('[Supabase] Update last_cleaned error:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('[Supabase] last_cleaned updated successfully');
     return { success: true };
   } catch (error) {
-    console.error('[Supabase] Update last_cleaned exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -539,13 +455,11 @@ export async function getAllWashrooms(): Promise<{ success: boolean; data?: Wash
       .order('business_name', { ascending: true });
 
     if (error) {
-      console.error('[Supabase] Get all washrooms error:', error);
       return { success: false, error: error.message };
     }
 
     return { success: true, data: data ?? [] };
   } catch (error) {
-    console.error('[Supabase] Get all washrooms exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -561,13 +475,11 @@ export async function getWashroomsForBusiness(businessName: string): Promise<{ s
       .order('room_name', { ascending: true });
 
     if (error) {
-      console.error('[Supabase] Get washrooms for business error:', error);
       return { success: false, error: error.message };
     }
 
     return { success: true, data: data ?? [] };
   } catch (error) {
-    console.error('[Supabase] Get washrooms for business exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -575,33 +487,34 @@ export async function getWashroomsForBusiness(businessName: string): Promise<{ s
 // Delete a washroom (soft delete - set is_active to false)
 export async function deleteWashroom(washroomId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log('[Supabase] Deleting washroom:', washroomId);
     const { error } = await supabase
       .from('washrooms')
       .update({ is_active: false })
       .eq('id', washroomId);
 
     if (error) {
-      console.error('[Supabase] Delete washroom error:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('[Supabase] Washroom deleted successfully:', washroomId);
     return { success: true };
   } catch (error) {
-    console.error('[Supabase] Delete washroom exception:', error);
     return { success: false, error: String(error) };
   }
 }
 
-// Insert a new washroom
+// Insert a new washroom with hashed PIN
 export async function insertWashroom(washroom: InsertWashroom): Promise<{ success: boolean; data?: WashroomRow; error?: string }> {
   try {
-    console.log('[Supabase] Inserting washroom:', washroom.id);
+    // Hash the PIN before storing
+    const hashedPin = await hashPin(washroom.pin_code);
+
     const { data, error } = await supabase
       .from('washrooms')
       .insert([{
-        ...washroom,
+        id: washroom.id,
+        business_name: washroom.business_name,
+        room_name: washroom.room_name,
+        pin_code: hashedPin,
         is_active: washroom.is_active ?? true,
         created_at: new Date().toISOString(),
       }])
@@ -609,14 +522,11 @@ export async function insertWashroom(washroom: InsertWashroom): Promise<{ succes
       .single();
 
     if (error) {
-      console.error('[Supabase] Insert washroom error:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('[Supabase] Washroom inserted successfully:', data?.id);
     return { success: true, data };
   } catch (error) {
-    console.error('[Supabase] Insert washroom exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -624,21 +534,17 @@ export async function insertWashroom(washroom: InsertWashroom): Promise<{ succes
 // Delete a location from Supabase
 export async function deleteLocation(locationId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log('[Supabase] Deleting location:', locationId);
     const { error } = await supabase
       .from('locations')
       .delete()
       .eq('id', locationId);
 
     if (error) {
-      console.error('[Supabase] Delete location error:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('[Supabase] Location deleted successfully:', locationId);
     return { success: true };
   } catch (error) {
-    console.error('[Supabase] Delete location exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -646,22 +552,17 @@ export async function deleteLocation(locationId: string): Promise<{ success: boo
 // Delete all cleaning logs for a specific location
 export async function deleteLogsForLocation(locationId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log('[Supabase] Deleting logs for location:', locationId);
-
     const { error } = await supabase
       .from('cleaning_logs')
       .delete()
       .eq('location_id', locationId);
 
     if (error) {
-      console.error('[Supabase] Delete logs error:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('[Supabase] Logs deleted successfully for location:', locationId);
     return { success: true };
   } catch (error) {
-    console.error('[Supabase] Delete logs exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -672,8 +573,6 @@ export async function getLogsForDateRange(
   endDate: Date
 ): Promise<{ success: boolean; data?: CleaningLogRow[]; error?: string }> {
   try {
-    console.log('[Supabase] Fetching logs for date range:', startDate.toISOString(), 'to', endDate.toISOString());
-
     const { data, error } = await supabase
       .from('cleaning_logs')
       .select('*')
@@ -682,14 +581,11 @@ export async function getLogsForDateRange(
       .order('timestamp', { ascending: false });
 
     if (error) {
-      console.error('[Supabase] Date range query error:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('[Supabase] Found', data?.length ?? 0, 'logs in date range');
     return { success: true, data: data ?? [] };
   } catch (error) {
-    console.error('[Supabase] Date range query exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -705,6 +601,16 @@ export interface BusinessRow {
   created_at: string;
 }
 
+// Safe business data without sensitive fields (for client-side storage)
+export interface SafeBusinessRow {
+  id: string;
+  name: string;
+  email: string;
+  is_admin: boolean;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface InsertBusiness {
   name: string;
   email: string;
@@ -713,17 +619,18 @@ export interface InsertBusiness {
   is_active?: boolean;
 }
 
-// Insert a new business
+// Insert a new business with properly hashed password
 export async function insertBusiness(business: InsertBusiness): Promise<{ success: boolean; data?: BusinessRow; error?: string }> {
   try {
-    console.log('[Supabase] Inserting business:', business.name);
+    const hashedPassword = await hashPassword(business.password);
+
     const { data, error } = await supabase
       .from('businesses')
       .insert([{
         id: generateId(),
         name: business.name,
         email: business.email.toLowerCase(),
-        password_hash: business.password, // Simple password for now
+        password_hash: hashedPassword,
         is_admin: business.is_admin ?? false,
         is_active: business.is_active ?? true,
         created_at: new Date().toISOString(),
@@ -732,47 +639,71 @@ export async function insertBusiness(business: InsertBusiness): Promise<{ succes
       .single();
 
     if (error) {
-      console.error('[Supabase] Insert business error:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('[Supabase] Business inserted successfully:', data?.id);
     return { success: true, data };
   } catch (error) {
-    console.error('[Supabase] Insert business exception:', error);
     return { success: false, error: String(error) };
   }
 }
 
-// Login business by email and password
-export async function loginBusiness(email: string, password: string): Promise<{ success: boolean; data?: BusinessRow; error?: string }> {
+// Login business by email and password with secure password verification
+export async function loginBusiness(email: string, password: string): Promise<{ success: boolean; data?: SafeBusinessRow; error?: string }> {
   try {
-    console.log('[Supabase] Logging in business:', email);
     const { data, error } = await supabase
       .from('businesses')
       .select('*')
       .eq('email', email.toLowerCase())
-      .eq('password_hash', password)
       .single();
 
     if (error) {
       if (error.code === 'PGRST116') {
         return { success: false, error: 'Invalid email or password / Courriel ou mot de passe invalide' };
       }
-      console.error('[Supabase] Login error:', error);
       return { success: false, error: error.message };
     }
 
-    // Check if business is active
-    if (data && data.is_active === false) {
-      console.log('[Supabase] Business account is deactivated:', data.name);
+    if (!data) {
+      return { success: false, error: 'Invalid email or password / Courriel ou mot de passe invalide' };
+    }
+
+    if (data.is_active === false) {
       return { success: false, error: 'Your account has been deactivated. Please contact support. / Votre compte a été désactivé. Veuillez contacter le support.' };
     }
 
-    console.log('[Supabase] Login successful:', data?.name);
-    return { success: true, data };
+    // Verify password - support both hashed and legacy plain text passwords
+    let passwordValid = false;
+    if (isBcryptHash(data.password_hash)) {
+      passwordValid = await verifyPassword(password, data.password_hash);
+    } else {
+      // Legacy plain text password - verify and upgrade to hash
+      passwordValid = data.password_hash === password;
+      if (passwordValid) {
+        const hashedPassword = await hashPassword(password);
+        await supabase
+          .from('businesses')
+          .update({ password_hash: hashedPassword })
+          .eq('id', data.id);
+      }
+    }
+
+    if (!passwordValid) {
+      return { success: false, error: 'Invalid email or password / Courriel ou mot de passe invalide' };
+    }
+
+    // Return safe business data (without password_hash)
+    const safeData: SafeBusinessRow = {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      is_admin: data.is_admin,
+      is_active: data.is_active,
+      created_at: data.created_at,
+    };
+
+    return { success: true, data: safeData };
   } catch (error) {
-    console.error('[Supabase] Login exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -786,13 +717,11 @@ export async function getAllBusinesses(): Promise<{ success: boolean; data?: Bus
       .order('name', { ascending: true });
 
     if (error) {
-      console.error('[Supabase] Get all businesses error:', error);
       return { success: false, error: error.message };
     }
 
     return { success: true, data: data ?? [] };
   } catch (error) {
-    console.error('[Supabase] Get all businesses exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -807,13 +736,11 @@ export async function getLocationsForBusiness(businessId: string): Promise<{ suc
       .order('name', { ascending: true });
 
     if (error) {
-      console.error('[Supabase] Get locations for business error:', error);
       return { success: false, error: error.message };
     }
 
     return { success: true, data: data ?? [] };
   } catch (error) {
-    console.error('[Supabase] Get locations for business exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -827,13 +754,11 @@ export async function getAllLocations(): Promise<{ success: boolean; data?: Loca
       .order('name', { ascending: true });
 
     if (error) {
-      console.error('[Supabase] Get all locations error:', error);
       return { success: false, error: error.message };
     }
 
     return { success: true, data: data ?? [] };
   } catch (error) {
-    console.error('[Supabase] Get all locations exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -841,7 +766,6 @@ export async function getAllLocations(): Promise<{ success: boolean; data?: Loca
 // Get logs for a specific business (all their locations)
 export async function getLogsForBusiness(businessId: string): Promise<{ success: boolean; data?: CleaningLogRow[]; error?: string }> {
   try {
-    // First get all location IDs for this business
     const locationsResult = await getLocationsForBusiness(businessId);
     if (!locationsResult.success || !locationsResult.data) {
       return { success: false, error: locationsResult.error };
@@ -860,13 +784,11 @@ export async function getLogsForBusiness(businessId: string): Promise<{ success:
       .order('timestamp', { ascending: false });
 
     if (error) {
-      console.error('[Supabase] Get logs for business error:', error);
       return { success: false, error: error.message };
     }
 
     return { success: true, data: data ?? [] };
   } catch (error) {
-    console.error('[Supabase] Get logs for business exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -874,14 +796,12 @@ export async function getLogsForBusiness(businessId: string): Promise<{ success:
 // Get logs for a specific business by name (using washrooms table)
 export async function getLogsForBusinessByName(businessName: string): Promise<{ success: boolean; data?: CleaningLogRow[]; error?: string }> {
   try {
-    // First get all washroom IDs for this business
     const washroomsResult = await getWashroomsForBusiness(businessName);
     if (!washroomsResult.success || !washroomsResult.data) {
       return { success: false, error: washroomsResult.error };
     }
 
     const washroomIds = washroomsResult.data.map(w => w.id);
-    console.log('[Supabase] Found washrooms for business:', washroomIds);
 
     if (washroomIds.length === 0) {
       return { success: true, data: [] };
@@ -894,14 +814,11 @@ export async function getLogsForBusinessByName(businessName: string): Promise<{ 
       .order('timestamp', { ascending: false });
 
     if (error) {
-      console.error('[Supabase] Get logs for business by name error:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('[Supabase] Found', data?.length ?? 0, 'logs for business:', businessName);
     return { success: true, data: data ?? [] };
   } catch (error) {
-    console.error('[Supabase] Get logs for business by name exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -927,13 +844,11 @@ export async function getIssuesForBusiness(businessId: string): Promise<{ succes
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('[Supabase] Get issues for business error:', error);
       return { success: false, error: error.message };
     }
 
     return { success: true, data: data ?? [] };
   } catch (error) {
-    console.error('[Supabase] Get issues for business exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -960,7 +875,6 @@ export interface InsertReportedIssue {
 // Insert a new reported issue to Supabase
 export async function insertReportedIssue(issue: InsertReportedIssue): Promise<{ success: boolean; data?: ReportedIssueRow; error?: string }> {
   try {
-    console.log('[Supabase] Inserting reported issue for location:', issue.location_id);
     const { data, error } = await supabase
       .from('reported_issues')
       .insert([{
@@ -976,14 +890,11 @@ export async function insertReportedIssue(issue: InsertReportedIssue): Promise<{
       .single();
 
     if (error) {
-      console.error('[Supabase] Insert issue error:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('[Supabase] Issue inserted successfully:', data?.id);
     return { success: true, data };
   } catch (error) {
-    console.error('[Supabase] Insert issue exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -991,7 +902,6 @@ export async function insertReportedIssue(issue: InsertReportedIssue): Promise<{
 // Get all open reported issues
 export async function getOpenReportedIssues(): Promise<{ success: boolean; data?: ReportedIssueRow[]; error?: string }> {
   try {
-    console.log('[Supabase] Fetching open reported issues...');
     const { data, error } = await supabase
       .from('reported_issues')
       .select('*')
@@ -999,14 +909,11 @@ export async function getOpenReportedIssues(): Promise<{ success: boolean; data?
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('[Supabase] Get open issues error:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('[Supabase] Found', data?.length ?? 0, 'open issues');
     return { success: true, data: data ?? [] };
   } catch (error) {
-    console.error('[Supabase] Get open issues exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -1014,7 +921,6 @@ export async function getOpenReportedIssues(): Promise<{ success: boolean; data?
 // Resolve a reported issue
 export async function resolveReportedIssue(issueId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log('[Supabase] Resolving issue:', issueId);
     const { error } = await supabase
       .from('reported_issues')
       .update({
@@ -1024,14 +930,11 @@ export async function resolveReportedIssue(issueId: string): Promise<{ success: 
       .eq('id', issueId);
 
     if (error) {
-      console.error('[Supabase] Resolve issue error:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('[Supabase] Issue resolved successfully:', issueId);
     return { success: true };
   } catch (error) {
-    console.error('[Supabase] Resolve issue exception:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -1039,21 +942,17 @@ export async function resolveReportedIssue(issueId: string): Promise<{ success: 
 // Toggle business active status (admin only)
 export async function toggleBusinessActive(businessId: string, isActive: boolean): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log('[Supabase] Toggling business active status:', businessId, 'to', isActive);
     const { error } = await supabase
       .from('businesses')
       .update({ is_active: isActive })
       .eq('id', businessId);
 
     if (error) {
-      console.error('[Supabase] Toggle business active error:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('[Supabase] Business active status updated successfully:', businessId);
     return { success: true };
   } catch (error) {
-    console.error('[Supabase] Toggle business active exception:', error);
     return { success: false, error: String(error) };
   }
 }

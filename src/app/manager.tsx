@@ -162,17 +162,24 @@ export default function ManagerDashboard() {
     try {
       const stored = await AsyncStorage.getItem('currentBusiness');
       if (stored) {
-        const business = JSON.parse(stored) as BusinessRow;
-        setCurrentBusiness(business);
-        setBusinessName(business.name);
-        // Fetch business-specific washrooms
-        const washroomsResult = await getWashroomsForBusiness(business.name);
-        if (washroomsResult.success && washroomsResult.data) {
-          setBusinessLocations(washroomsResult.data);
+        try {
+          const business = JSON.parse(stored) as BusinessRow;
+          if (business?.id && business?.name) {
+            setCurrentBusiness(business);
+            setBusinessName(business.name);
+            // Fetch business-specific washrooms
+            const washroomsResult = await getWashroomsForBusiness(business.name);
+            if (washroomsResult.success && washroomsResult.data) {
+              setBusinessLocations(washroomsResult.data);
+            }
+          }
+        } catch (parseError) {
+          // Invalid JSON in storage, clear it
+          await AsyncStorage.removeItem('currentBusiness');
         }
       }
     } catch (error) {
-      console.error('[Manager] Auth check error:', error);
+      // Storage error
     }
     setIsCheckingAuth(false);
   };

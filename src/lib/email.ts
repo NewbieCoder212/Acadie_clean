@@ -1,15 +1,34 @@
-// Access env var - Expo replaces process.env.EXPO_PUBLIC_* at build time
-const RESEND_API_KEY = process.env.EXPO_PUBLIC_RESEND_API_KEY ?? '';
-const DEFAULT_FROM_EMAIL = 'Acadia Clean <onboarding@resend.dev>';
-// For testing with unverified domain, emails can only go to this address
-const RESEND_TEST_EMAIL = 'microsaasnb@proton.me';
+// Email service - uses Vercel serverless function to keep API key secure
 
-// Base URL for email links - uses environment variable for production
+// Base URL for email links and API calls
 const BASE_URL = process.env.EXPO_PUBLIC_APP_URL || 'https://acadiacleaniq.vercel.app';
 
-// Debug log to verify key is loaded (remove in production)
-if (__DEV__) {
-  console.log('[Email] Resend API key configured:', RESEND_API_KEY ? 'Yes' : 'No');
+// Send email via the secure API endpoint
+async function sendEmailViaAPI(params: { to: string; subject: string; html: string; text?: string }): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetch(`${BASE_URL}/api/send-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({})) as { error?: string };
+      return {
+        success: false,
+        error: errorData.error || `Failed to send email (${response.status})`
+      };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: 'Failed to connect to email service'
+    };
+  }
 }
 
 interface EmailParams {
@@ -220,63 +239,30 @@ export interface SendAlertEmailResult {
 }
 
 /**
- * Send an attention required alert email via Resend API
+ * Send an attention required alert email via secure API
  */
 export async function sendAttentionRequiredEmail(params: EmailParams): Promise<SendAlertEmailResult> {
-  console.log('[Email] Attempting to send alert email to:', params.to);
-
-  if (!RESEND_API_KEY) {
-    console.error('[Email] Resend API key not configured. Key value:', RESEND_API_KEY);
-    return {
-      success: false,
-      error: 'Email service not configured. Please contact support.'
-    };
-  }
-
   try {
     const htmlContent = generateEmailHTML(params);
     const textContent = generateEmailText(params);
 
-    console.log('[Email] Sending to Resend API...');
-
-    // Use test email if domain not verified (Resend free tier limitation)
-    // Once you verify a domain at resend.com/domains, you can send to any email
-    // TODO: Change to params.to after domain verification at resend.com/domains
-    const recipientEmail = RESEND_TEST_EMAIL;
-    console.log('[Email] Recipient (using test email):', recipientEmail);
-
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: DEFAULT_FROM_EMAIL,
-        to: [recipientEmail],
-        subject: `[Acadia Clean] Attention Required - ${params.locationName}`,
-        html: htmlContent,
-        text: textContent,
-      }),
+    const result = await sendEmailViaAPI({
+      to: params.to,
+      subject: `[Acadia Clean] Attention Required - ${params.locationName}`,
+      html: htmlContent,
+      text: textContent,
     });
 
-    console.log('[Email] Response status:', response.status);
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('[Email] Resend API error:', response.status, JSON.stringify(errorData));
+    if (!result.success) {
       return {
         success: false,
-        error: `Failed to send email alert (${response.status}). The log was saved successfully.`
+        error: result.error || 'Failed to send email alert. The log was saved successfully.'
       };
     }
 
-    const data = await response.json();
-    console.log('[Email] Alert sent successfully:', data.id);
     return { success: true };
 
   } catch (error) {
-    console.error('[Email] Failed to send alert:', error);
     return {
       success: false,
       error: 'Failed to send email alert. The log was saved successfully.'
@@ -493,56 +479,30 @@ function generateIssueReportHTML(params: IssueReportParams): string {
 }
 
 /**
- * Send an urgent issue report email via Resend API
+ * Send an urgent issue report email via secure API
  */
 export async function sendIssueReportEmail(params: IssueReportParams): Promise<{ success: boolean; error?: string }> {
-  console.log('[Email] Sending urgent issue report for:', params.locationName);
-
-  if (!RESEND_API_KEY) {
-    console.error('[Email] Resend API key not configured');
-    return {
-      success: false,
-      error: 'Email service not configured.'
-    };
-  }
-
   try {
     const htmlContent = generateIssueReportHTML(params);
     const issueLabel = ISSUE_TYPES.find(t => t.value === params.issueType)?.label || params.issueType;
 
-    // TODO: Change to params.to after domain verification at resend.com/domains
-    const recipientEmail = RESEND_TEST_EMAIL;
-
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: DEFAULT_FROM_EMAIL,
-        to: [recipientEmail],
-        subject: `URGENT: Issue Reported at ${params.locationName} - ${issueLabel}`,
-        html: htmlContent,
-        text: `URGENT: Issue Reported at ${params.locationName}\n\nIssue Type: ${issueLabel}\nComment: ${params.comment || 'No comment provided'}\n\nPlease address this immediately.`,
-      }),
+    const result = await sendEmailViaAPI({
+      to: params.to,
+      subject: `URGENT: Issue Reported at ${params.locationName} - ${issueLabel}`,
+      html: htmlContent,
+      text: `URGENT: Issue Reported at ${params.locationName}\n\nIssue Type: ${issueLabel}\nComment: ${params.comment || 'No comment provided'}\n\nPlease address this immediately.`,
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('[Email] Issue report failed:', response.status, errorData);
+    if (!result.success) {
       return {
         success: false,
-        error: `Failed to send report (${response.status})`
+        error: result.error || 'Failed to send report'
       };
     }
 
-    const data = await response.json();
-    console.log('[Email] Issue report sent:', data.id);
     return { success: true };
 
   } catch (error) {
-    console.error('[Email] Issue report error:', error);
     return {
       success: false,
       error: 'Failed to send report. Please try again.'
@@ -550,93 +510,3 @@ export async function sendIssueReportEmail(params: IssueReportParams): Promise<{
   }
 }
 
-/**
- * Diagnostic function to test email delivery via Resend
- */
-export async function sendDiagnosticEmail(): Promise<{ success: boolean; error?: string }> {
-  console.log('[Email Diagnostic] Testing Resend email delivery...');
-
-  if (!RESEND_API_KEY) {
-    console.error('[Email Diagnostic] Resend API key not configured');
-    return {
-      success: false,
-      error: 'Resend API key not configured. Add EXPO_PUBLIC_RESEND_API_KEY in ENV tab.'
-    };
-  }
-
-  try {
-    const timestamp = new Date();
-    const formattedTime = timestamp.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true,
-    });
-
-    const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Diagnostic Test - Acadia Clean</title>
-</head>
-<body style="margin: 0; padding: 40px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f1f5f9;">
-  <div style="max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; padding: 32px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-    <div style="text-align: center; margin-bottom: 24px;">
-      <div style="width: 64px; height: 64px; background: #dcfce7; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
-        <span style="font-size: 32px;">✓</span>
-      </div>
-      <h1 style="color: #059669; margin: 0; font-size: 24px;">Diagnostic Test Passed</h1>
-    </div>
-    <div style="background: #f8fafc; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-      <p style="color: #64748b; font-size: 12px; margin: 0 0 4px; text-transform: uppercase;">Test Time</p>
-      <p style="color: #0f172a; font-size: 18px; font-weight: 600; margin: 0;">${formattedTime}</p>
-    </div>
-    <p style="color: #64748b; font-size: 14px; text-align: center; margin: 0;">
-      If you received this email, your Resend integration is working correctly.
-    </p>
-  </div>
-</body>
-</html>
-    `.trim();
-
-    console.log('[Email Diagnostic] Sending test email to:', RESEND_TEST_EMAIL);
-
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: DEFAULT_FROM_EMAIL,
-        to: [RESEND_TEST_EMAIL],
-        subject: `[Acadia Clean] Diagnostic Test - ${formattedTime}`,
-        html: htmlContent,
-        text: `Acadia Clean Diagnostic Test\n\nTest Time: ${formattedTime}\n\nIf you received this email, your Resend integration is working correctly.`,
-      }),
-    });
-
-    console.log('[Email Diagnostic] Response status:', response.status);
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('[Email Diagnostic] Failed:', response.status, JSON.stringify(errorData));
-      return {
-        success: false,
-        error: `Resend API error (${response.status}): ${errorData.message || 'Unknown error'}`
-      };
-    }
-
-    const data = await response.json();
-    console.log('[Email Diagnostic] Success! Email ID:', data.id);
-    return { success: true };
-
-  } catch (error) {
-    console.error('[Email Diagnostic] Exception:', error);
-    return {
-      success: false,
-      error: `Network error: ${String(error)}`
-    };
-  }
-}
