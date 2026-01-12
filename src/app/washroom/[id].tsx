@@ -327,8 +327,11 @@ export default function WashroomPublicScreen() {
 
       const insertedIssueId = supabaseResult.data?.id;
 
+      // Use the location's alert_email, fallback to a default if not set
+      const recipientEmail = supabaseWashroom?.alert_email || 'microsaasnb@proton.me';
+
       const result = await sendIssueReportEmail({
-        to: 'microsaasnb@proton.me',
+        to: recipientEmail,
         locationName: location?.name || 'Unknown Location',
         locationId: id || '',
         issueType: selectedIssueType,
@@ -399,7 +402,8 @@ export default function WashroomPublicScreen() {
       setSupabaseWashroom(prev => prev ? { ...prev, last_cleaned: new Date().toISOString() } : null);
 
       if (status === 'attention_required') {
-        const recipientEmail = 'sportsfansummer@hotmail.com';
+        // Use the location's alert_email, fallback to a default if not set
+        const recipientEmail = supabaseWashroom?.alert_email || 'microsaasnb@proton.me';
         const uncheckedItems = getUncheckedItems(checklist);
 
         const emailResult = await sendAttentionRequiredEmail({
