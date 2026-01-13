@@ -40,7 +40,7 @@ import {
   toggleWashroomActive,
   updateBusinessAddress,
   ReportedIssueRow,
-  getIssuesForBusiness,
+  getIssuesForBusinessByName,
   resolveReportedIssue,
 } from '@/lib/supabase';
 import { hashPassword, verifyPassword } from '@/lib/password';
@@ -251,7 +251,7 @@ export default function ManagerDashboard() {
         console.log('[Manager] Fetching data for business:', currentBusiness.name);
         const [logsResult, issuesResult] = await Promise.all([
           getLogsForBusinessByName(currentBusiness.name),
-          getIssuesForBusiness(currentBusiness.id),
+          getIssuesForBusinessByName(currentBusiness.name),
         ]);
 
         console.log('[Manager] Logs result:', logsResult.success, 'count:', logsResult.data?.length);

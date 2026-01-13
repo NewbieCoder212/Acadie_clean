@@ -908,7 +908,7 @@ export async function getLogsForBusinessByName(businessName: string): Promise<{ 
   }
 }
 
-// Get reported issues for a specific business
+// Get reported issues for a specific business (legacy - uses locations table)
 export async function getIssuesForBusiness(businessId: string): Promise<{ success: boolean; data?: ReportedIssueRow[]; error?: string }> {
   try {
     const locationsResult = await getLocationsForBusiness(businessId);
@@ -926,6 +926,36 @@ export async function getIssuesForBusiness(businessId: string): Promise<{ succes
       .from('reported_issues')
       .select('*')
       .in('location_id', locationIds)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data ?? [] };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Get reported issues for a specific business by name (uses washrooms table)
+export async function getIssuesForBusinessByName(businessName: string): Promise<{ success: boolean; data?: ReportedIssueRow[]; error?: string }> {
+  try {
+    const washroomsResult = await getWashroomsForBusiness(businessName);
+    if (!washroomsResult.success || !washroomsResult.data) {
+      return { success: false, error: washroomsResult.error };
+    }
+
+    const washroomIds = washroomsResult.data.map(w => w.id);
+
+    if (washroomIds.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    const { data, error } = await supabase
+      .from('reported_issues')
+      .select('*')
+      .in('location_id', washroomIds)
       .order('created_at', { ascending: false });
 
     if (error) {
