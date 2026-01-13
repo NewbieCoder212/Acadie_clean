@@ -2,7 +2,7 @@
 // This keeps the Resend API key on the server side
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? '';
-const DEFAULT_FROM_EMAIL = 'Acadia Clean <onboarding@resend.dev>';
+const DEFAULT_FROM_EMAIL = 'Acadia Clean <alerts@acadiacleaniq.ca>';
 
 interface RequestBody {
   to: string | string[];
