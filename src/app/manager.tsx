@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Shield, Lock, Eye, EyeOff, Download, MapPin, AlertTriangle, CheckCircle2, Mail, ExternalLink, Plus, Link, Copy, LogOut, Trash2, Key, FileText, Calendar, ClipboardList, RefreshCw, Sparkles, ChevronRight, Save, Power } from 'lucide-react-native';
+import { Shield, Lock, Eye, EyeOff, Download, MapPin, AlertTriangle, CheckCircle2, Mail, ExternalLink, Plus, Link, Copy, LogOut, Trash2, Key, FileText, Calendar, ClipboardList, RefreshCw, Sparkles, ChevronRight, Save, Power, AlertOctagon } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
@@ -39,6 +39,9 @@ import {
   updateWashroomAlertEmail,
   toggleWashroomActive,
   updateBusinessAddress,
+  ReportedIssueRow,
+  getIssuesForBusiness,
+  resolveReportedIssue,
 } from '@/lib/supabase';
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
@@ -78,7 +81,8 @@ export default function ManagerDashboard() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [businessLocations, setBusinessLocations] = useState<WashroomRow[]>([]);
   const [allLogs, setAllLogs] = useState<CleaningLogRow[]>([]);
-
+  const [reportedIssues, setReportedIssues] = useState<ReportedIssueRow[]>([]);
+  const [resolvingIssueId, setResolvingIssueId] = useState<string | null>(null);
   const [passwordInput, setPasswordInput] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -158,6 +162,35 @@ export default function ManagerDashboard() {
     fetchAllData();
   };
 
+  // Handle resolving a reported issue
+  const handleResolveIssue = async (issueId: string) => {
+    setResolvingIssueId(issueId);
+    try {
+      const result = await resolveReportedIssue(issueId);
+      if (result.success) {
+        // Update local state to remove the resolved issue from open list
+        setReportedIssues(prev =>
+          prev.map(issue =>
+            issue.id === issueId
+              ? { ...issue, status: 'resolved' as const, resolved_at: new Date().toISOString() }
+              : issue
+          )
+        );
+      } else {
+        Alert.alert('Error', result.error || 'Failed to resolve issue');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setResolvingIssueId(null);
+    }
+  };
+
+  // Get open issues
+  const openIssues = useMemo(() => {
+    return reportedIssues.filter(issue => issue.status === 'open');
+  }, [reportedIssues]);
+
   // Recent logs (last 10)
   const recentLogs = useMemo(() => {
     return allLogs.slice(0, 10);
@@ -216,13 +249,21 @@ export default function ManagerDashboard() {
       if (currentBusiness && !currentBusiness.is_admin) {
         // Fetch business-specific data
         console.log('[Manager] Fetching data for business:', currentBusiness.name);
-        const logsResult = await getLogsForBusinessByName(currentBusiness.name);
+        const [logsResult, issuesResult] = await Promise.all([
+          getLogsForBusinessByName(currentBusiness.name),
+          getIssuesForBusiness(currentBusiness.id),
+        ]);
 
         console.log('[Manager] Logs result:', logsResult.success, 'count:', logsResult.data?.length);
 
         if (logsResult.success && logsResult.data) {
           console.log('[Manager] Setting allLogs with', logsResult.data.length, 'logs');
           setAllLogs(logsResult.data);
+        }
+
+        if (issuesResult.success && issuesResult.data) {
+          console.log('[Manager] Setting reportedIssues with', issuesResult.data.length, 'issues');
+          setReportedIssues(issuesResult.data);
         }
       } else {
         // Admin or legacy mode - fetch all
@@ -1201,6 +1242,137 @@ export default function ManagerDashboard() {
                         </Text>
                       </View>
                     </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </Animated.View>
+
+        {/* OPEN ISSUES - Reported by Public */}
+        <Animated.View
+          entering={FadeInDown.delay(300).duration(500)}
+          className="px-5 py-4"
+        >
+          <View className="mb-3">
+            <View className="flex-row items-center justify-between">
+              <View>
+                <Text className="text-lg font-bold" style={{ color: C.textPrimary }}>
+                  Open Issues
+                </Text>
+                <Text className="text-xs" style={{ color: C.textMuted }}>
+                  Problèmes signalés par le public
+                </Text>
+              </View>
+              {openIssues.length > 0 && (
+                <View
+                  className="px-3 py-1 rounded-full"
+                  style={{ backgroundColor: C.error }}
+                >
+                  <Text className="text-xs font-bold" style={{ color: C.white }}>
+                    {openIssues.length}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {openIssues.length === 0 ? (
+            <View
+              className="rounded-xl p-6 items-center"
+              style={{ backgroundColor: C.successBg, borderWidth: 1, borderColor: C.borderLight }}
+            >
+              <CheckCircle2 size={24} color={C.actionGreen} />
+              <Text className="text-sm font-medium mt-2" style={{ color: C.actionGreen }}>
+                No Open Issues
+              </Text>
+              <Text className="text-xs mt-1" style={{ color: C.textMuted }}>
+                Aucun problème signalé
+              </Text>
+            </View>
+          ) : (
+            <View
+              className="rounded-xl overflow-hidden"
+              style={{
+                backgroundColor: C.white,
+                borderWidth: 1,
+                borderColor: C.error,
+                ...D.shadow.sm,
+              }}
+            >
+              {openIssues.map((issue, index) => {
+                const issueTypeLabels: Record<string, string> = {
+                  out_of_supplies: 'Out of Supplies',
+                  needs_cleaning: 'Needs Cleaning',
+                  maintenance_required: 'Maintenance Required',
+                  safety_concern: 'Safety Concern',
+                  other: 'Other',
+                };
+                const issueLabel = issueTypeLabels[issue.issue_type] || issue.issue_type;
+
+                return (
+                  <View
+                    key={issue.id}
+                    className="p-4"
+                    style={{
+                      borderBottomWidth: index < openIssues.length - 1 ? 1 : 0,
+                      borderBottomColor: C.borderLight,
+                      backgroundColor: C.errorBg,
+                    }}
+                  >
+                    {/* Issue Header */}
+                    <View className="flex-row items-start justify-between mb-2">
+                      <View className="flex-row items-center flex-1">
+                        <AlertOctagon size={18} color={C.error} />
+                        <Text
+                          className="text-sm font-bold ml-2"
+                          style={{ color: C.error }}
+                          numberOfLines={1}
+                        >
+                          {issueLabel}
+                        </Text>
+                      </View>
+                      <Text className="text-[10px]" style={{ color: C.textMuted }}>
+                        {formatTimeAgo(issue.created_at)}
+                      </Text>
+                    </View>
+
+                    {/* Location */}
+                    <View className="flex-row items-center mb-2">
+                      <MapPin size={14} color={C.textMuted} />
+                      <Text className="text-xs ml-1" style={{ color: C.textPrimary }}>
+                        {issue.location_name}
+                      </Text>
+                    </View>
+
+                    {/* Description */}
+                    {issue.description && (
+                      <Text
+                        className="text-xs mb-3 p-2 rounded-lg"
+                        style={{ backgroundColor: C.white, color: C.textPrimary }}
+                      >
+                        "{issue.description}"
+                      </Text>
+                    )}
+
+                    {/* Resolve Button */}
+                    <Pressable
+                      onPress={() => handleResolveIssue(issue.id)}
+                      disabled={resolvingIssueId === issue.id}
+                      className="flex-row items-center justify-center py-2 rounded-lg active:opacity-80"
+                      style={{ backgroundColor: C.actionGreen }}
+                    >
+                      {resolvingIssueId === issue.id ? (
+                        <ActivityIndicator size="small" color={C.white} />
+                      ) : (
+                        <>
+                          <CheckCircle2 size={16} color={C.white} />
+                          <Text className="text-sm font-bold ml-2" style={{ color: C.white }}>
+                            Mark Resolved
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
                   </View>
                 );
               })}

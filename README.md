@@ -282,8 +282,9 @@ Email alerts are sent automatically when staff submit cleaning logs with "Attent
 ## System Readiness (v1.0 - Soft Launch Ready)
 
 All critical flows verified:
-- Report Issue form saves to Supabase AND triggers email notifications
+- Report Issue form saves to Supabase AND triggers email notifications (email is non-blocking)
 - Attention Required entries auto-resolve when next complete cleaning is logged
+- Open Issues from public reports appear in Manager Dashboard with "Mark Resolved" button
 - Manager authentication persists across app restarts (Zustand + AsyncStorage)
 - All screens have proper empty state messages
 - All screens have back/home navigation buttons

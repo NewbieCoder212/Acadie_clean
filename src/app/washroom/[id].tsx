@@ -315,6 +315,7 @@ export default function WashroomPublicScreen() {
     setIsSubmittingIssue(true);
 
     try {
+      // First save to Supabase - this is the critical part
       const supabaseResult = await insertReportedIssue({
         location_id: id || '',
         location_name: location?.name || 'Unknown Location',
@@ -323,15 +324,24 @@ export default function WashroomPublicScreen() {
       });
 
       if (!supabaseResult.success) {
-        console.log('[Issue] Warning: Failed to insert to Supabase:', supabaseResult.error);
+        // Only show error if Supabase insert fails
+        Alert.alert('Error', supabaseResult.error || 'Failed to save report. Please try again.');
+        setIsSubmittingIssue(false);
+        return;
       }
 
-      const insertedIssueId = supabaseResult.data?.id;
+      // Issue saved successfully - show success to user
+      setIssueSuccess(true);
+      setTimeout(() => {
+        setIssueSuccess(false);
+        handleCloseIssueModal();
+      }, 2000);
 
-      // Use the location's alert_email, fallback to a default if not set
+      // Try to send email notification (non-blocking - issue is already saved)
+      const insertedIssueId = supabaseResult.data?.id;
       const recipientEmail = supabaseWashroom?.alert_email || 'microsaasnb@proton.me';
 
-      const result = await sendIssueReportEmail({
+      sendIssueReportEmail({
         to: recipientEmail,
         locationName: location?.name || 'Unknown Location',
         locationId: id || '',
@@ -339,19 +349,14 @@ export default function WashroomPublicScreen() {
         comment: issueComment.trim(),
         timestamp: new Date(),
         issueId: insertedIssueId,
+      }).then(result => {
+        if (!result.success) {
+          console.log('[Issue] Email notification failed (issue still saved):', result.error);
+        }
       });
 
-      if (result.success) {
-        setIssueSuccess(true);
-        setTimeout(() => {
-          setIssueSuccess(false);
-          handleCloseIssueModal();
-        }, 2000);
-      } else {
-        Alert.alert('Error', result.error || 'Failed to send report');
-      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to send report. Please try again.');
+      Alert.alert('Error', 'Failed to save report. Please try again.');
     } finally {
       setIsSubmittingIssue(false);
     }
