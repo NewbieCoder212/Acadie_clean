@@ -155,14 +155,14 @@ function generateEmailHTML(params: EmailParams): string {
                 </tr>
               </table>
 
-              <!-- Action Button -->
+              <!-- Action Button - Now informational only -->
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center">
-                    <a href="${BASE_URL}/manager" style="display: inline-block; background-color: #059669; color: #ffffff; font-size: 16px; font-weight: bold; text-decoration: none; padding: 16px 32px; border-radius: 12px;">
-                      Open Manager Dashboard to Resolve
+                    <a href="${BASE_URL}/manager" style="display: inline-block; background-color: #64748b; color: #ffffff; font-size: 16px; font-weight: bold; text-decoration: none; padding: 16px 32px; border-radius: 12px;">
+                      View Manager Dashboard
                     </a>
-                    <p style="color: #64748b; font-size: 12px; margin: 16px 0 0;">Tap the button above to open the dashboard and mark this issue as resolved</p>
+                    <p style="color: #64748b; font-size: 12px; margin: 16px 0 0;">This issue will be automatically resolved when the next complete cleaning is logged</p>
                   </td>
                 </tr>
               </table>
@@ -223,9 +223,10 @@ MAINTENANCE NOTES:
 ${notes || 'No notes provided'}
 
 ---
-TO RESOLVE THIS ISSUE:
-Open this link in your browser:
+VIEW DASHBOARD:
 ${BASE_URL}/manager
+
+Note: This issue will be automatically resolved when the next complete cleaning is logged.
 
 ---
 This is an automated alert from Acadia Clean

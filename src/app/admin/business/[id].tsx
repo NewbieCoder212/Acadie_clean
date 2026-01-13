@@ -24,6 +24,9 @@ import {
   Check,
   Trash2,
   ExternalLink,
+  Key,
+  Save,
+  Mail,
 } from 'lucide-react-native';
 import * as Linking from 'expo-linking';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -40,6 +43,9 @@ import {
   insertWashroom,
   getWashroomsForBusiness,
   WashroomRow,
+  hardDeleteWashroom,
+  deleteLogsForLocation,
+  updateBusinessAddress,
 } from '@/lib/supabase';
 
 const COLORS = {
@@ -72,6 +78,14 @@ export default function BusinessDetailScreen() {
   // New location form
   const [newLocationName, setNewLocationName] = useState('');
   const [newLocationPin, setNewLocationPin] = useState('');
+  const [newLocationAlertEmail, setNewLocationAlertEmail] = useState('');
+
+  // Delete washroom state
+  const [deletingWashroomId, setDeletingWashroomId] = useState<string | null>(null);
+
+  // Business address editing
+  const [businessAddress, setBusinessAddress] = useState('');
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -88,6 +102,7 @@ export default function BusinessDetailScreen() {
         const foundBusiness = businessesResult.data.find(b => b.id === id);
         if (foundBusiness) {
           setBusiness(foundBusiness);
+          setBusinessAddress(foundBusiness.address || '');
 
           // Get washrooms for this business using business name
           const washroomsResult = await getWashroomsForBusiness(foundBusiness.name);
@@ -137,12 +152,14 @@ export default function BusinessDetailScreen() {
         business_name: business.name,
         room_name: newLocationName.trim(),
         pin_code: newLocationPin,
+        alert_email: newLocationAlertEmail.trim() || undefined,
       });
 
       if (result.success) {
         setShowAddModal(false);
         setNewLocationName('');
         setNewLocationPin('');
+        setNewLocationAlertEmail('');
         loadData();
         Alert.alert('Success', `Washroom "${newLocationName.trim()}" created with PIN: ${newLocationPin}`);
       } else {
@@ -165,6 +182,58 @@ export default function BusinessDetailScreen() {
 
   const handleViewPublicPage = (locationId: string) => {
     router.push(`/washroom/${locationId}?admin=true`);
+  };
+
+  const handleDeleteWashroom = (washroom: WashroomRow) => {
+    Alert.alert(
+      'Delete Washroom',
+      `Are you sure you want to permanently delete "${washroom.room_name}"?\n\nThis will also delete all cleaning logs for this location. This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingWashroomId(washroom.id);
+            try {
+              // First delete all logs for this location
+              await deleteLogsForLocation(washroom.id);
+              // Then delete the washroom
+              const result = await hardDeleteWashroom(washroom.id);
+              if (result.success) {
+                Alert.alert('Success', `"${washroom.room_name}" has been permanently deleted.`);
+                loadData();
+              } else {
+                Alert.alert('Error', result.error || 'Failed to delete washroom');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Network error. Please try again.');
+            } finally {
+              setDeletingWashroomId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSaveBusinessAddress = async () => {
+    if (!business?.id) return;
+    setIsSavingAddress(true);
+    try {
+      const result = await updateBusinessAddress(business.id, businessAddress.trim());
+      if (result.success) {
+        // Update local business state
+        setBusiness({ ...business, address: businessAddress.trim() });
+        Alert.alert('Success', 'Business address saved!');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to save address');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setIsSavingAddress(false);
+    }
   };
 
   const todayLogs = allLogs.filter(log => {
@@ -330,13 +399,14 @@ export default function BusinessDetailScreen() {
                 {washrooms.map((washroom, index) => (
                   <View
                     key={washroom.id}
-                    className="flex-row items-center justify-between p-4"
+                    className="p-4"
                     style={{
                       borderBottomWidth: index < washrooms.length - 1 ? 1 : 0,
                       borderBottomColor: COLORS.glassBorder,
                     }}
                   >
-                    <View className="flex-row items-center flex-1">
+                    {/* Top row: Location info */}
+                    <View className="flex-row items-center">
                       <View
                         className="w-12 h-12 rounded-xl items-center justify-center"
                         style={{ backgroundColor: COLORS.primaryLight }}
@@ -362,13 +432,51 @@ export default function BusinessDetailScreen() {
                         </View>
                       </View>
                     </View>
-                    <Pressable
-                      onPress={() => handleViewPublicPage(washroom.id)}
-                      className="p-2 rounded-lg active:opacity-70"
-                      style={{ backgroundColor: COLORS.primaryLight }}
-                    >
-                      <ExternalLink size={20} color={COLORS.primary} />
-                    </Pressable>
+
+                    {/* Middle row: PIN and Alert Email */}
+                    <View className="flex-row items-center mt-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
+                      <View className="flex-1 flex-row items-center">
+                        <Key size={14} color={COLORS.textMuted} />
+                        <Text className="text-sm font-mono ml-2" style={{ color: COLORS.textDark }}>
+                          PIN: {washroom.pin_display || washroom.pin_code}
+                        </Text>
+                      </View>
+                      {washroom.alert_email && (
+                        <View className="flex-1 flex-row items-center">
+                          <Mail size={14} color={COLORS.textMuted} />
+                          <Text className="text-xs ml-2" style={{ color: COLORS.textMuted }} numberOfLines={1}>
+                            {washroom.alert_email}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Bottom row: Actions */}
+                    <View className="flex-row items-center justify-end mt-3 gap-2">
+                      <Pressable
+                        onPress={() => handleViewPublicPage(washroom.id)}
+                        className="flex-row items-center px-3 py-2 rounded-lg active:opacity-70"
+                        style={{ backgroundColor: COLORS.primaryLight }}
+                      >
+                        <ExternalLink size={16} color={COLORS.primary} />
+                        <Text className="text-xs font-medium ml-1" style={{ color: COLORS.primary }}>View</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleDeleteWashroom(washroom)}
+                        disabled={deletingWashroomId === washroom.id}
+                        className="flex-row items-center px-3 py-2 rounded-lg active:opacity-70"
+                        style={{ backgroundColor: '#fee2e2' }}
+                      >
+                        {deletingWashroomId === washroom.id ? (
+                          <ActivityIndicator size="small" color={COLORS.error} />
+                        ) : (
+                          <>
+                            <Trash2 size={16} color={COLORS.error} />
+                            <Text className="text-xs font-medium ml-1" style={{ color: COLORS.error }}>Delete</Text>
+                          </>
+                        )}
+                      </Pressable>
+                    </View>
                   </View>
                 ))}
               </View>
@@ -387,20 +495,78 @@ export default function BusinessDetailScreen() {
               className="rounded-2xl p-4"
               style={{ backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder }}
             >
+              {/* Business Name */}
               <View className="flex-row items-center mb-3">
                 <Building2 size={20} color={COLORS.primary} />
-                <Text className="ml-3 text-base" style={{ color: COLORS.textDark }}>
+                <Text className="ml-3 text-base font-semibold" style={{ color: COLORS.textDark }}>
                   {business.name}
                 </Text>
               </View>
-              <View className="flex-row items-center">
-                <Text className="text-sm" style={{ color: COLORS.textMuted }}>
-                  Email: {business.email}
+
+              {/* Email */}
+              <View className="mb-3">
+                <Text className="text-xs font-medium mb-1" style={{ color: COLORS.textMuted }}>Email</Text>
+                <Text className="text-sm" style={{ color: COLORS.textDark }}>
+                  {business.email}
                 </Text>
               </View>
-              <View className="flex-row items-center mt-1">
-                <Text className="text-sm" style={{ color: COLORS.textMuted }}>
-                  Password: {business.password_hash}
+
+              {/* Business Address - Editable */}
+              <View className="mb-3">
+                <Text className="text-xs font-medium mb-1" style={{ color: COLORS.textMuted }}>Business Address</Text>
+                <View className="flex-row items-center gap-2">
+                  <TextInput
+                    value={businessAddress}
+                    onChangeText={setBusinessAddress}
+                    placeholder="Enter business address"
+                    placeholderTextColor={COLORS.textMuted}
+                    className="flex-1 rounded-lg px-3 py-2"
+                    style={{
+                      backgroundColor: COLORS.primaryLight,
+                      fontSize: 14,
+                      color: COLORS.textDark,
+                    }}
+                  />
+                  <Pressable
+                    onPress={handleSaveBusinessAddress}
+                    disabled={isSavingAddress}
+                    className="px-3 py-2 rounded-lg active:opacity-70"
+                    style={{ backgroundColor: COLORS.primary }}
+                  >
+                    {isSavingAddress ? (
+                      <ActivityIndicator size="small" color={COLORS.white} />
+                    ) : (
+                      <Save size={18} color={COLORS.white} />
+                    )}
+                  </Pressable>
+                </View>
+                <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                  This address appears in audit reports
+                </Text>
+              </View>
+
+              {/* Washroom PINs Summary */}
+              {washrooms.length > 0 && (
+                <View className="mb-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
+                  <Text className="text-xs font-medium mb-2" style={{ color: COLORS.textMuted }}>Washroom Staff PINs</Text>
+                  {washrooms.map((w) => (
+                    <View key={w.id} className="flex-row items-center justify-between py-1">
+                      <Text className="text-sm" style={{ color: COLORS.textDark }}>{w.room_name}</Text>
+                      <View className="flex-row items-center">
+                        <Key size={12} color={COLORS.primary} />
+                        <Text className="text-sm font-mono ml-1" style={{ color: COLORS.primary }}>
+                          {w.pin_display || w.pin_code}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Created At */}
+              <View className="pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
+                <Text className="text-xs" style={{ color: COLORS.textMuted }}>
+                  Created: {new Date(business.created_at).toLocaleDateString()}
                 </Text>
               </View>
             </View>
@@ -446,7 +612,7 @@ export default function BusinessDetailScreen() {
                 />
               </View>
 
-              <View className="mb-6">
+              <View className="mb-4">
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                   Staff PIN (4-5 digits)
                 </Text>
@@ -467,6 +633,29 @@ export default function BusinessDetailScreen() {
                 />
                 <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
                   Staff will use this PIN to submit cleaning logs
+                </Text>
+              </View>
+
+              <View className="mb-6">
+                <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
+                  Alert Email (optional)
+                </Text>
+                <TextInput
+                  value={newLocationAlertEmail}
+                  onChangeText={setNewLocationAlertEmail}
+                  placeholder="supervisor@example.com"
+                  placeholderTextColor={COLORS.textMuted}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  className="rounded-xl px-4 py-3"
+                  style={{
+                    backgroundColor: COLORS.primaryLight,
+                    fontSize: 16,
+                    color: COLORS.textDark,
+                  }}
+                />
+                <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                  Receives alerts when issues need attention
                 </Text>
               </View>
 

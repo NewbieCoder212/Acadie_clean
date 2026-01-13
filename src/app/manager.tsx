@@ -320,6 +320,7 @@ export default function ManagerDashboard() {
         room_name: newLocationName.trim(),
         business_name: currentBusiness?.name || 'Default Business',
         pin_code: newLocationPin,
+        alert_email: newLocationEmail.trim(),
       });
 
       if (supabaseResult.success && currentBusiness) {

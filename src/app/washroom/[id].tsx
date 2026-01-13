@@ -54,6 +54,7 @@ import {
   getWashroomById,
   updateWashroomLastCleaned,
   WashroomRow,
+  autoResolveLogsForLocation,
 } from '@/lib/supabase';
 import { sendAttentionRequiredEmail, getUncheckedItems, sendIssueReportEmail, ISSUE_TYPES } from '@/lib/email';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
@@ -400,6 +401,14 @@ export default function WashroomPublicScreen() {
       await updateWashroomLastCleaned(id);
 
       setSupabaseWashroom(prev => prev ? { ...prev, last_cleaned: new Date().toISOString() } : null);
+
+      // If this is a complete cleaning, auto-resolve any previous attention-required entries
+      if (status === 'complete') {
+        const resolveResult = await autoResolveLogsForLocation(id);
+        if (resolveResult.success && resolveResult.resolvedCount && resolveResult.resolvedCount > 0) {
+          console.log(`[Submit] Auto-resolved ${resolveResult.resolvedCount} previous attention entries`);
+        }
+      }
 
       if (status === 'attention_required') {
         // Use the location's alert_email, fallback to a default if not set

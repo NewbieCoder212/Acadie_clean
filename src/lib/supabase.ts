@@ -198,6 +198,47 @@ export async function resolveLog(logId: string): Promise<{ success: boolean; err
   }
 }
 
+// Auto-resolve all unresolved attention logs for a location
+export async function autoResolveLogsForLocation(locationId: string): Promise<{ success: boolean; resolvedCount?: number; error?: string }> {
+  try {
+    // First get count of unresolved logs
+    const { data: unresolvedLogs, error: fetchError } = await supabase
+      .from('cleaning_logs')
+      .select('id')
+      .eq('location_id', locationId)
+      .eq('status', 'attention_required')
+      .eq('resolved', false);
+
+    if (fetchError) {
+      return { success: false, error: fetchError.message };
+    }
+
+    const count = unresolvedLogs?.length ?? 0;
+    if (count === 0) {
+      return { success: true, resolvedCount: 0 };
+    }
+
+    // Update all unresolved attention logs for this location
+    const { error } = await supabase
+      .from('cleaning_logs')
+      .update({
+        resolved: true,
+        resolved_at: new Date().toISOString()
+      })
+      .eq('location_id', locationId)
+      .eq('status', 'attention_required')
+      .eq('resolved', false);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, resolvedCount: count };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
 // Helper function to generate unique IDs
 function generateId(): string {
   return Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
@@ -273,6 +314,7 @@ export interface InsertWashroom {
   business_name: string;
   room_name: string;
   pin_code: string;
+  alert_email?: string;
   is_active?: boolean;
 }
 
@@ -504,6 +546,24 @@ export async function deleteWashroom(washroomId: string): Promise<{ success: boo
   }
 }
 
+// Permanently delete a washroom (hard delete) - Admin only
+export async function hardDeleteWashroom(washroomId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('washrooms')
+      .delete()
+      .eq('id', washroomId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
 // Insert a new washroom with hashed PIN
 export async function insertWashroom(washroom: InsertWashroom): Promise<{ success: boolean; data?: WashroomRow; error?: string }> {
   try {
@@ -518,6 +578,7 @@ export async function insertWashroom(washroom: InsertWashroom): Promise<{ succes
         room_name: washroom.room_name,
         pin_code: hashedPin,
         pin_display: washroom.pin_code, // Store plain PIN for manager display
+        alert_email: washroom.alert_email || null,
         is_active: washroom.is_active ?? true,
         created_at: new Date().toISOString(),
       }])

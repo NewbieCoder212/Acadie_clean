@@ -17,7 +17,7 @@ The app uses a consistent color palette across all screens:
 ## Features
 
 - **Location Management**: Business owners can create and manage multiple washroom locations
-- **Supervisor Email**: Each location can have a supervisor email for alert notifications (managed in Manager Dashboard only)
+- **Alert Email Persistence**: The alert email entered during location creation is saved to Supabase and pre-filled when viewing location settings
 - **Staff PIN Protection**: Each location has a 4-5 digit PIN that staff must enter before logging a cleaning (prevents fake log submissions)
 - **Unique Public URLs**: Each location has a unique URL (`/washroom/[location_id]`) for staff to log cleanings via QR code
 - **Bilingual Checklist**: Staff complete an 8-item checklist organized in 3 sections (English/French):
@@ -140,6 +140,9 @@ Both the Admin Dashboard and Business Portal include a "View Public Page" link f
 2. Enters admin credentials on `/admin-login`
 3. Redirected to `/admin` - the Admin Master View
 4. Can view all businesses, all locations, system-wide statistics
+5. Can permanently delete washroom locations (with confirmation)
+6. Can edit business address (auto-populates in audit reports)
+7. Can view plain-text Staff PINs for all washrooms in Business Info section
 
 ## QR Code URLs
 
@@ -274,11 +277,13 @@ The Manager Dashboard includes an **Inspector Mode** for generating professional
 
 Email alerts are sent automatically when staff submit cleaning logs with "Attention Required" status or when visitors report issues. Alerts are sent to the configured supervisor email for each location.
 
+**Auto-Resolve Feature:** When a cleaner comes back and logs a "Complete" cleaning, any previous "Attention Required" entries for that location are automatically marked as resolved. This eliminates the need for supervisors to manually resolve issues - the next cleaning naturally resolves them.
+
 ## System Readiness (v1.0 - Soft Launch Ready)
 
 All critical flows verified:
 - Report Issue form saves to Supabase AND triggers email notifications
-- "Mark as Resolved" updates the database with visual success feedback
+- Attention Required entries auto-resolve when next complete cleaning is logged
 - Manager authentication persists across app restarts (Zustand + AsyncStorage)
 - All screens have proper empty state messages
 - All screens have back/home navigation buttons
