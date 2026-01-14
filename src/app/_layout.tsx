@@ -71,6 +71,12 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
             headerShown: false,
           }}
         />
+        <Stack.Screen
+          name="manage-acadia9511"
+          options={{
+            headerShown: false,
+          }}
+        />
       </Stack>
     </ThemeProvider>
   );

@@ -63,6 +63,29 @@ The app uses a consistent color palette across all screens:
 - **Safe Session Data**: Login sessions only store non-sensitive business data (no password hashes in AsyncStorage)
 - **Automatic Password Migration**: Legacy plain-text passwords are automatically upgraded to bcrypt hashes on successful login
 
+### Secure Manager Access (Hidden URL)
+
+For enhanced security on public-facing deployments, managers access the portal via a hidden URL:
+
+- **Hidden Manager URL**: `/manage-acadia9511` - not linked from the public site
+- **Email + Password Authentication**: Managers log in with their business email and password (stored hashed in Supabase)
+- **Rate Limiting Protection**:
+  - 5 failed login attempts triggers a 15-minute lockout
+  - Countdown timer shows remaining lockout time
+  - Attempts counter warns users before lockout
+  - Lockout data persists in AsyncStorage
+- **Per-Location Credentials**: Each business location has unique email/password credentials
+- **Admin-Only Business Creation**: Only admins can create new business accounts with credentials
+
+**Manager Login Flow:**
+1. Admin creates new business in admin dashboard with email + password
+2. Admin shares the hidden URL (`/manage-acadia9511`) with the business manager
+3. Manager bookmarks the URL and uses email/password to log in
+4. Rate limiting protects against brute-force attacks even on public URLs
+
+**Password Recovery:**
+If a manager forgets their password, the admin can update it directly in Supabase (businesses table → password_hash field) or create a new business account
+
 ## Design
 
 - **Unified Branding**: All screens use the AcadiaLogo component for consistent logo display (Business Login, Cleaning Page, Admin Dashboard)
@@ -112,6 +135,7 @@ Both the Admin Dashboard and Business Portal include a "View Public Page" link f
 ## Structure
 
 - `/` - Business Portal Login page (Acadia Clean: Partner Portal) - for business owners and admin access
+- `/manage-acadia9511` - **Hidden secure manager login** with rate limiting (share only with authorized managers)
 - `/washroom/[id]` - Public QR landing page (hero status display, issue reporting, staff PIN access) - standalone public access
 - `/public-log/[id]` - Modern mint/emerald public display screen with glass-effect UI showing cleaning status
 - `/scan/[id]` - Redirect route for QR code scans (redirects to `/washroom/[id]`)
