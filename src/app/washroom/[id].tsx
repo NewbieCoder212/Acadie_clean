@@ -640,6 +640,14 @@ export default function WashroomPublicScreen() {
                     {isClean ? 'PROPRE' : needsAttention ? 'REQUISE' : 'EN ATTENTE'}
                   </Text>
 
+                  {/* Business Name */}
+                  <Text
+                    className="text-base font-semibold mb-1"
+                    style={{ color: COLORS.textDark }}
+                  >
+                    {location.businessName}
+                  </Text>
+
                   {/* Location Name */}
                   <View
                     className="flex-row items-center px-4 py-2 rounded-full"
