@@ -46,6 +46,7 @@ import {
   hardDeleteWashroom,
   deleteLogsForLocation,
   updateBusinessAddress,
+  updateBusinessPassword,
 } from '@/lib/supabase';
 
 const COLORS = {
@@ -86,6 +87,10 @@ export default function BusinessDetailScreen() {
   // Business address editing
   const [businessAddress, setBusinessAddress] = useState('');
   const [isSavingAddress, setIsSavingAddress] = useState(false);
+
+  // Business password editing
+  const [newPassword, setNewPassword] = useState('');
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -234,6 +239,45 @@ export default function BusinessDetailScreen() {
     } finally {
       setIsSavingAddress(false);
     }
+  };
+
+  const handleSavePassword = async () => {
+    if (!business?.id) return;
+    if (!newPassword.trim()) {
+      Alert.alert('Error', 'Please enter a new password');
+      return;
+    }
+    if (newPassword.trim().length < 4) {
+      Alert.alert('Error', 'Password must be at least 4 characters');
+      return;
+    }
+
+    Alert.alert(
+      'Update Password',
+      `Are you sure you want to change the password for "${business.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Update',
+          onPress: async () => {
+            setIsSavingPassword(true);
+            try {
+              const result = await updateBusinessPassword(business.id, newPassword.trim());
+              if (result.success) {
+                setNewPassword('');
+                Alert.alert('Success', 'Password updated! The business manager can now log in with the new password.');
+              } else {
+                Alert.alert('Error', result.error || 'Failed to update password');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Network error. Please try again.');
+            } finally {
+              setIsSavingPassword(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const todayLogs = allLogs.filter(log => {
@@ -508,6 +552,41 @@ export default function BusinessDetailScreen() {
                 <Text className="text-xs font-medium mb-1" style={{ color: COLORS.textMuted }}>Email</Text>
                 <Text className="text-sm" style={{ color: COLORS.textDark }}>
                   {business.email}
+                </Text>
+              </View>
+
+              {/* Manager Password - Editable */}
+              <View className="mb-3">
+                <Text className="text-xs font-medium mb-1" style={{ color: COLORS.textMuted }}>Manager Password</Text>
+                <View className="flex-row items-center gap-2">
+                  <TextInput
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    placeholder="Enter new password"
+                    placeholderTextColor={COLORS.textMuted}
+                    secureTextEntry
+                    className="flex-1 rounded-lg px-3 py-2"
+                    style={{
+                      backgroundColor: COLORS.primaryLight,
+                      fontSize: 14,
+                      color: COLORS.textDark,
+                    }}
+                  />
+                  <Pressable
+                    onPress={handleSavePassword}
+                    disabled={isSavingPassword || !newPassword.trim()}
+                    className="px-3 py-2 rounded-lg active:opacity-70"
+                    style={{ backgroundColor: newPassword.trim() ? COLORS.primary : COLORS.textMuted }}
+                  >
+                    {isSavingPassword ? (
+                      <ActivityIndicator size="small" color={COLORS.white} />
+                    ) : (
+                      <Save size={18} color={COLORS.white} />
+                    )}
+                  </Pressable>
+                </View>
+                <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                  Leave empty to keep current password
                 </Text>
               </View>
 

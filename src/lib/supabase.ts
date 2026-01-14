@@ -811,6 +811,24 @@ export async function updateBusinessAddress(businessId: string, address: string)
   }
 }
 
+// Update business password
+export async function updateBusinessPassword(businessId: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('businesses')
+      .update({ password: newPassword })
+      .eq('id', businessId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
 // Get locations for a specific business
 export async function getLocationsForBusiness(businessId: string): Promise<{ success: boolean; data?: LocationRow[]; error?: string }> {
   try {
