@@ -231,7 +231,7 @@ export default function ManagerDashboard() {
 
   // Generate QR code URL - uses environment variable for production URL
   const getLocationUrl = (locationId: string) => {
-    const baseUrl = process.env.EXPO_PUBLIC_APP_URL || 'https://acadiacleaniq.vercel.app';
+    const baseUrl = process.env.EXPO_PUBLIC_APP_URL || 'https://app.acadiacleaniq.ca';
     return `${baseUrl}/washroom/${locationId}`;
   };
 
