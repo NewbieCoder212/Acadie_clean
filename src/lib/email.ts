@@ -339,7 +339,7 @@ interface IssueReportParams {
  * Generate HTML email template for urgent issue reports
  */
 function generateIssueReportHTML(params: IssueReportParams): string {
-  const { locationName, locationId, issueType, comment, timestamp, issueId } = params;
+  const { locationName, locationId, issueType, comment, timestamp } = params;
 
   const issueLabel = ISSUE_TYPES.find(t => t.value === issueType)?.label || issueType;
 
@@ -356,10 +356,9 @@ function generateIssueReportHTML(params: IssueReportParams): string {
     hour12: true,
   });
 
-  // Build the dashboard URL with optional issueId parameter using BASE_URL
-  const dashboardUrl = issueId
-    ? `${BASE_URL}/manager?issueId=${issueId}`
-    : `${BASE_URL}/manager`;
+  // Build the login URL - managers need to authenticate first
+  // After login, they'll be redirected to the dashboard
+  const loginUrl = `${BASE_URL}/login`;
 
   return `
 <!DOCTYPE html>
@@ -451,10 +450,10 @@ function generateIssueReportHTML(params: IssueReportParams): string {
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center">
-                    <a href="${dashboardUrl}" style="display: inline-block; background-color: #2563eb; color: #ffffff; font-size: 18px; font-weight: bold; text-decoration: none; padding: 18px 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3);">
-                      View in Dashboard
+                    <a href="${loginUrl}" style="display: inline-block; background-color: #2563eb; color: #ffffff; font-size: 18px; font-weight: bold; text-decoration: none; padding: 18px 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3);">
+                      Login to View Issue
                     </a>
-                    <p style="color: #64748b; font-size: 11px; margin: 12px 0 0;">Click to open the Manager Dashboard and resolve this issue</p>
+                    <p style="color: #64748b; font-size: 11px; margin: 12px 0 0;">Sign in to access your Manager Dashboard and resolve this issue</p>
                   </td>
                 </tr>
               </table>
