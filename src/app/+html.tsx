@@ -21,7 +21,11 @@ export default function Root({ children }: { children: React.ReactNode }) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="AcadiaClean" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/logo-icon.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="/logo-icon.png" />
+        <link rel="apple-touch-icon" sizes="120x120" href="/logo-icon.png" />
         <link rel="apple-touch-icon" href="/logo-icon.png" />
+        <link rel="icon" type="image/png" href="/logo-icon.png" />
 
         {/*
           Disable body scrolling on web. This makes ScrollView components work closer to how they do on native.
