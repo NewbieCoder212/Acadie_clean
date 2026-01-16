@@ -26,6 +26,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useStore, WashroomLocation } from '@/lib/store';
 import {
   getLogs6Months as getSupabase6MonthLogs,
+  getLogs1Month as getSupabase1MonthLogs,
   deleteLogsForLocation as supabaseDeleteLogsForLocation,
   insertWashroom as supabaseInsertWashroom,
   deleteWashroom as supabaseDeleteWashroom,
@@ -44,6 +45,7 @@ import {
   resolveReportedIssue,
 } from '@/lib/supabase';
 import { hashPassword, verifyPassword } from '@/lib/password';
+import { sendNewWashroomNotification } from '@/lib/email';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
 import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
 
@@ -370,6 +372,17 @@ export default function ManagerDashboard() {
         if (washroomsResult.success && washroomsResult.data) {
           setBusinessLocations(washroomsResult.data);
         }
+
+        // Send notification email to admin about new washroom
+        sendNewWashroomNotification({
+          businessName: currentBusiness.name,
+          washroomName: newLocationName.trim(),
+          washroomId: locationId,
+          alertEmail: newLocationEmail.trim(),
+          timestamp: new Date(),
+        }).catch((err) => {
+          console.log('Failed to send new washroom notification:', err);
+        });
       }
 
       setNewlyCreatedLocation({ id: locationId, name: newLocationName.trim() });
@@ -576,7 +589,7 @@ export default function ManagerDashboard() {
       ].join(',');
     });
 
-    return `${businessDisplayName}\nLocation / Emplacement: ${locationName}\n6 Month History / Historique de 6 mois\n\n${headers}\n${rows.join('\n')}`;
+    return `${businessDisplayName}\nLocation / Emplacement: ${locationName}\n1 Month History / Historique de 1 mois (30 jours)\n\n${headers}\n${rows.join('\n')}`;
   };
 
   const handleExport = async (locationId: string) => {
@@ -585,16 +598,16 @@ export default function ManagerDashboard() {
       const location = displayLocations.find(l => l.id === locationId);
       if (!location) return;
 
-      const result = await getSupabase6MonthLogs(locationId);
+      const result = await getSupabase1MonthLogs(locationId);
       if (!result.success || !result.data || result.data.length === 0) {
-        Alert.alert('No Data', 'No cleaning logs found for the past 6 months');
+        Alert.alert('No Data', 'No cleaning logs found for the past 30 days');
         setExportingId(null);
         return;
       }
 
       const businessDisplayName = currentBusiness?.name || 'Acadia Clean';
       const csv = generateCSV(result.data, location.name, businessDisplayName);
-      const fileName = `${location.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-6-month-history.csv`;
+      const fileName = `${location.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-1-month-history.csv`;
 
       if (Platform.OS === 'web') {
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -1276,6 +1289,7 @@ export default function ManagerDashboard() {
               {displayLocations.map((location) => {
                 const isInactive = location.isActive === false;
                 const status = getLocationStatus(location.id);
+                const isNew = status === 'unknown' && !isInactive; // New washroom = no logs yet
                 const statusColor = isInactive ? COLORS.slate400 : status === 'clean' ? COLORS.primary : status === 'attention' ? COLORS.amber : COLORS.slate400;
                 const statusBg = isInactive ? COLORS.slate100 : status === 'clean' ? COLORS.primaryLight : status === 'attention' ? COLORS.amberLight : COLORS.slate100;
                 const statusText = isInactive ? 'INACTIVE' : status === 'clean' ? 'CLEAN' : status === 'attention' ? 'ATTENTION REQUIRED' : 'NO DATA';
@@ -1295,16 +1309,27 @@ export default function ManagerDashboard() {
                       style={{
                         backgroundColor: COLORS.white,
                         borderWidth: 2,
-                        borderColor: statusColor,
+                        borderColor: isNew ? '#2563eb' : statusColor,
                       }}
                     >
+                      {/* NEW Badge for washrooms without logs */}
+                      {isNew && (
+                        <View
+                          className="absolute -top-2 -right-2 px-2 py-0.5 rounded-full"
+                          style={{ backgroundColor: '#2563eb' }}
+                        >
+                          <Text className="text-[10px] font-bold text-white">NEW</Text>
+                        </View>
+                      )}
                       <View className="flex-row items-start justify-between mb-2">
                         <View
                           className="w-10 h-10 rounded-full items-center justify-center"
-                          style={{ backgroundColor: statusBg }}
+                          style={{ backgroundColor: isNew ? '#dbeafe' : statusBg }}
                         >
                           {isInactive ? (
                             <Power size={22} color={statusColor} />
+                          ) : isNew ? (
+                            <Sparkles size={22} color="#2563eb" />
                           ) : status === 'clean' ? (
                             <CheckCircle2 size={22} color={statusColor} />
                           ) : status === 'attention' ? (
@@ -1333,15 +1358,15 @@ export default function ManagerDashboard() {
                       </Text>
                       <Text
                         className="text-xs font-bold"
-                        style={{ color: statusColor }}
+                        style={{ color: isNew ? '#2563eb' : statusColor }}
                       >
-                        {statusText}
+                        {isNew ? 'NEEDS QR CODE' : statusText}
                       </Text>
                       <Text
                         className="text-[10px]"
-                        style={{ color: statusColor }}
+                        style={{ color: isNew ? '#2563eb' : statusColor }}
                       >
-                        {isInactive ? 'Inactif' : status === 'clean' ? 'Propre' : status === 'attention' ? 'Attention requise' : 'Pas de données'}
+                        {isInactive ? 'Inactif' : isNew ? 'Code QR requis' : status === 'clean' ? 'Propre' : status === 'attention' ? 'Attention requise' : 'Pas de données'}
                       </Text>
                     </View>
                   </Pressable>
@@ -2034,11 +2059,11 @@ export default function ManagerDashboard() {
                     <View className="flex-row items-center">
                       <Download size={20} color="#fff" />
                       <Text className="text-white font-bold ml-2">
-                        {exportingId === location.id ? 'Exporting...' : 'Export 6-Month History'}
+                        {exportingId === location.id ? 'Exporting...' : 'View 1-Month History'}
                       </Text>
                     </View>
                     <Text className="text-white/80 text-xs">
-                      {exportingId === location.id ? 'Exportation...' : 'Exporter l\'historique de 6 mois'}
+                      {exportingId === location.id ? 'Exportation...' : 'Voir l\'historique de 1 mois (30 jours max)'}
                     </Text>
                   </Pressable>
 

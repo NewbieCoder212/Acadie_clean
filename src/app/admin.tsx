@@ -9,6 +9,7 @@ import {
   TextInput,
   Alert,
   Switch,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,9 +25,14 @@ import {
   AlertTriangle,
   X,
   Check,
+  Download,
+  Calendar,
 } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import {
   BusinessRow,
   getAllBusinesses,
@@ -36,6 +42,7 @@ import {
   getAllLocations,
   getAllWashrooms,
   toggleBusinessActive,
+  getLogsForDateRange,
   LocationRow,
   WashroomRow,
   CleaningLogRow,
@@ -70,6 +77,15 @@ export default function AdminDashboardScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+
+  // Export History state
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)); // 30 days ago
+  const [exportEndDate, setExportEndDate] = useState(new Date());
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportSuccess, setExportSuccess] = useState(false);
 
   // New business form
   const [newBusinessName, setNewBusinessName] = useState('');
@@ -206,6 +222,119 @@ export default function AdminDashboardScreen() {
     return locationCount + washroomCount;
   };
 
+  // Format date for display
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  // Generate CSV for export
+  const generateAdminCSV = (logsData: CleaningLogRow[]): string => {
+    const headers = [
+      'Date/Time',
+      'Business',
+      'Location',
+      'Staff Name',
+      'Supplies',
+      'Toilet Paper',
+      'Bins',
+      'Surfaces',
+      'Fixtures',
+      'Water Temp',
+      'Floors',
+      'Ventilation',
+      'Status',
+      'Notes'
+    ].join(',');
+
+    const rows = logsData.map((log) => {
+      const date = new Date(log.timestamp);
+      const dateStr = date.toLocaleDateString('en-US');
+      const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      const notes = (log.notes || '').replace(/"/g, '""').replace(/\n/g, ' ');
+      // Find business name from washroom
+      const washroom = washrooms.find(w => w.id === log.location_id);
+      const businessName = washroom?.business_name || 'Unknown';
+
+      return [
+        `"${dateStr} ${timeStr}"`,
+        `"${businessName}"`,
+        `"${log.location_name || 'Unknown'}"`,
+        `"${log.staff_name || 'Unknown'}"`,
+        log.checklist_supplies ? 'Yes' : 'No',
+        log.checklist_supplies ? 'Yes' : 'No',
+        log.checklist_trash ? 'Yes' : 'No',
+        log.checklist_surfaces ? 'Yes' : 'No',
+        log.checklist_fixtures ? 'Yes' : 'No',
+        log.checklist_fixtures ? 'Yes' : 'No',
+        log.checklist_floor ? 'Yes' : 'No',
+        log.checklist_fixtures ? 'Yes' : 'No',
+        log.status === 'complete' ? 'Complete' : 'Attention Required',
+        `"${notes}"`
+      ].join(',');
+    });
+
+    return `Acadia Clean - Admin Export\nDate Range: ${formatDate(exportStartDate)} to ${formatDate(exportEndDate)}\nTotal Records: ${logsData.length}\n\n${headers}\n${rows.join('\n')}`;
+  };
+
+  // Handle export
+  const handleExportHistory = async () => {
+    if (exportStartDate > exportEndDate) {
+      Alert.alert('Invalid Date Range', 'Start date must be before end date');
+      return;
+    }
+
+    setIsExporting(true);
+    setExportSuccess(false);
+
+    try {
+      const startDate = new Date(exportStartDate);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(exportEndDate);
+      endDate.setHours(23, 59, 59, 999);
+
+      const result = await getLogsForDateRange(startDate, endDate);
+
+      if (!result.success || !result.data || result.data.length === 0) {
+        Alert.alert('No Data', 'No cleaning logs found for the selected date range');
+        setIsExporting(false);
+        return;
+      }
+
+      const csv = generateAdminCSV(result.data);
+      const startStr = exportStartDate.toISOString().split('T')[0];
+      const endStr = exportEndDate.toISOString().split('T')[0];
+      const fileName = `acadia-clean-export-${startStr}-to-${endStr}.csv`;
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setExportSuccess(true);
+      } else {
+        const filePath = `${FileSystem.documentDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(filePath, csv);
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(filePath, { mimeType: 'text/csv' });
+          setExportSuccess(true);
+        }
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to export data');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const openIssueCount = issues.filter(i => i.status === 'open').length;
   const todayLogs = logs.filter(log => {
     const logDate = new Date(log.timestamp);
@@ -311,6 +440,19 @@ export default function AdminDashboardScreen() {
                 <Plus size={20} color={COLORS.white} />
                 <Text className="font-bold ml-2" style={{ color: COLORS.white }}>
                   Add Business
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setExportSuccess(false);
+                  setShowExportModal(true);
+                }}
+                className="flex-1 flex-row items-center justify-center py-4 rounded-2xl active:opacity-80"
+                style={{ backgroundColor: '#2563eb' }}
+              >
+                <Download size={20} color={COLORS.white} />
+                <Text className="font-bold ml-2" style={{ color: COLORS.white }}>
+                  Export History
                 </Text>
               </Pressable>
             </View>
@@ -549,6 +691,132 @@ export default function AdminDashboardScreen() {
                   </View>
                 )}
               </Pressable>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Export History Modal */}
+        <Modal
+          visible={showExportModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowExportModal(false)}
+        >
+          <View className="flex-1 bg-black/60 items-center justify-center px-6">
+            <View
+              className="w-full max-w-sm rounded-3xl p-6"
+              style={{ backgroundColor: COLORS.white }}
+            >
+              <View className="flex-row items-center justify-between mb-6">
+                <Text className="text-xl font-bold" style={{ color: COLORS.textDark }}>
+                  Export History
+                </Text>
+                <Pressable onPress={() => setShowExportModal(false)} className="p-1">
+                  <X size={24} color={COLORS.textMuted} />
+                </Pressable>
+              </View>
+
+              {/* Start Date */}
+              <View className="mb-4">
+                <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
+                  Start Date
+                </Text>
+                <Pressable
+                  onPress={() => setShowStartPicker(true)}
+                  className="flex-row items-center rounded-xl px-4 py-3"
+                  style={{ backgroundColor: COLORS.primaryLight }}
+                >
+                  <Calendar size={20} color={COLORS.primary} />
+                  <Text className="ml-3 text-base" style={{ color: COLORS.textDark }}>
+                    {formatDate(exportStartDate)}
+                  </Text>
+                </Pressable>
+                {showStartPicker && (
+                  <DateTimePicker
+                    value={exportStartDate}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(event, date) => {
+                      setShowStartPicker(Platform.OS === 'ios');
+                      if (date) setExportStartDate(date);
+                    }}
+                    maximumDate={new Date()}
+                  />
+                )}
+              </View>
+
+              {/* End Date */}
+              <View className="mb-6">
+                <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
+                  End Date
+                </Text>
+                <Pressable
+                  onPress={() => setShowEndPicker(true)}
+                  className="flex-row items-center rounded-xl px-4 py-3"
+                  style={{ backgroundColor: COLORS.primaryLight }}
+                >
+                  <Calendar size={20} color={COLORS.primary} />
+                  <Text className="ml-3 text-base" style={{ color: COLORS.textDark }}>
+                    {formatDate(exportEndDate)}
+                  </Text>
+                </Pressable>
+                {showEndPicker && (
+                  <DateTimePicker
+                    value={exportEndDate}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(event, date) => {
+                      setShowEndPicker(Platform.OS === 'ios');
+                      if (date) setExportEndDate(date);
+                    }}
+                    maximumDate={new Date()}
+                  />
+                )}
+              </View>
+
+              {/* Export Success Message */}
+              {exportSuccess && (
+                <View className="mb-4 p-3 rounded-xl" style={{ backgroundColor: '#dcfce7' }}>
+                  <View className="flex-row items-center">
+                    <Check size={20} color="#16a34a" />
+                    <Text className="ml-2 font-semibold" style={{ color: '#16a34a' }}>
+                      Export completed successfully!
+                    </Text>
+                  </View>
+                  <Text className="text-sm mt-1" style={{ color: '#15803d' }}>
+                    Your CSV file has been downloaded/shared.
+                  </Text>
+                </View>
+              )}
+
+              {/* Export Button */}
+              <Pressable
+                onPress={handleExportHistory}
+                disabled={isExporting}
+                className="rounded-xl py-4 items-center active:opacity-80"
+                style={{ backgroundColor: '#2563eb' }}
+              >
+                {isExporting ? (
+                  <View className="flex-row items-center">
+                    <ActivityIndicator color={COLORS.white} />
+                    <Text className="text-base font-bold ml-2" style={{ color: COLORS.white }}>
+                      Exporting...
+                    </Text>
+                  </View>
+                ) : (
+                  <View className="flex-row items-center">
+                    <Download size={20} color={COLORS.white} />
+                    <Text className="text-base font-bold ml-2" style={{ color: COLORS.white }}>
+                      {exportSuccess ? 'Export Again' : 'Export CSV'}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+
+              {/* Info text */}
+              <Text className="text-xs text-center mt-3" style={{ color: COLORS.textMuted }}>
+                Exports all cleaning logs for all businesses within the selected date range
+              </Text>
             </View>
           </View>
         </Modal>

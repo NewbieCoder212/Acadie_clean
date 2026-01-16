@@ -157,6 +157,29 @@ export async function getLogs6Months(locationId: string): Promise<{ success: boo
   }
 }
 
+// Get logs for the last 1 month for a specific location (30 days max)
+export async function getLogs1Month(locationId: string): Promise<{ success: boolean; data?: CleaningLogRow[]; error?: string }> {
+  try {
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+
+    const { data, error } = await supabase
+      .from('cleaning_logs')
+      .select('*')
+      .eq('location_id', locationId)
+      .gte('timestamp', oneMonthAgo.toISOString())
+      .order('timestamp', { ascending: false });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data ?? [] };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
 // Get unresolved attention-required logs
 export async function getUnresolvedLogs(): Promise<{ success: boolean; data?: CleaningLogRow[]; error?: string }> {
   try {

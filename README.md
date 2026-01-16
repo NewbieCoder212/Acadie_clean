@@ -45,7 +45,9 @@ The app uses a consistent color palette across all screens:
 - **Manager Resolution**: Managers can mark "Attention Required" entries as resolved, which removes the yellow warning from the public badge while keeping the note for audit purposes
 - **Compliance Record**: Displays the 2 most recent cleaning entries with date, time, staff name, and status
 - **Password-Protected Access**: Manager Dashboard requires password authentication from the main page
-- **CSV Export**: Export 6-month cleaning history for WorkSafeNB compliance audits
+- **CSV Export**: Managers can export 1-month (30 days max) cleaning history for each washroom location. Admins have full date range export for all businesses.
+- **NEW Washroom Badge**: New washrooms without any cleaning logs are highlighted with a blue "NEW" badge and "NEEDS QR CODE" status to remind admins to generate QR codes.
+- **Admin Email Notifications**: When a manager adds a new washroom, the admin (chris@acadiacleaniq.ca) receives an email notification with washroom details and a reminder to generate QR codes.
 
 ## Security
 
