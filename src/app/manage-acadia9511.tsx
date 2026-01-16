@@ -450,8 +450,36 @@ export default function SecureManagerLoginScreen() {
                 </View>
               </Animated.View>
 
+              {/* Admin Access Button */}
+              <Animated.View
+                entering={FadeInDown.delay(500).duration(600).springify()}
+                style={{ marginTop: 24, alignItems: 'center' }}
+              >
+                <Pressable
+                  onPress={() => router.push('/admin-login')}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 12,
+                    paddingHorizontal: 20,
+                    borderRadius: D.borderRadius.full,
+                    backgroundColor: 'rgba(124, 58, 237, 0.1)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(124, 58, 237, 0.3)',
+                  }}
+                >
+                  <ShieldCheck size={16} color="#7c3aed" />
+                  <Text style={{ fontSize: 13, color: '#7c3aed', marginLeft: 8, fontWeight: '600' }}>
+                    Admin Access
+                  </Text>
+                </Pressable>
+                <Text style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>
+                  Accès administrateur
+                </Text>
+              </Animated.View>
+
               {/* Footer */}
-              <View style={{ marginTop: 24, alignItems: 'center' }}>
+              <View style={{ marginTop: 20, alignItems: 'center' }}>
                 <Text style={{ fontSize: 11, color: C.textMuted }}>
                   Powered by{' '}
                   <Text style={{ fontWeight: '600', color: C.emeraldDark }}>
