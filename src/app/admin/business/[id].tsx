@@ -27,8 +27,12 @@ import {
   Key,
   Save,
   Mail,
+  QrCode,
+  Copy,
+  Link,
 } from 'lucide-react-native';
 import * as Linking from 'expo-linking';
+import * as Clipboard from 'expo-clipboard';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import {
   BusinessRow,
@@ -91,6 +95,30 @@ export default function BusinessDetailScreen() {
   // Business password editing
   const [newPassword, setNewPassword] = useState('');
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+
+  // QR Code modal
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [selectedWashroom, setSelectedWashroom] = useState<WashroomRow | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  // Generate public URL for washroom
+  const getWashroomUrl = (washroomId: string) => {
+    return `https://app.acadiacleaniq.ca/washroom/${washroomId}`;
+  };
+
+  const handleShowQrCode = (washroom: WashroomRow) => {
+    setSelectedWashroom(washroom);
+    setCopiedLink(false);
+    setShowQrModal(true);
+  };
+
+  const handleCopyLink = async () => {
+    if (!selectedWashroom) return;
+    const url = getWashroomUrl(selectedWashroom.id);
+    await Clipboard.setStringAsync(url);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
 
   useEffect(() => {
     if (id) {
@@ -498,6 +526,14 @@ export default function BusinessDetailScreen() {
                     {/* Bottom row: Actions */}
                     <View className="flex-row items-center justify-end mt-3 gap-2">
                       <Pressable
+                        onPress={() => handleShowQrCode(washroom)}
+                        className="flex-row items-center px-3 py-2 rounded-lg active:opacity-70"
+                        style={{ backgroundColor: '#d1fae5' }}
+                      >
+                        <QrCode size={16} color="#059669" />
+                        <Text className="text-xs font-medium ml-1" style={{ color: '#059669' }}>QR</Text>
+                      </Pressable>
+                      <Pressable
                         onPress={() => handleViewPublicPage(washroom.id)}
                         className="flex-row items-center px-3 py-2 rounded-lg active:opacity-70"
                         style={{ backgroundColor: COLORS.primaryLight }}
@@ -755,6 +791,109 @@ export default function BusinessDetailScreen() {
                   </View>
                 )}
               </Pressable>
+            </View>
+          </View>
+        </Modal>
+
+        {/* QR Code Modal */}
+        <Modal
+          visible={showQrModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowQrModal(false)}
+        >
+          <View className="flex-1 bg-black/60 items-center justify-center px-6">
+            <View
+              className="w-full max-w-sm rounded-3xl p-6"
+              style={{ backgroundColor: COLORS.white }}
+            >
+              <View className="flex-row items-center justify-between mb-4">
+                <Text className="text-xl font-bold" style={{ color: COLORS.textDark }}>
+                  QR Code Link
+                </Text>
+                <Pressable onPress={() => setShowQrModal(false)} className="p-1">
+                  <X size={24} color={COLORS.textMuted} />
+                </Pressable>
+              </View>
+
+              {selectedWashroom && (
+                <>
+                  {/* Washroom Info */}
+                  <View className="items-center mb-4 p-4 rounded-2xl" style={{ backgroundColor: COLORS.primaryLight }}>
+                    <QrCode size={64} color={COLORS.primary} />
+                    <Text className="text-lg font-bold mt-3" style={{ color: COLORS.textDark }}>
+                      {selectedWashroom.room_name}
+                    </Text>
+                    <Text className="text-sm" style={{ color: COLORS.textMuted }}>
+                      {business?.name}
+                    </Text>
+                  </View>
+
+                  {/* URL Display */}
+                  <View className="mb-4">
+                    <Text className="text-xs font-semibold mb-2" style={{ color: COLORS.textMuted }}>
+                      Public URL (for QR code)
+                    </Text>
+                    <View
+                      className="p-3 rounded-xl flex-row items-center"
+                      style={{ backgroundColor: '#f1f5f9' }}
+                    >
+                      <Link size={16} color={COLORS.textMuted} />
+                      <Text
+                        className="flex-1 text-xs ml-2"
+                        style={{ color: COLORS.textDark }}
+                        numberOfLines={2}
+                      >
+                        {getWashroomUrl(selectedWashroom.id)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* PIN Display */}
+                  <View className="mb-4 p-3 rounded-xl" style={{ backgroundColor: '#fef3c7' }}>
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-sm font-medium" style={{ color: '#92400e' }}>
+                        Staff PIN
+                      </Text>
+                      <View className="flex-row items-center">
+                        <Key size={14} color="#92400e" />
+                        <Text className="text-lg font-bold font-mono ml-2" style={{ color: '#92400e' }}>
+                          {selectedWashroom.pin_display || selectedWashroom.pin_code}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Copy Link Button */}
+                  <Pressable
+                    onPress={handleCopyLink}
+                    className="rounded-xl py-4 items-center active:opacity-80"
+                    style={{ backgroundColor: copiedLink ? COLORS.success : COLORS.primary }}
+                  >
+                    <View className="flex-row items-center">
+                      {copiedLink ? (
+                        <>
+                          <Check size={20} color={COLORS.white} />
+                          <Text className="text-base font-bold ml-2" style={{ color: COLORS.white }}>
+                            Link Copied!
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={20} color={COLORS.white} />
+                          <Text className="text-base font-bold ml-2" style={{ color: COLORS.white }}>
+                            Copy Link for QR Code
+                          </Text>
+                        </>
+                      )}
+                    </View>
+                  </Pressable>
+
+                  <Text className="text-xs text-center mt-3" style={{ color: COLORS.textMuted }}>
+                    Use this link to generate a QR code at qr-code-generator.com or similar
+                  </Text>
+                </>
+              )}
             </View>
           </View>
         </Modal>
