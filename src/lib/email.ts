@@ -511,7 +511,7 @@ export async function sendIssueReportEmail(params: IssueReportParams): Promise<{
 }
 
 // Admin email for new washroom notifications
-const ADMIN_EMAIL = 'chris@acadiacleaniq.ca';
+const ADMIN_EMAIL = 'jay@acadiacleaniq.ca';
 
 interface NewWashroomParams {
   businessName: string;

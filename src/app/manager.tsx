@@ -1360,13 +1360,13 @@ export default function ManagerDashboard() {
                         className="text-xs font-bold"
                         style={{ color: isNew ? '#2563eb' : statusColor }}
                       >
-                        {isNew ? 'NEEDS QR CODE' : statusText}
+                        {isNew ? 'NEW' : statusText}
                       </Text>
                       <Text
                         className="text-[10px]"
                         style={{ color: isNew ? '#2563eb' : statusColor }}
                       >
-                        {isInactive ? 'Inactif' : isNew ? 'Code QR requis' : status === 'clean' ? 'Propre' : status === 'attention' ? 'Attention requise' : 'Pas de données'}
+                        {isInactive ? 'Inactif' : isNew ? 'Nouveau' : status === 'clean' ? 'Propre' : status === 'attention' ? 'Attention requise' : 'Pas de données'}
                       </Text>
                     </View>
                   </Pressable>
