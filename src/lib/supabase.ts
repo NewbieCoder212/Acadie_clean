@@ -949,6 +949,42 @@ export async function getLogsForBusinessByName(businessName: string): Promise<{ 
   }
 }
 
+// Get logs for a specific business by name with date range
+export async function getLogsForBusinessByNameAndDateRange(
+  businessName: string,
+  startDate: Date,
+  endDate: Date
+): Promise<{ success: boolean; data?: CleaningLogRow[]; error?: string }> {
+  try {
+    const washroomsResult = await getWashroomsForBusiness(businessName);
+    if (!washroomsResult.success || !washroomsResult.data) {
+      return { success: false, error: washroomsResult.error };
+    }
+
+    const washroomIds = washroomsResult.data.map(w => w.id);
+
+    if (washroomIds.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    const { data, error } = await supabase
+      .from('cleaning_logs')
+      .select('*')
+      .in('location_id', washroomIds)
+      .gte('timestamp', startDate.toISOString())
+      .lte('timestamp', endDate.toISOString())
+      .order('timestamp', { ascending: false });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data ?? [] };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
 // Get reported issues for a specific business (legacy - uses locations table)
 export async function getIssuesForBusiness(businessId: string): Promise<{ success: boolean; data?: ReportedIssueRow[]; error?: string }> {
   try {

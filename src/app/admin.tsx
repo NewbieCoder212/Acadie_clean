@@ -43,6 +43,7 @@ import {
   getAllWashrooms,
   toggleBusinessActive,
   getLogsForDateRange,
+  getLogsForBusinessByNameAndDateRange,
   LocationRow,
   WashroomRow,
   CleaningLogRow,
@@ -78,7 +79,7 @@ export default function AdminDashboardScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
-  // Export History state
+  // Export History state (all businesses)
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportStartDate, setExportStartDate] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)); // 30 days ago
   const [exportEndDate, setExportEndDate] = useState(new Date());
@@ -86,6 +87,16 @@ export default function AdminDashboardScreen() {
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
+
+  // Per-business export state
+  const [showBusinessExportModal, setShowBusinessExportModal] = useState(false);
+  const [exportingBusiness, setExportingBusiness] = useState<BusinessRow | null>(null);
+  const [businessExportStartDate, setBusinessExportStartDate] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+  const [businessExportEndDate, setBusinessExportEndDate] = useState(new Date());
+  const [showBusinessStartPicker, setShowBusinessStartPicker] = useState(false);
+  const [showBusinessEndPicker, setShowBusinessEndPicker] = useState(false);
+  const [isBusinessExporting, setIsBusinessExporting] = useState(false);
+  const [businessExportSuccess, setBusinessExportSuccess] = useState(false);
 
   // New business form
   const [newBusinessName, setNewBusinessName] = useState('');
@@ -335,6 +346,103 @@ export default function AdminDashboardScreen() {
     }
   };
 
+  // Generate CSV for a specific business
+  const generateBusinessCSV = (logsData: CleaningLogRow[], businessName: string) => {
+    const headers = 'Date/Time,Location,Staff,Supplies,Mirrors,Trash,Surfaces,Toilets,Urinals,Floor,Dispensers,Status,Notes';
+    const rows = logsData.map(log => {
+      const date = new Date(log.timestamp);
+      const dateStr = date.toLocaleDateString('en-CA');
+      const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      const notes = (log.notes || '').replace(/"/g, '""');
+
+      return [
+        `"${dateStr} ${timeStr}"`,
+        `"${log.location_name || 'Unknown'}"`,
+        `"${log.staff_name || 'Unknown'}"`,
+        log.checklist_supplies ? 'Yes' : 'No',
+        log.checklist_supplies ? 'Yes' : 'No',
+        log.checklist_trash ? 'Yes' : 'No',
+        log.checklist_surfaces ? 'Yes' : 'No',
+        log.checklist_fixtures ? 'Yes' : 'No',
+        log.checklist_fixtures ? 'Yes' : 'No',
+        log.checklist_floor ? 'Yes' : 'No',
+        log.checklist_fixtures ? 'Yes' : 'No',
+        log.status === 'complete' ? 'Complete' : 'Attention Required',
+        `"${notes}"`
+      ].join(',');
+    });
+
+    const formatDate = (date: Date) => date.toLocaleDateString('en-CA');
+    return `${businessName} - Cleaning Log Export\nDate Range: ${formatDate(businessExportStartDate)} to ${formatDate(businessExportEndDate)}\nTotal Records: ${logsData.length}\n\n${headers}\n${rows.join('\n')}`;
+  };
+
+  // Handle per-business export
+  const handleBusinessExport = async () => {
+    if (!exportingBusiness) return;
+
+    if (businessExportStartDate > businessExportEndDate) {
+      Alert.alert('Invalid Date Range', 'Start date must be before end date');
+      return;
+    }
+
+    setIsBusinessExporting(true);
+    setBusinessExportSuccess(false);
+
+    try {
+      const startDate = new Date(businessExportStartDate);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(businessExportEndDate);
+      endDate.setHours(23, 59, 59, 999);
+
+      const result = await getLogsForBusinessByNameAndDateRange(exportingBusiness.name, startDate, endDate);
+
+      if (!result.success || !result.data || result.data.length === 0) {
+        Alert.alert('No Data', `No cleaning logs found for ${exportingBusiness.name} in the selected date range`);
+        setIsBusinessExporting(false);
+        return;
+      }
+
+      const csv = generateBusinessCSV(result.data, exportingBusiness.name);
+      const startStr = businessExportStartDate.toISOString().split('T')[0];
+      const endStr = businessExportEndDate.toISOString().split('T')[0];
+      const safeName = exportingBusiness.name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+      const fileName = `${safeName}-export-${startStr}-to-${endStr}.csv`;
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setBusinessExportSuccess(true);
+      } else {
+        const filePath = `${FileSystem.documentDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(filePath, csv);
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(filePath, { mimeType: 'text/csv' });
+          setBusinessExportSuccess(true);
+        }
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to export data');
+    } finally {
+      setIsBusinessExporting(false);
+    }
+  };
+
+  // Open business export modal
+  const openBusinessExportModal = (business: BusinessRow) => {
+    setExportingBusiness(business);
+    setBusinessExportStartDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+    setBusinessExportEndDate(new Date());
+    setBusinessExportSuccess(false);
+    setShowBusinessExportModal(true);
+  };
+
   const openIssueCount = issues.filter(i => i.status === 'open').length;
   const todayLogs = logs.filter(log => {
     const logDate = new Date(log.timestamp);
@@ -554,16 +662,31 @@ export default function AdminDashboardScreen() {
                         </Text>
                       </View>
 
-                      <Pressable
-                        onPress={() => router.push(`/admin/business/${business.id}`)}
-                        className="flex-row items-center px-3 py-2 rounded-lg active:opacity-70"
-                        style={{ backgroundColor: COLORS.primaryLight }}
-                      >
-                        <Text className="text-xs font-semibold mr-1" style={{ color: COLORS.primary }}>
-                          View Details
-                        </Text>
-                        <ChevronRight size={14} color={COLORS.primary} />
-                      </Pressable>
+                      <View className="flex-row items-center">
+                        {/* Export Button */}
+                        <Pressable
+                          onPress={() => openBusinessExportModal(business)}
+                          className="flex-row items-center px-3 py-2 rounded-lg active:opacity-70 mr-2"
+                          style={{ backgroundColor: '#dcfce7' }}
+                        >
+                          <Download size={14} color="#16a34a" />
+                          <Text className="text-xs font-semibold ml-1" style={{ color: '#16a34a' }}>
+                            Export
+                          </Text>
+                        </Pressable>
+
+                        {/* View Details Button */}
+                        <Pressable
+                          onPress={() => router.push(`/admin/business/${business.id}`)}
+                          className="flex-row items-center px-3 py-2 rounded-lg active:opacity-70"
+                          style={{ backgroundColor: COLORS.primaryLight }}
+                        >
+                          <Text className="text-xs font-semibold mr-1" style={{ color: COLORS.primary }}>
+                            View Details
+                          </Text>
+                          <ChevronRight size={14} color={COLORS.primary} />
+                        </Pressable>
+                      </View>
                     </View>
                   </View>
                 ))}
@@ -816,6 +939,140 @@ export default function AdminDashboardScreen() {
               {/* Info text */}
               <Text className="text-xs text-center mt-3" style={{ color: COLORS.textMuted }}>
                 Exports all cleaning logs for all businesses within the selected date range
+              </Text>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Per-Business Export Modal */}
+        <Modal
+          visible={showBusinessExportModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowBusinessExportModal(false)}
+        >
+          <View className="flex-1 bg-black/60 items-center justify-center px-6">
+            <View
+              className="w-full max-w-sm rounded-3xl p-6"
+              style={{ backgroundColor: COLORS.white }}
+            >
+              <View className="flex-row items-center justify-between mb-4">
+                <Text className="text-xl font-bold" style={{ color: COLORS.textDark }}>
+                  Export Logs
+                </Text>
+                <Pressable onPress={() => setShowBusinessExportModal(false)} className="p-1">
+                  <X size={24} color={COLORS.textMuted} />
+                </Pressable>
+              </View>
+
+              {/* Business Name */}
+              <View className="mb-4 p-3 rounded-xl" style={{ backgroundColor: COLORS.primaryLight }}>
+                <Text className="text-sm" style={{ color: COLORS.textMuted }}>Business</Text>
+                <Text className="text-base font-semibold" style={{ color: COLORS.textDark }}>
+                  {exportingBusiness?.name}
+                </Text>
+              </View>
+
+              {/* Start Date */}
+              <View className="mb-4">
+                <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
+                  Start Date
+                </Text>
+                <Pressable
+                  onPress={() => setShowBusinessStartPicker(true)}
+                  className="flex-row items-center rounded-xl px-4 py-3"
+                  style={{ backgroundColor: '#f0fdf4' }}
+                >
+                  <Calendar size={20} color="#16a34a" />
+                  <Text className="ml-3 text-base" style={{ color: COLORS.textDark }}>
+                    {formatDate(businessExportStartDate)}
+                  </Text>
+                </Pressable>
+                {showBusinessStartPicker && (
+                  <DateTimePicker
+                    value={businessExportStartDate}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(event, date) => {
+                      setShowBusinessStartPicker(Platform.OS === 'ios');
+                      if (date) setBusinessExportStartDate(date);
+                    }}
+                    maximumDate={new Date()}
+                  />
+                )}
+              </View>
+
+              {/* End Date */}
+              <View className="mb-6">
+                <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
+                  End Date
+                </Text>
+                <Pressable
+                  onPress={() => setShowBusinessEndPicker(true)}
+                  className="flex-row items-center rounded-xl px-4 py-3"
+                  style={{ backgroundColor: '#f0fdf4' }}
+                >
+                  <Calendar size={20} color="#16a34a" />
+                  <Text className="ml-3 text-base" style={{ color: COLORS.textDark }}>
+                    {formatDate(businessExportEndDate)}
+                  </Text>
+                </Pressable>
+                {showBusinessEndPicker && (
+                  <DateTimePicker
+                    value={businessExportEndDate}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(event, date) => {
+                      setShowBusinessEndPicker(Platform.OS === 'ios');
+                      if (date) setBusinessExportEndDate(date);
+                    }}
+                    maximumDate={new Date()}
+                  />
+                )}
+              </View>
+
+              {/* Export Success Message */}
+              {businessExportSuccess && (
+                <View className="mb-4 p-3 rounded-xl" style={{ backgroundColor: '#dcfce7' }}>
+                  <View className="flex-row items-center">
+                    <Check size={20} color="#16a34a" />
+                    <Text className="ml-2 font-semibold" style={{ color: '#16a34a' }}>
+                      Export completed successfully!
+                    </Text>
+                  </View>
+                  <Text className="text-sm mt-1" style={{ color: '#15803d' }}>
+                    Your CSV file has been downloaded/shared.
+                  </Text>
+                </View>
+              )}
+
+              {/* Export Button */}
+              <Pressable
+                onPress={handleBusinessExport}
+                disabled={isBusinessExporting}
+                className="rounded-xl py-4 items-center active:opacity-80"
+                style={{ backgroundColor: '#16a34a' }}
+              >
+                {isBusinessExporting ? (
+                  <View className="flex-row items-center">
+                    <ActivityIndicator color={COLORS.white} />
+                    <Text className="text-base font-bold ml-2" style={{ color: COLORS.white }}>
+                      Exporting...
+                    </Text>
+                  </View>
+                ) : (
+                  <View className="flex-row items-center">
+                    <Download size={20} color={COLORS.white} />
+                    <Text className="text-base font-bold ml-2" style={{ color: COLORS.white }}>
+                      {businessExportSuccess ? 'Export Again' : 'Export CSV'}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+
+              {/* Info text */}
+              <Text className="text-xs text-center mt-3" style={{ color: COLORS.textMuted }}>
+                Exports cleaning logs for {exportingBusiness?.name || 'this business'} only
               </Text>
             </View>
           </View>
