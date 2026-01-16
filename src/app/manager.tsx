@@ -47,6 +47,7 @@ import {
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { sendNewWashroomNotification } from '@/lib/email';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
+import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
 
 // Legacy color mapping for backward compatibility
@@ -1265,6 +1266,9 @@ export default function ManagerDashboard() {
             </Text>
           </View>
         </Animated.View>
+
+        {/* Install App Banner for PWA */}
+        <InstallAppBanner />
 
         {/* CURRENT STATUS GRID */}
         <Animated.View
