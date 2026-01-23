@@ -1184,3 +1184,206 @@ export async function toggleWashroomActive(washroomId: string, isActive: boolean
     return { success: false, error: String(error) };
   }
 }
+
+// ============ QR SCAN TRACKING (efficient counter-based) ============
+
+export interface QrScanStatRow {
+  id: string;
+  location_id: string;
+  scan_date: string;
+  total_scans: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Track a QR scan - uses upsert to increment counter for location_id + date
+export async function trackQrScan(locationId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+
+    // Use Supabase RPC to perform atomic upsert with increment
+    // This calls a database function that handles the upsert logic
+    const { error } = await supabase.rpc('increment_qr_scan', {
+      p_location_id: locationId,
+      p_scan_date: today,
+    });
+
+    if (error) {
+      // If RPC doesn't exist, fall back to manual upsert
+      if (error.code === '42883' || error.message.includes('does not exist')) {
+        return await trackQrScanFallback(locationId, today);
+      }
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Fallback upsert method if RPC function doesn't exist
+async function trackQrScanFallback(locationId: string, scanDate: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    // First, try to get existing record
+    const { data: existing, error: fetchError } = await supabase
+      .from('qr_scan_stats')
+      .select('id, total_scans')
+      .eq('location_id', locationId)
+      .eq('scan_date', scanDate)
+      .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      // PGRST116 = no rows returned, which is expected for new records
+      return { success: false, error: fetchError.message };
+    }
+
+    if (existing) {
+      // Update existing record - increment counter
+      const { error: updateError } = await supabase
+        .from('qr_scan_stats')
+        .update({
+          total_scans: existing.total_scans + 1,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id);
+
+      if (updateError) {
+        return { success: false, error: updateError.message };
+      }
+    } else {
+      // Insert new record
+      const { error: insertError } = await supabase
+        .from('qr_scan_stats')
+        .insert([{
+          id: generateId(),
+          location_id: locationId,
+          scan_date: scanDate,
+          total_scans: 1,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }]);
+
+      if (insertError) {
+        return { success: false, error: insertError.message };
+      }
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Get QR scan stats for a specific location (last 30 days)
+export async function getQrScanStatsForLocation(locationId: string): Promise<{ success: boolean; data?: QrScanStatRow[]; error?: string }> {
+  try {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+
+    const { data, error } = await supabase
+      .from('qr_scan_stats')
+      .select('*')
+      .eq('location_id', locationId)
+      .gte('scan_date', startDate)
+      .order('scan_date', { ascending: false });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data ?? [] };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Get QR scan stats for multiple locations (for admin dashboard)
+export async function getQrScanStatsForLocations(locationIds: string[]): Promise<{ success: boolean; data?: QrScanStatRow[]; error?: string }> {
+  try {
+    if (locationIds.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+
+    const { data, error } = await supabase
+      .from('qr_scan_stats')
+      .select('*')
+      .in('location_id', locationIds)
+      .gte('scan_date', startDate)
+      .order('scan_date', { ascending: false });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data ?? [] };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Get aggregated QR scan stats for a business (sum by location)
+export async function getQrScanStatsForBusiness(businessName: string): Promise<{
+  success: boolean;
+  data?: { locationId: string; locationName: string; totalScans: number; last7Days: number; last30Days: number }[];
+  error?: string
+}> {
+  try {
+    // First get all washrooms for this business
+    const washroomsResult = await getWashroomsForBusiness(businessName);
+    if (!washroomsResult.success || !washroomsResult.data) {
+      return { success: false, error: washroomsResult.error };
+    }
+
+    const washrooms = washroomsResult.data;
+    if (washrooms.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    const locationIds = washrooms.map(w => w.id);
+
+    // Get scan stats for last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const { data: stats, error } = await supabase
+      .from('qr_scan_stats')
+      .select('*')
+      .in('location_id', locationIds)
+      .gte('scan_date', thirtyDaysAgo.toISOString().split('T')[0]);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    // Aggregate stats by location
+    const aggregated = washrooms.map(washroom => {
+      const locationStats = stats?.filter(s => s.location_id === washroom.id) ?? [];
+
+      const totalScans = locationStats.reduce((sum, s) => sum + s.total_scans, 0);
+      const last7Days = locationStats
+        .filter(s => new Date(s.scan_date) >= sevenDaysAgo)
+        .reduce((sum, s) => sum + s.total_scans, 0);
+      const last30Days = totalScans;
+
+      return {
+        locationId: washroom.id,
+        locationName: washroom.room_name,
+        totalScans,
+        last7Days,
+        last30Days,
+      };
+    });
+
+    return { success: true, data: aggregated };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}

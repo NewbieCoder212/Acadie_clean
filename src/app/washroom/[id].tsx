@@ -55,6 +55,7 @@ import {
   updateWashroomLastCleaned,
   WashroomRow,
   autoResolveLogsForLocation,
+  trackQrScan,
 } from '@/lib/supabase';
 import { sendAttentionRequiredEmail, getUncheckedItems, sendIssueReportEmail, ISSUE_TYPES } from '@/lib/email';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
@@ -238,6 +239,14 @@ export default function WashroomPublicScreen() {
 
         if (washroomResult.success && washroomResult.data) {
           setSupabaseWashroom(washroomResult.data);
+
+          // Track QR scan only for public views (not admin)
+          // Fire and forget - don't block page load
+          if (!isAdminView) {
+            trackQrScan(id).catch(err => {
+              console.log('[QR Scan] Tracking failed (non-blocking):', err);
+            });
+          }
         }
       } catch (error) {
         if (currentLocationRef.current === id) {
@@ -250,7 +259,7 @@ export default function WashroomPublicScreen() {
       }
     }
     fetchData();
-  }, [id]);
+  }, [id, isAdminView]);
 
   const handleRetryLoad = () => {
     setLoadError(null);

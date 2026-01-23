@@ -27,6 +27,8 @@ import {
   Check,
   Download,
   Calendar,
+  QrCode,
+  TrendingUp,
 } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -44,10 +46,12 @@ import {
   toggleBusinessActive,
   getLogsForDateRange,
   getLogsForBusinessByNameAndDateRange,
+  getQrScanStatsForLocations,
   LocationRow,
   WashroomRow,
   CleaningLogRow,
   ReportedIssueRow,
+  QrScanStatRow,
 } from '@/lib/supabase';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
 
@@ -75,6 +79,7 @@ export default function AdminDashboardScreen() {
   const [washrooms, setWashrooms] = useState<WashroomRow[]>([]);
   const [logs, setLogs] = useState<CleaningLogRow[]>([]);
   const [issues, setIssues] = useState<ReportedIssueRow[]>([]);
+  const [qrScanStats, setQrScanStats] = useState<QrScanStatRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -149,6 +154,15 @@ export default function AdminDashboardScreen() {
       }
       if (washroomsResult.success) {
         setWashrooms(washroomsResult.data ?? []);
+
+        // Fetch QR scan stats for all washrooms
+        const washroomIds = washroomsResult.data?.map(w => w.id) ?? [];
+        if (washroomIds.length > 0) {
+          const qrStatsResult = await getQrScanStatsForLocations(washroomIds);
+          if (qrStatsResult.success) {
+            setQrScanStats(qrStatsResult.data ?? []);
+          }
+        }
       }
       if (logsResult.success) {
         setLogs(logsResult.data ?? []);
@@ -450,6 +464,43 @@ export default function AdminDashboardScreen() {
     return logDate.toDateString() === today.toDateString();
   }).length;
 
+  // Calculate QR scan statistics
+  const getQrScansForBusiness = (businessName: string) => {
+    const businessWashrooms = washrooms.filter(w => w.business_name === businessName);
+    const washroomIds = businessWashrooms.map(w => w.id);
+    const businessStats = qrScanStats.filter(s => washroomIds.includes(s.location_id));
+
+    const today = new Date().toISOString().split('T')[0];
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+
+    const todayScans = businessStats
+      .filter(s => s.scan_date === today)
+      .reduce((sum, s) => sum + s.total_scans, 0);
+
+    const last7DaysScans = businessStats
+      .filter(s => s.scan_date >= sevenDaysAgoStr)
+      .reduce((sum, s) => sum + s.total_scans, 0);
+
+    const totalScans = businessStats.reduce((sum, s) => sum + s.total_scans, 0);
+
+    return { todayScans, last7DaysScans, totalScans };
+  };
+
+  const totalQrScansToday = qrScanStats
+    .filter(s => s.scan_date === new Date().toISOString().split('T')[0])
+    .reduce((sum, s) => sum + s.total_scans, 0);
+
+  const totalQrScans7Days = (() => {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+    return qrScanStats
+      .filter(s => s.scan_date >= sevenDaysAgoStr)
+      .reduce((sum, s) => sum + s.total_scans, 0);
+  })();
+
   if (isLoading) {
     return (
       <LinearGradient
@@ -716,6 +767,124 @@ export default function AdminDashboardScreen() {
                 </Text>
               </View>
             </View>
+          </Animated.View>
+
+          {/* QR Scan Analytics - Admin Only */}
+          <Animated.View entering={FadeInDown.delay(400).duration(400)} className="mt-6 mb-6">
+            <View className="flex-row items-center mb-3">
+              <QrCode size={20} color={COLORS.primary} />
+              <Text
+                className="text-lg font-bold ml-2"
+                style={{ color: COLORS.textDark }}
+              >
+                QR Scan Analytics
+              </Text>
+            </View>
+
+            {/* Overview Stats */}
+            <View
+              className="flex-row gap-3 mb-4"
+            >
+              <View
+                className="flex-1 p-4 rounded-2xl"
+                style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0' }}
+              >
+                <Text className="text-2xl font-bold" style={{ color: '#16a34a' }}>
+                  {totalQrScansToday}
+                </Text>
+                <Text className="text-xs" style={{ color: '#15803d' }}>
+                  Scans Today
+                </Text>
+              </View>
+              <View
+                className="flex-1 p-4 rounded-2xl"
+                style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe' }}
+              >
+                <Text className="text-2xl font-bold" style={{ color: '#2563eb' }}>
+                  {totalQrScans7Days}
+                </Text>
+                <Text className="text-xs" style={{ color: '#1d4ed8' }}>
+                  Last 7 Days
+                </Text>
+              </View>
+            </View>
+
+            {/* Per-Business Breakdown */}
+            {businesses.length > 0 && (
+              <View
+                className="rounded-2xl overflow-hidden"
+                style={{ backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder }}
+              >
+                <View className="px-4 py-3 border-b" style={{ borderBottomColor: COLORS.glassBorder, backgroundColor: '#faf5ff' }}>
+                  <Text className="text-sm font-semibold" style={{ color: COLORS.primary }}>
+                    Scans by Business
+                  </Text>
+                </View>
+                {businesses.map((business, index) => {
+                  const stats = getQrScansForBusiness(business.name);
+                  return (
+                    <View
+                      key={business.id}
+                      className="flex-row items-center justify-between px-4 py-3"
+                      style={{
+                        borderBottomWidth: index < businesses.length - 1 ? 1 : 0,
+                        borderBottomColor: COLORS.glassBorder,
+                      }}
+                    >
+                      <View className="flex-1">
+                        <Text className="text-sm font-medium" style={{ color: COLORS.textDark }}>
+                          {business.name}
+                        </Text>
+                        <Text className="text-xs" style={{ color: COLORS.textMuted }}>
+                          {getLocationCountForBusiness(business)} locations
+                        </Text>
+                      </View>
+                      <View className="flex-row items-center gap-4">
+                        <View className="items-center">
+                          <Text className="text-sm font-bold" style={{ color: '#16a34a' }}>
+                            {stats.todayScans}
+                          </Text>
+                          <Text className="text-xs" style={{ color: COLORS.textMuted }}>
+                            today
+                          </Text>
+                        </View>
+                        <View className="items-center">
+                          <Text className="text-sm font-bold" style={{ color: '#2563eb' }}>
+                            {stats.last7DaysScans}
+                          </Text>
+                          <Text className="text-xs" style={{ color: COLORS.textMuted }}>
+                            7 days
+                          </Text>
+                        </View>
+                        <View className="items-center">
+                          <Text className="text-sm font-bold" style={{ color: COLORS.textDark }}>
+                            {stats.totalScans}
+                          </Text>
+                          <Text className="text-xs" style={{ color: COLORS.textMuted }}>
+                            30 days
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {qrScanStats.length === 0 && (
+              <View
+                className="p-4 rounded-2xl items-center"
+                style={{ backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder }}
+              >
+                <QrCode size={32} color={COLORS.textMuted} />
+                <Text className="text-sm mt-2" style={{ color: COLORS.textMuted }}>
+                  No QR scans recorded yet
+                </Text>
+                <Text className="text-xs text-center mt-1" style={{ color: COLORS.textMuted }}>
+                  Scans will appear here when customers view washroom status pages
+                </Text>
+              </View>
+            )}
           </Animated.View>
 
         </ScrollView>
