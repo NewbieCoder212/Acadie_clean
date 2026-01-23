@@ -130,6 +130,45 @@ export default function WashroomPublicScreen() {
 
   const currentLocationRef = useRef<string | null>(null);
 
+  // Hidden staff access - tap logo 5 times to reveal
+  const [showStaffButton, setShowStaffButton] = useState(false);
+  const tapCountRef = useRef(0);
+  const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleLogoTap = () => {
+    // Clear existing timeout
+    if (tapTimeoutRef.current) {
+      clearTimeout(tapTimeoutRef.current);
+    }
+
+    tapCountRef.current += 1;
+
+    if (tapCountRef.current >= 5) {
+      // Reveal the staff button
+      setShowStaffButton(true);
+      tapCountRef.current = 0;
+
+      // Auto-hide after 30 seconds of inactivity
+      tapTimeoutRef.current = setTimeout(() => {
+        setShowStaffButton(false);
+      }, 30000);
+    } else {
+      // Reset tap count after 2 seconds of no taps
+      tapTimeoutRef.current = setTimeout(() => {
+        tapCountRef.current = 0;
+      }, 2000);
+    }
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (tapTimeoutRef.current) {
+        clearTimeout(tapTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Use Supabase washroom data
   const location = supabaseWashroom ? {
     id: supabaseWashroom.id,
@@ -571,10 +610,12 @@ export default function WashroomPublicScreen() {
             </View>
           ) : (
             <View className="items-center">
-              {/* App Logo */}
-              <Animated.View entering={FadeIn.duration(500)} className="mb-4">
-                <AcadiaLogo size={100} />
-              </Animated.View>
+              {/* App Logo - Tap 5 times to reveal staff access */}
+              <Pressable onPress={handleLogoTap}>
+                <Animated.View entering={FadeIn.duration(500)} className="mb-4">
+                  <AcadiaLogo size={100} />
+                </Animated.View>
+              </Pressable>
 
               {/* Main Status Card */}
               <View
@@ -716,37 +757,39 @@ export default function WashroomPublicScreen() {
                   </View>
                 </Pressable>
 
-                {/* Staff Access */}
-                <Pressable
-                  onPress={handleOpenChecklist}
-                  style={{
-                    backgroundColor: showSuccess ? COLORS.emerald : 'transparent',
-                    borderRadius: 12,
-                    paddingVertical: 14,
-                    paddingHorizontal: 16,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderWidth: showSuccess ? 0 : 1,
-                    borderColor: COLORS.glassBorder,
-                  }}
-                  className="active:opacity-70"
-                >
-                  {showSuccess ? (
-                    <View className="flex-row items-center justify-center">
-                      <Check size={18} color={COLORS.white} strokeWidth={3} />
-                      <Text className="text-sm font-semibold ml-2" style={{ color: COLORS.white }}>
-                        Log Saved! / Entrée enregistrée!
-                      </Text>
-                    </View>
-                  ) : (
-                    <View className="flex-row items-center justify-center">
-                      <Lock size={16} color={COLORS.textMuted} />
-                      <Text className="text-sm font-medium ml-2" style={{ color: COLORS.textMuted }}>
-                        Staff Only / Personnel uniquement
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
+                {/* Staff Access - Hidden by default, revealed by tapping logo 5 times */}
+                {(showStaffButton || isAdminView) && (
+                  <Pressable
+                    onPress={handleOpenChecklist}
+                    style={{
+                      backgroundColor: showSuccess ? COLORS.emerald : 'transparent',
+                      borderRadius: 12,
+                      paddingVertical: 14,
+                      paddingHorizontal: 16,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderWidth: showSuccess ? 0 : 1,
+                      borderColor: COLORS.glassBorder,
+                    }}
+                    className="active:opacity-70"
+                  >
+                    {showSuccess ? (
+                      <View className="flex-row items-center justify-center">
+                        <Check size={18} color={COLORS.white} strokeWidth={3} />
+                        <Text className="text-sm font-semibold ml-2" style={{ color: COLORS.white }}>
+                          Log Saved! / Entrée enregistrée!
+                        </Text>
+                      </View>
+                    ) : (
+                      <View className="flex-row items-center justify-center">
+                        <Lock size={16} color={COLORS.textMuted} />
+                        <Text className="text-sm font-medium ml-2" style={{ color: COLORS.textMuted }}>
+                          Staff Only / Personnel uniquement
+                        </Text>
+                      </View>
+                    )}
+                  </Pressable>
+                )}
               </View>
 
               {/* Compliance Footer */}
@@ -1013,6 +1056,9 @@ export default function WashroomPublicScreen() {
                   Staff Access
                 </Text>
                 <Text className="text-sm" style={{ color: COLORS.textMuted }}>
+                  Accès du personnel
+                </Text>
+                <Text className="text-xs mt-2" style={{ color: COLORS.textMuted }}>
                   Enter PIN / Entrer le NIP
                 </Text>
               </View>
@@ -1071,7 +1117,7 @@ export default function WashroomPublicScreen() {
                   <>
                     <ActivityIndicator size="small" color={COLORS.white} />
                     <Text className="text-base font-bold ml-2" style={{ color: COLORS.white }}>
-                      Verifying...
+                      Verifying... / Vérification...
                     </Text>
                   </>
                 ) : (
@@ -1079,7 +1125,7 @@ export default function WashroomPublicScreen() {
                     className="text-base font-bold"
                     style={{ color: staffPin.length >= 4 ? COLORS.white : COLORS.textMuted }}
                   >
-                    Continue
+                    Continue / Continuer
                   </Text>
                 )}
               </Pressable>
@@ -1089,7 +1135,7 @@ export default function WashroomPublicScreen() {
                 className="py-2.5 mt-2 items-center"
               >
                 <Text style={{ color: COLORS.textMuted }} className="font-medium">
-                  Cancel
+                  Cancel / Annuler
                 </Text>
               </Pressable>
             </View>
@@ -1120,22 +1166,38 @@ export default function WashroomPublicScreen() {
                   <Pressable onPress={handleCloseChecklist} className="p-2 -ml-2">
                     <X size={24} color={COLORS.white} />
                   </Pressable>
-                  <Text className="text-base font-bold" style={{ color: COLORS.white }}>
-                    Cleaning Log
-                  </Text>
+                  <View className="items-center">
+                    <Text className="text-base font-bold" style={{ color: COLORS.white }}>
+                      Cleaning Log
+                    </Text>
+                    <Text className="text-xs" style={{ color: COLORS.white, opacity: 0.85 }}>
+                      Journal de nettoyage
+                    </Text>
+                  </View>
                   <View className="w-8" />
                 </View>
 
-                <ScrollView className="flex-1" contentContainerStyle={{ padding: 16 }}>
+                <ScrollView
+                  className="flex-1"
+                  contentContainerStyle={{
+                    padding: 16,
+                    maxWidth: 500,
+                    width: '100%',
+                    alignSelf: 'center',
+                  }}
+                >
                   {/* Staff Name Input */}
                   <View className="mb-5">
-                    <Text className="text-sm font-bold mb-1.5" style={{ color: COLORS.textDark }}>
-                      Staff Name / Nom du personnel
+                    <Text className="text-sm font-bold mb-0.5" style={{ color: COLORS.textDark }}>
+                      Staff Name
+                    </Text>
+                    <Text className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
+                      Nom du personnel
                     </Text>
                     <TextInput
                       value={staffName}
                       onChangeText={setStaffName}
-                      placeholder="Enter your name"
+                      placeholder="Enter your name / Entrez votre nom"
                       placeholderTextColor={COLORS.textMuted}
                       style={{
                         backgroundColor: COLORS.white,
@@ -1152,18 +1214,24 @@ export default function WashroomPublicScreen() {
 
                   {/* Checklist Items */}
                   <View className="mb-5">
-                    <Text className="text-sm font-bold mb-2" style={{ color: COLORS.textDark }}>
-                      Checklist / Liste de contrôle
+                    <Text className="text-sm font-bold mb-0.5" style={{ color: COLORS.textDark }}>
+                      Checklist
+                    </Text>
+                    <Text className="text-xs mb-3" style={{ color: COLORS.textMuted }}>
+                      Liste de contrôle
                     </Text>
 
                     {CHECKLIST_SECTIONS.map((section) => {
                       const sectionItems = CHECKLIST_ITEMS.filter(item => item.section === section.id);
                       return (
-                        <View key={section.id} className="mb-3">
-                          {/* Section Header */}
-                          <View className="mb-1.5 px-1">
+                        <View key={section.id} className="mb-4">
+                          {/* Section Header - Bilingual */}
+                          <View className="mb-2 px-1">
                             <Text className="font-semibold text-xs" style={{ color: COLORS.emeraldDark }}>
                               {section.titleEn}
+                            </Text>
+                            <Text className="text-xs mt-0.5" style={{ color: COLORS.textMuted }}>
+                              {section.titleFr}
                             </Text>
                           </View>
 
@@ -1192,6 +1260,7 @@ export default function WashroomPublicScreen() {
                                     )}
                                   </View>
                                   <View className="ml-2.5 flex-1">
+                                    {/* English label */}
                                     <Text
                                       className="font-medium"
                                       style={{
@@ -1200,6 +1269,17 @@ export default function WashroomPublicScreen() {
                                       }}
                                     >
                                       {item.labelEn}
+                                    </Text>
+                                    {/* French label */}
+                                    <Text
+                                      className="mt-1"
+                                      style={{
+                                        color: isChecked ? COLORS.textMuted : '#9ca3af',
+                                        fontSize: 11,
+                                        fontStyle: 'italic',
+                                      }}
+                                    >
+                                      {item.labelFr}
                                     </Text>
                                   </View>
                                 </Pressable>
@@ -1213,20 +1293,23 @@ export default function WashroomPublicScreen() {
 
                   {/* Maintenance Notes */}
                   <View className="mb-5">
-                    <View className="flex-row items-center mb-1.5">
+                    <View className="flex-row items-center mb-0.5">
                       <Text className="text-sm font-bold" style={{ color: COLORS.textDark }}>
                         Notes
                       </Text>
                       {hasUnchecked && (
                         <Text className="text-xs font-bold ml-2" style={{ color: COLORS.red }}>
-                          *Required
+                          *Required / Requis
                         </Text>
                       )}
                     </View>
+                    <Text className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
+                      Remarques
+                    </Text>
                     <TextInput
                       value={maintenanceNotes}
                       onChangeText={setMaintenanceNotes}
-                      placeholder="Describe any issues..."
+                      placeholder="Describe any issues... / Décrivez les problèmes..."
                       placeholderTextColor={COLORS.textMuted}
                       multiline
                       numberOfLines={3}
@@ -1256,7 +1339,7 @@ export default function WashroomPublicScreen() {
                       <View className="flex-row items-center mb-1">
                         <WifiOff size={16} color={COLORS.red} />
                         <Text className="text-sm font-semibold text-red-800 ml-1.5">
-                          Failed to save
+                          Failed to save / Échec de l'enregistrement
                         </Text>
                       </View>
                       <Pressable
@@ -1268,7 +1351,7 @@ export default function WashroomPublicScreen() {
                         className="flex-row items-center justify-center bg-red-600 py-2 rounded-lg active:bg-red-700 mt-1"
                       >
                         <RefreshCw size={14} color="#ffffff" />
-                        <Text className="text-white font-semibold ml-1.5 text-sm">Retry</Text>
+                        <Text className="text-white font-semibold ml-1.5 text-sm">Retry / Réessayer</Text>
                       </Pressable>
                     </View>
                   )}
@@ -1313,7 +1396,7 @@ export default function WashroomPublicScreen() {
                       <>
                         <ActivityIndicator size="small" color={COLORS.white} />
                         <Text className="text-base font-bold ml-2" style={{ color: COLORS.white }}>
-                          Submitting...
+                          Submitting... / Soumission...
                         </Text>
                       </>
                     ) : (
