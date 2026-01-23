@@ -841,11 +841,26 @@ export default function ManagerDashboard() {
           printWindow.document.write(html);
           printWindow.document.close();
           printWindow.focus();
-          setTimeout(() => {
+
+          // Wait for content to fully load before printing
+          // Use onload event or fallback timeout to ensure content is rendered
+          const triggerPrint = () => {
             printWindow.print();
-            // Close the window after print dialog is dismissed
-            printWindow.close();
-          }, 250);
+          };
+
+          // Check if document has finished loading
+          if (printWindow.document.readyState === 'complete') {
+            // Give extra time for images/styles to render
+            setTimeout(triggerPrint, 500);
+          } else {
+            // Wait for load event
+            printWindow.onload = () => {
+              setTimeout(triggerPrint, 300);
+            };
+            // Fallback in case onload doesn't fire
+            setTimeout(triggerPrint, 800);
+          }
+          // Note: Don't auto-close the window - let user close it manually after printing
         }
       } else {
         // Native platforms use expo-print
