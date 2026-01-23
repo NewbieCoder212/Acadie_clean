@@ -843,13 +843,10 @@ export default function ManagerDashboard() {
           printWindow.focus();
           setTimeout(() => {
             printWindow.print();
+            // Close the window after print dialog is dismissed
+            printWindow.close();
           }, 250);
         }
-        Alert.alert(
-          'Success',
-          'PDF print dialog opened!\nBoîte de dialogue d\'impression ouverte!',
-          [{ text: 'OK' }]
-        );
       } else {
         // Native platforms use expo-print
         const { uri } = await Print.printToFileAsync({ html });
