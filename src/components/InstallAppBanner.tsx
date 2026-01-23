@@ -1,11 +1,8 @@
 import { useState, useEffect } from 'react';
 import { View, Text, Pressable, Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Download, X, Share, Plus } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { BRAND_COLORS as C } from '@/lib/colors';
-
-const STORAGE_KEY = 'pwa_install_banner_dismissed';
 
 export function InstallAppBanner() {
   const [isVisible, setIsVisible] = useState(false);
@@ -17,33 +14,29 @@ export function InstallAppBanner() {
     if (Platform.OS !== 'web') return;
 
     const checkPWAState = async () => {
-      // Check if already running as PWA
+      // Check if already running as PWA (user added to home screen)
       const standalone = window.matchMedia('(display-mode: standalone)').matches
         || (window.navigator as any).standalone === true;
 
       if (standalone) {
         setIsStandalone(true);
-        return;
+        return; // Don't show banner - they already added it!
       }
-
-      // Check if banner was dismissed
-      const dismissed = await AsyncStorage.getItem(STORAGE_KEY);
-      if (dismissed) return;
 
       // Check if iOS
       const userAgent = window.navigator.userAgent.toLowerCase();
       const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
       setIsIOS(isIOSDevice);
 
-      // Show banner
+      // Always show banner until user adds to home screen
       setIsVisible(true);
     };
 
     checkPWAState();
   }, []);
 
-  const handleDismiss = async () => {
-    await AsyncStorage.setItem(STORAGE_KEY, 'true');
+  // X button just hides for this session - banner will come back next visit
+  const handleDismiss = () => {
     setIsVisible(false);
   };
 
