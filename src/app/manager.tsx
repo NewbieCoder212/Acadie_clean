@@ -835,32 +835,67 @@ export default function ManagerDashboard() {
 
       // Handle web platform differently
       if (Platform.OS === 'web') {
-        // Open HTML in new window and trigger print
+        // Try to use window.open first (works in regular browser)
+        // If blocked (PWA standalone mode), fall back to iframe print
         const printWindow = window.open('', '_blank');
-        if (printWindow) {
+
+        if (printWindow && printWindow.document) {
+          // window.open worked - use it
           printWindow.document.write(html);
           printWindow.document.close();
           printWindow.focus();
 
           // Wait for content to fully load before printing
-          // Use onload event or fallback timeout to ensure content is rendered
           const triggerPrint = () => {
             printWindow.print();
           };
 
-          // Check if document has finished loading
           if (printWindow.document.readyState === 'complete') {
-            // Give extra time for images/styles to render
             setTimeout(triggerPrint, 500);
           } else {
-            // Wait for load event
             printWindow.onload = () => {
               setTimeout(triggerPrint, 300);
             };
-            // Fallback in case onload doesn't fire
             setTimeout(triggerPrint, 800);
           }
-          // Note: Don't auto-close the window - let user close it manually after printing
+        } else {
+          // window.open was blocked (PWA standalone mode)
+          // Fall back to iframe-based printing
+          console.log('[PDF] window.open blocked, using iframe fallback');
+
+          // Create a hidden iframe for printing
+          const iframe = document.createElement('iframe');
+          iframe.style.position = 'fixed';
+          iframe.style.right = '0';
+          iframe.style.bottom = '0';
+          iframe.style.width = '0';
+          iframe.style.height = '0';
+          iframe.style.border = 'none';
+          document.body.appendChild(iframe);
+
+          const iframeDoc = iframe.contentWindow?.document;
+          if (iframeDoc) {
+            iframeDoc.open();
+            iframeDoc.write(html);
+            iframeDoc.close();
+
+            // Wait for content to load, then print
+            setTimeout(() => {
+              iframe.contentWindow?.focus();
+              iframe.contentWindow?.print();
+
+              // Clean up iframe after printing
+              setTimeout(() => {
+                document.body.removeChild(iframe);
+              }, 1000);
+            }, 500);
+          } else {
+            // Last resort: open in same window (will navigate away)
+            console.log('[PDF] iframe failed, opening in current window');
+            const blob = new Blob([html], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            window.location.href = url;
+          }
         }
       } else {
         // Native platforms use expo-print
