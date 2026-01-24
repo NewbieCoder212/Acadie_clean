@@ -20,21 +20,25 @@ The app uses a consistent color palette across all screens:
 - **Alert Email Persistence**: The alert email entered during location creation is saved to Supabase and pre-filled when viewing location settings
 - **Staff PIN Protection**: Each location has a 4-5 digit PIN that staff must enter before logging a cleaning (prevents fake log submissions)
 - **Unique Public URLs**: Each location has a unique URL (`/washroom/[location_id]`) for staff to log cleanings via QR code
-- **Bilingual Checklist**: Staff complete an 8-item checklist organized in 3 sections (English/French):
+- **Bilingual Checklist**: Staff complete a 12-item checklist organized in 3 sections (English/French):
 
   **1. Supplies & Restocking (Hygiene & Handwashing)**
-  - Handwashing Station: Liquid/Powder soap is full; paper towels or air dryer are functional
-  - Toilet Paper: All dispensers are stocked with at least one backup roll
-  - Bins: Covered disposal bin in stalls is emptied and sanitized
+  - Handwashing Station: Liquid/Powder soap is full; paper towels or air dryer are functional. Bar soap is not permitted.
+  - Toilet Paper: All dispensers are stocked with at least one backup roll. Paper must be stored in the dispenser and not on the floor or tank.
+  - Bins: Covered disposal bin in stalls is emptied and sanitized. Ensure liners are replaced and the lid is functioning correctly.
+  - Required Signage: "Wash Your Hands" / "Lavez vos mains" signage is clearly posted near the sink (Mandatory for staff/food premises compliance). **Has N/A option for non-food premises.**
 
   **2. Sanitization (Infection Control)**
-  - Surfaces Disinfected: All high-touch points (faucets, flush handles, stall locks, grab bars) cleaned with DIN-registered disinfectant
-  - Fixtures: Sinks, toilets, and urinals are scrubbed and free of visible scale/waste
+  - Surfaces Disinfected: All high-touch points (faucets, flush handles, stall locks, grab bars, and door handles) cleaned with DIN-registered disinfectant.
+  - Fixtures: Sinks, toilets, and urinals are scrubbed and free of visible scale/waste. Ensure no "biofilm" or slime buildup is present around drain rings.
+  - Cleaning Tools: Ensure cloths used for toilets are not used for sinks (color-coding) to prevent cross-contamination.
+  - Chemical Storage: All cleaning chemicals are labeled and stored in a secure area away from public reach.
 
   **3. Facility & Safety (Compliance)**
-  - Water Temperature: Confirmed hot water is functional (must be between 35°C and 43°C)
-  - Floors: Swept and mopped; confirmed dry and free of trip hazards
-  - Ventilation & Lighting: Exhaust fan is running and all light bulbs are functional
+  - Water Temperature: Confirmed hot water is functional (must be between 35°C and 43°C). Cold water must also be available to allow for tempered mixing.
+  - Floors: Swept and mopped; confirmed dry and free of trip hazards. Check that floor drains (if present) are clear and not emitting odors.
+  - Ventilation & Lighting: Exhaust fan is running and all light bulbs are functional. Ventilation covers must be free of visible dust accumulation.
+  - Structural Integrity: Walls and floors are checked for cracks or water damage (surfaces must remain "impervious to moisture" per NB Health code).
 - **Staff Name Tracking**: Each cleaning log records the staff member's name
 - **Conditional Status**:
   - **Complete**: All checklist items are checked
@@ -314,3 +318,38 @@ All critical flows verified:
 - Manager authentication persists across app restarts (Zustand + AsyncStorage)
 - All screens have proper empty state messages
 - All screens have back/home navigation buttons
+
+## Offline Capability
+
+The app supports **offline cleaning log submission** for environments with unreliable internet (e.g., basements, areas with poor connectivity):
+
+### How It Works
+
+1. **Network Detection**: The app monitors network connectivity in real-time
+2. **Offline Queue**: When offline, cleaning logs are saved to a local queue (persisted in AsyncStorage)
+3. **Auto-Sync**: When connectivity returns, queued logs automatically sync to Supabase
+4. **Visual Feedback**:
+   - Yellow banner shows "Offline Mode - Logs will sync when connected"
+   - Success message shows "Saved Offline - Will Sync" instead of "Log Saved!"
+   - Pending sync indicator shows number of logs waiting to sync
+
+### Technical Details
+
+- **Offline Queue Store**: `src/lib/offline-queue.ts` - Zustand store with AsyncStorage persistence
+- **Network Hook**: `src/lib/useNetworkStatus.ts` - Real-time network status monitoring
+- **Auto-Sync Listener**: Starts on app launch, listens for connectivity changes
+- **Sync Process**: Logs sync in order (oldest first), with retry tracking for failed attempts
+
+### User Experience
+
+**Staff in basement/offline area:**
+1. Complete cleaning checklist as normal
+2. Submit log - sees "Saved Offline - Will Sync" message
+3. Log is stored locally on device
+4. When phone regains connectivity (e.g., walking upstairs), log syncs automatically
+5. No data is lost - compliance record is maintained
+
+**Limitations:**
+- Initial page load requires internet (to fetch washroom data and recent logs)
+- Email alerts are sent only when log syncs to server (may be delayed)
+- QR scan tracking only works when online

@@ -59,6 +59,8 @@ import {
 } from '@/lib/supabase';
 import { sendAttentionRequiredEmail, getUncheckedItems, sendIssueReportEmail, ISSUE_TYPES } from '@/lib/email';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
+import { useOfflineQueue, PendingLog } from '@/lib/offline-queue';
+import { useNetworkStatus } from '@/lib/useNetworkStatus';
 
 // Use consistent brand colors
 import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
@@ -85,22 +87,39 @@ interface ChecklistState {
   handwashingStation: boolean;
   toiletPaper: boolean;
   bins: boolean;
+  requiredSignage: boolean;
   surfacesDisinfected: boolean;
   fixtures: boolean;
+  cleaningTools: boolean;
+  chemicalStorage: boolean;
   waterTemperature: boolean;
   floors: boolean;
   ventilationLighting: boolean;
+  structuralIntegrity: boolean;
+}
+
+// Track which items are marked as N/A
+interface NaState {
+  requiredSignage: boolean;
 }
 
 const initialChecklist: ChecklistState = {
   handwashingStation: false,
   toiletPaper: false,
   bins: false,
+  requiredSignage: false,
   surfacesDisinfected: false,
   fixtures: false,
+  cleaningTools: false,
+  chemicalStorage: false,
   waterTemperature: false,
   floors: false,
   ventilationLighting: false,
+  structuralIntegrity: false,
+};
+
+const initialNaState: NaState = {
+  requiredSignage: false,
 };
 
 export default function WashroomPublicScreen() {
@@ -121,6 +140,7 @@ export default function WashroomPublicScreen() {
   const [pinError, setPinError] = useState<string | null>(null);
   const [isVerifyingPin, setIsVerifyingPin] = useState(false);
   const [checklist, setChecklist] = useState<ChecklistState>(initialChecklist);
+  const [naState, setNaState] = useState<NaState>(initialNaState);
   const [maintenanceNotes, setMaintenanceNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -128,8 +148,17 @@ export default function WashroomPublicScreen() {
   const [supabaseWashroom, setSupabaseWashroom] = useState<WashroomRow | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [savedOffline, setSavedOffline] = useState(false);
 
   const currentLocationRef = useRef<string | null>(null);
+
+  // Network status and offline queue
+  const networkStatus = useNetworkStatus();
+  const isOnline = networkStatus.isConnected;
+  const addPendingLog = useOfflineQueue((s) => s.addPendingLog);
+  const pendingCount = useOfflineQueue((s) => s.pendingLogs.length);
+  const getPendingForLocation = useOfflineQueue((s) => s.getPendingForLocation);
+  const pendingLogsForLocation = id ? getPendingForLocation(id) : [];
 
   // Hidden staff access - tap logo 5 times to reveal
   const [showStaffButton, setShowStaffButton] = useState(false);
@@ -292,8 +321,19 @@ export default function WashroomPublicScreen() {
   const isClean = lastLog && lastLog.status === 'complete';
   const needsAttention = lastLog?.status === 'attention_required' && !lastLog.resolved;
 
-  const allChecked = Object.values(checklist).every((v) => v);
-  const hasUnchecked = Object.values(checklist).some((v) => !v);
+  // Check if all items are either checked OR marked as N/A
+  const allChecked = Object.entries(checklist).every(([key, value]) => {
+    // If item has N/A option and is marked N/A, treat as "checked"
+    if (key === 'requiredSignage' && naState.requiredSignage) return true;
+    return value;
+  });
+
+  // Check if any item is unchecked (excluding N/A items)
+  const hasUnchecked = Object.entries(checklist).some(([key, value]) => {
+    // If item is marked N/A, don't count as unchecked
+    if (key === 'requiredSignage' && naState.requiredSignage) return false;
+    return !value;
+  });
 
   const needsNotes = hasUnchecked && !maintenanceNotes.trim();
   const canSubmit = staffName.trim() && (!hasUnchecked || maintenanceNotes.trim());
@@ -411,7 +451,22 @@ export default function WashroomPublicScreen() {
   };
 
   const handleToggleCheck = (key: keyof ChecklistState) => {
+    // If item has N/A and N/A is checked, uncheck N/A first
+    if (key === 'requiredSignage' && naState.requiredSignage) {
+      setNaState((prev) => ({ ...prev, requiredSignage: false }));
+    }
     setChecklist((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleToggleNa = (key: keyof NaState) => {
+    setNaState((prev) => {
+      const newValue = !prev[key];
+      // If marking as N/A, also uncheck the main checkbox
+      if (newValue) {
+        setChecklist((prevChecklist) => ({ ...prevChecklist, [key]: false }));
+      }
+      return { ...prev, [key]: newValue };
+    });
   };
 
   const handleSubmit = async () => {
@@ -420,28 +475,76 @@ export default function WashroomPublicScreen() {
     Keyboard.dismiss();
 
     setSubmitError(null);
+    setSavedOffline(false);
     setIsSubmitting(true);
 
     const status: CleaningStatus = allChecked ? 'complete' : 'attention_required';
 
+    const logData = {
+      location_id: id,
+      location_name: location?.name ?? 'Unknown Location',
+      staff_name: staffName.trim(),
+      timestamp: new Date().toISOString(),
+      status,
+      notes: maintenanceNotes.trim(),
+      checklist_supplies: checklist.handwashingStation && checklist.toiletPaper,
+      checklist_surfaces: checklist.surfacesDisinfected,
+      checklist_fixtures: checklist.fixtures && checklist.waterTemperature && checklist.ventilationLighting,
+      checklist_trash: checklist.bins,
+      checklist_floor: checklist.floors,
+      resolved: false,
+    };
+
+    // If offline, save to queue immediately
+    if (!isOnline) {
+      console.log('[Submit] Offline - saving to local queue');
+      addPendingLog(logData);
+
+      setIsSubmitting(false);
+      setChecklist(initialChecklist);
+      setNaState(initialNaState);
+      setStaffName('');
+      setStaffPin('');
+      setPinError(null);
+      setMaintenanceNotes('');
+      setShowChecklist(false);
+      setSavedOffline(true);
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+        setSavedOffline(false);
+      }, 3500);
+      return;
+    }
+
     try {
-      const result = await insertSupabaseLog({
-        location_id: id,
-        location_name: location?.name ?? 'Unknown Location',
-        staff_name: staffName.trim(),
-        timestamp: new Date().toISOString(),
-        status,
-        notes: maintenanceNotes.trim(),
-        checklist_supplies: checklist.handwashingStation && checklist.toiletPaper,
-        checklist_surfaces: checklist.surfacesDisinfected,
-        checklist_fixtures: checklist.fixtures && checklist.waterTemperature && checklist.ventilationLighting,
-        checklist_trash: checklist.bins,
-        checklist_floor: checklist.floors,
-        resolved: false,
-      });
+      const result = await insertSupabaseLog(logData);
 
       if (!result.success) {
         console.error('[Submit] Failed to save to Supabase:', result.error);
+
+        // If network error, save to offline queue as fallback
+        if (result.error?.includes('network') || result.error?.includes('fetch')) {
+          console.log('[Submit] Network error - falling back to offline queue');
+          addPendingLog(logData);
+
+          setIsSubmitting(false);
+          setChecklist(initialChecklist);
+          setNaState(initialNaState);
+          setStaffName('');
+          setStaffPin('');
+          setPinError(null);
+          setMaintenanceNotes('');
+          setShowChecklist(false);
+          setSavedOffline(true);
+          setShowSuccess(true);
+          setTimeout(() => {
+            setShowSuccess(false);
+            setSavedOffline(false);
+          }, 3500);
+          return;
+        }
+
         setSubmitError(result.error ?? 'Failed to save. Please try again.');
         setIsSubmitting(false);
         return;
@@ -487,6 +590,7 @@ export default function WashroomPublicScreen() {
 
       setIsSubmitting(false);
       setChecklist(initialChecklist);
+      setNaState(initialNaState);
       setStaffName('');
       setStaffPin('');
       setPinError(null);
@@ -497,14 +601,32 @@ export default function WashroomPublicScreen() {
 
     } catch (error) {
       console.error('[Submit] Network exception:', error);
-      setSubmitError('Network error. Please check your connection and try again.');
+
+      // Save to offline queue on exception
+      console.log('[Submit] Exception - saving to offline queue as fallback');
+      addPendingLog(logData);
+
       setIsSubmitting(false);
+      setChecklist(initialChecklist);
+      setNaState(initialNaState);
+      setStaffName('');
+      setStaffPin('');
+      setPinError(null);
+      setMaintenanceNotes('');
+      setShowChecklist(false);
+      setSavedOffline(true);
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+        setSavedOffline(false);
+      }, 3500);
     }
   };
 
   const handleCloseChecklist = () => {
     setShowChecklist(false);
     setChecklist(initialChecklist);
+    setNaState(initialNaState);
     setStaffName('');
     setStaffPin('');
     setPinError(null);
@@ -587,6 +709,32 @@ export default function WashroomPublicScreen() {
               Back / Retour
             </Text>
           </Pressable>
+        )}
+
+        {/* Offline Banner */}
+        {!isOnline && (
+          <View
+            className="flex-row items-center justify-center px-4 py-2"
+            style={{ backgroundColor: '#fbbf24' }}
+          >
+            <WifiOff size={16} color="#78350f" />
+            <Text className="text-sm font-semibold ml-2" style={{ color: '#78350f' }}>
+              Offline Mode - Logs will sync when connected
+            </Text>
+          </View>
+        )}
+
+        {/* Pending Sync Banner */}
+        {isOnline && pendingLogsForLocation.length > 0 && (
+          <View
+            className="flex-row items-center justify-center px-4 py-2"
+            style={{ backgroundColor: COLORS.mintLight }}
+          >
+            <RefreshCw size={14} color={COLORS.emeraldDark} />
+            <Text className="text-sm font-medium ml-2" style={{ color: COLORS.emeraldDark }}>
+              {pendingLogsForLocation.length} log(s) syncing...
+            </Text>
+          </View>
         )}
 
         <ScrollView
@@ -784,10 +932,21 @@ export default function WashroomPublicScreen() {
                   >
                     {showSuccess ? (
                       <View className="flex-row items-center justify-center">
-                        <Check size={18} color={COLORS.white} strokeWidth={3} />
-                        <Text className="text-sm font-semibold ml-2" style={{ color: COLORS.white }}>
-                          Log Saved! / Entrée enregistrée!
-                        </Text>
+                        {savedOffline ? (
+                          <>
+                            <WifiOff size={16} color={COLORS.white} strokeWidth={2} />
+                            <Text className="text-sm font-semibold ml-2" style={{ color: COLORS.white }}>
+                              Saved Offline - Will Sync
+                            </Text>
+                          </>
+                        ) : (
+                          <>
+                            <Check size={18} color={COLORS.white} strokeWidth={3} />
+                            <Text className="text-sm font-semibold ml-2" style={{ color: COLORS.white }}>
+                              Log Saved! / Entrée enregistrée!
+                            </Text>
+                          </>
+                        )}
                       </View>
                     ) : (
                       <View className="flex-row items-center justify-center">
@@ -1251,47 +1410,79 @@ export default function WashroomPublicScreen() {
                           >
                             {sectionItems.map((item, index) => {
                               const isChecked = checklist[item.key as keyof ChecklistState];
+                              const isNa = item.hasNaOption && naState[item.key as keyof NaState];
+                              const isDisabled = isNa; // Disable main checkbox when N/A is selected
                               return (
-                                <Pressable
+                                <View
                                   key={item.key}
-                                  onPress={() => handleToggleCheck(item.key as keyof ChecklistState)}
-                                  className="flex-row items-start p-3 active:bg-emerald-50"
                                   style={{
                                     borderBottomWidth: index < sectionItems.length - 1 ? 1 : 0,
                                     borderBottomColor: COLORS.glassBorder,
                                   }}
                                 >
-                                  <View className="mt-0.5">
-                                    {isChecked ? (
-                                      <CheckSquare size={22} color={COLORS.emerald} />
-                                    ) : (
-                                      <Square size={22} color={COLORS.textMuted} />
-                                    )}
-                                  </View>
-                                  <View className="ml-2.5 flex-1">
-                                    {/* English label */}
-                                    <Text
-                                      className="font-medium"
-                                      style={{
-                                        color: isChecked ? COLORS.textDark : COLORS.textMuted,
-                                        fontSize: 13,
-                                      }}
+                                  <Pressable
+                                    onPress={() => !isDisabled && handleToggleCheck(item.key as keyof ChecklistState)}
+                                    className="flex-row items-start p-3 active:bg-emerald-50"
+                                    style={{ opacity: isDisabled ? 0.5 : 1 }}
+                                  >
+                                    <View className="mt-0.5">
+                                      {isChecked ? (
+                                        <CheckSquare size={22} color={COLORS.emerald} />
+                                      ) : (
+                                        <Square size={22} color={COLORS.textMuted} />
+                                      )}
+                                    </View>
+                                    <View className="ml-2.5 flex-1">
+                                      {/* English label */}
+                                      <Text
+                                        className="font-medium"
+                                        style={{
+                                          color: isChecked ? COLORS.textDark : COLORS.textMuted,
+                                          fontSize: 13,
+                                          textDecorationLine: isNa ? 'line-through' : 'none',
+                                        }}
+                                      >
+                                        {item.labelEn}
+                                      </Text>
+                                      {/* French label */}
+                                      <Text
+                                        className="mt-1"
+                                        style={{
+                                          color: isChecked ? COLORS.textMuted : '#9ca3af',
+                                          fontSize: 11,
+                                          fontStyle: 'italic',
+                                          textDecorationLine: isNa ? 'line-through' : 'none',
+                                        }}
+                                      >
+                                        {item.labelFr}
+                                      </Text>
+                                    </View>
+                                  </Pressable>
+
+                                  {/* N/A Option for items that support it */}
+                                  {item.hasNaOption && (
+                                    <Pressable
+                                      onPress={() => handleToggleNa(item.key as keyof NaState)}
+                                      className="flex-row items-center px-3 pb-3 pt-0"
                                     >
-                                      {item.labelEn}
-                                    </Text>
-                                    {/* French label */}
-                                    <Text
-                                      className="mt-1"
-                                      style={{
-                                        color: isChecked ? COLORS.textMuted : '#9ca3af',
-                                        fontSize: 11,
-                                        fontStyle: 'italic',
-                                      }}
-                                    >
-                                      {item.labelFr}
-                                    </Text>
-                                  </View>
-                                </Pressable>
+                                      <View
+                                        className="w-5 h-5 rounded border-2 items-center justify-center mr-2"
+                                        style={{
+                                          borderColor: isNa ? COLORS.amber : COLORS.textMuted,
+                                          backgroundColor: isNa ? COLORS.amberLight : 'transparent',
+                                        }}
+                                      >
+                                        {isNa && <Check size={12} color={COLORS.amber} strokeWidth={3} />}
+                                      </View>
+                                      <Text
+                                        className="text-xs font-medium"
+                                        style={{ color: isNa ? COLORS.amber : COLORS.textMuted }}
+                                      >
+                                        N/A - Not Applicable / Non applicable
+                                      </Text>
+                                    </Pressable>
+                                  )}
+                                </View>
                               );
                             })}
                           </View>

@@ -2,10 +2,12 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
+import { startOfflineSync, stopOfflineSync } from '@/lib/offline-queue';
 
 export const unstable_settings = {
   // Ensure that reloading on `/modal` keeps a back button present.
@@ -86,6 +88,14 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+
+  // Start offline sync listener on app mount
+  useEffect(() => {
+    startOfflineSync();
+    return () => {
+      stopOfflineSync();
+    };
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
