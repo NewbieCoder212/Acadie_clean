@@ -1131,6 +1131,52 @@ export async function resolveReportedIssue(issueId: string): Promise<{ success: 
   }
 }
 
+// Issue types that can be auto-resolved by a complete cleaning
+// These are issues that cleaning staff can address
+const AUTO_RESOLVABLE_ISSUE_TYPES = ['out_of_supplies', 'needs_cleaning'];
+
+// Auto-resolve supply/cleaning issues for a location when a complete cleaning is logged
+// Maintenance and safety issues remain open for manual resolution
+export async function autoResolveIssuesForLocation(locationId: string): Promise<{ success: boolean; resolvedCount?: number; error?: string }> {
+  try {
+    // First get count of auto-resolvable open issues
+    const { data: openIssues, error: fetchError } = await supabase
+      .from('reported_issues')
+      .select('id')
+      .eq('location_id', locationId)
+      .eq('status', 'open')
+      .in('issue_type', AUTO_RESOLVABLE_ISSUE_TYPES);
+
+    if (fetchError) {
+      return { success: false, error: fetchError.message };
+    }
+
+    const count = openIssues?.length ?? 0;
+    if (count === 0) {
+      return { success: true, resolvedCount: 0 };
+    }
+
+    // Update all auto-resolvable open issues for this location
+    const { error } = await supabase
+      .from('reported_issues')
+      .update({
+        status: 'resolved',
+        resolved_at: new Date().toISOString(),
+      })
+      .eq('location_id', locationId)
+      .eq('status', 'open')
+      .in('issue_type', AUTO_RESOLVABLE_ISSUE_TYPES);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, resolvedCount: count };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
 // Toggle business active status (admin only)
 export async function toggleBusinessActive(businessId: string, isActive: boolean): Promise<{ success: boolean; error?: string }> {
   try {

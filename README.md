@@ -267,11 +267,24 @@ Visitors can report facility issues directly from the public washroom page:
 7. **Resolution**: Manager can mark issues as resolved, which updates the status in Supabase
 
 **Issue Types:**
-- Out of Supplies
-- Needs Cleaning
-- Maintenance Required
-- Safety Concern
-- Other
+- Out of Supplies *(auto-resolved by complete cleaning)*
+- Needs Cleaning *(auto-resolved by complete cleaning)*
+- Maintenance Required *(requires manual resolution)*
+- Safety Concern *(requires manual resolution)*
+- Other *(requires manual resolution)*
+
+### Auto-Resolution of Issues
+
+When a **complete** cleaning log is submitted (all checklist items pass), the system automatically resolves:
+- **"Out of Supplies"** issues - because supplies were restocked during cleaning
+- **"Needs Cleaning"** issues - because the washroom was just cleaned
+
+Issues that are **NOT auto-resolved** (require manager action):
+- **"Maintenance Required"** - e.g., broken toilet, leaky faucet
+- **"Safety Concern"** - e.g., ceiling damage, exposed wiring
+- **"Other"** - unknown issues that need review
+
+This reduces manual work for managers while ensuring maintenance/safety issues are properly tracked until fixed.
 
 ## WorkSafeNB Compliance
 

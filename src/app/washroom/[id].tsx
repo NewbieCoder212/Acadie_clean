@@ -55,6 +55,7 @@ import {
   updateWashroomLastCleaned,
   WashroomRow,
   autoResolveLogsForLocation,
+  autoResolveIssuesForLocation,
   trackQrScan,
 } from '@/lib/supabase';
 import { sendAttentionRequiredEmail, getUncheckedItems, sendIssueReportEmail, ISSUE_TYPES } from '@/lib/email';
@@ -559,10 +560,17 @@ export default function WashroomPublicScreen() {
       setSupabaseWashroom(prev => prev ? { ...prev, last_cleaned: new Date().toISOString() } : null);
 
       // If this is a complete cleaning, auto-resolve any previous attention-required entries
+      // and auto-resolve supply/cleaning issues reported by the public
       if (status === 'complete') {
         const resolveResult = await autoResolveLogsForLocation(id);
         if (resolveResult.success && resolveResult.resolvedCount && resolveResult.resolvedCount > 0) {
           console.log(`[Submit] Auto-resolved ${resolveResult.resolvedCount} previous attention entries`);
+        }
+
+        // Also auto-resolve supply/cleaning issues (not maintenance/safety)
+        const issueResolveResult = await autoResolveIssuesForLocation(id);
+        if (issueResolveResult.success && issueResolveResult.resolvedCount && issueResolveResult.resolvedCount > 0) {
+          console.log(`[Submit] Auto-resolved ${issueResolveResult.resolvedCount} supply/cleaning issues`);
         }
       }
 
