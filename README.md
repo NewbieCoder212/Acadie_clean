@@ -65,15 +65,18 @@ The database supports subscription tiers for future premium features. Currently 
 
 ## Security
 
-- **PIN-Protected Cleaning Forms**: Each location requires a 4-5 digit PIN to submit cleaning logs, preventing unauthorized submissions from people who guess URLs
-- **PIN Verification**: PINs are stored in Supabase and verified against the database, with fallback to local verification
-- **PIN Display for Managers**: The Manager Dashboard displays the plain PIN for each location so managers can share it with authorized staff
+- **Universal Staff PIN**: Each business can set a single staff PIN that works for all their washroom locations. This simplifies PIN management when cleaning staff work across multiple locations.
+- **PIN-Protected Cleaning Forms**: Each location requires a PIN to submit cleaning logs, preventing unauthorized submissions from people who guess URLs. The system first checks the universal business PIN, then falls back to the individual washroom PIN.
+- **PIN Verification**: PINs are stored hashed in Supabase and verified against the database
+- **PIN Management for Managers**: Managers can view and change the universal staff PIN directly from their dashboard
+- **PIN Display for Managers**: The Manager Dashboard displays the plain PIN so managers can share it with authorized staff
 - **Editable Alert Email**: Location alert emails can be edited and saved directly from the Location Management modal
 - **Soft Delete (Active Toggle)**: Locations can be deactivated instead of deleted, preserving data while hiding them from the cleaning app
 - **Public Badge**: The washroom public page showing the last two cleanings is accessible without authentication
 - **Staff Form**: Staff only see PIN entry, checklist and notes field - no access to email or settings
 - **Manager Access**: The shield icon on the main page requires password authentication to access settings and the Manager Dashboard
 - **Manager Dashboard**: Password-protected; shows unresolved attention items, location settings (including supervisor email and PIN), and allows resolution
+- **Forgot Password**: Manager login includes contact information for password recovery (jay@acadiacleaniq.ca)
 - **Secure Password Storage**: Manager passwords are hashed using bcrypt before storage. Plain-text passwords are never stored or displayed.
 - **Environment Variables**: Supabase credentials are stored in environment variables (`EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`), not hardcoded
 - **Safe Session Data**: Login sessions only store non-sensitive business data (no password hashes in AsyncStorage)
@@ -249,6 +252,8 @@ Data is persisted using **Supabase** cloud database. The app uses two tables:
 - `name` - Business name
 - `email` - Business email address (for login)
 - `password_hash` - Hashed password for authentication
+- `staff_pin_hash` - Hashed universal staff PIN for all washroom locations
+- `staff_pin_display` - Plain text PIN for display in manager dashboard
 - `is_admin` - Boolean flag for admin access
 - `is_active` - Boolean flag to enable/disable business access (when false, business cannot log in but data is preserved)
 - `created_at` - Record creation timestamp

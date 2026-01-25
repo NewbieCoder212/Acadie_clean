@@ -260,6 +260,27 @@ export default function LoginScreen() {
                     </View>
                   )}
                 </Pressable>
+
+                {/* Forgot Password Link */}
+                <View style={{ marginTop: 16, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, color: C.textSecondary, textAlign: 'center' }}>
+                    Forgot password? Contact administrator:
+                  </Text>
+                  <Text style={{ fontSize: 12, color: C.textMuted, textAlign: 'center', marginTop: 2 }}>
+                    Mot de passe oublié? Contactez l'administrateur:
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: '600',
+                      color: C.emeraldDark,
+                      marginTop: 6,
+                    }}
+                    selectable
+                  >
+                    jay@acadiacleaniq.ca
+                  </Text>
+                </View>
               </Animated.View>
 
               {/* Admin Access Link */}

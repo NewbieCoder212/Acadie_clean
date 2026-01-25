@@ -478,30 +478,63 @@ export async function getWashroomById(washroomId: string): Promise<{ success: bo
   }
 }
 
-// Verify PIN for a washroom (supports hashed and legacy plain-text PINs)
+// Verify PIN for a washroom (checks universal business PIN first, then washroom-specific PIN)
 export async function verifyWashroomPin(washroomId: string, pin: string): Promise<{ success: boolean; valid?: boolean; error?: string }> {
   try {
-    const { data, error } = await supabase
+    // First, get the washroom to find its business
+    const { data: washroom, error: washroomError } = await supabase
       .from('washrooms')
-      .select('id, pin_code')
+      .select('id, pin_code, business_name')
       .eq('id', washroomId)
       .eq('is_active', true)
       .single();
 
-    if (error) {
-      if (error.code === 'PGRST116') {
+    if (washroomError) {
+      if (washroomError.code === 'PGRST116') {
         return { success: true, valid: false };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: washroomError.message };
     }
 
-    // Check if PIN is hashed or plain text
+    // Try to verify against the universal business staff PIN first
+    if (washroom?.business_name) {
+      const { data: business, error: businessError } = await supabase
+        .from('businesses')
+        .select('id, staff_pin_hash')
+        .eq('name', washroom.business_name)
+        .eq('is_active', true)
+        .single();
+
+      if (!businessError && business?.staff_pin_hash) {
+        // Check against universal business PIN
+        let businessPinValid = false;
+        if (isBcryptHash(business.staff_pin_hash)) {
+          businessPinValid = await verifyPin(pin, business.staff_pin_hash);
+        } else {
+          // Legacy plain text PIN - verify and upgrade to hash
+          businessPinValid = business.staff_pin_hash === pin;
+          if (businessPinValid) {
+            const hashedPin = await hashPin(pin);
+            await supabase
+              .from('businesses')
+              .update({ staff_pin_hash: hashedPin })
+              .eq('id', business.id);
+          }
+        }
+
+        if (businessPinValid) {
+          return { success: true, valid: true };
+        }
+      }
+    }
+
+    // Fall back to washroom-specific PIN
     let valid = false;
-    if (isBcryptHash(data?.pin_code)) {
-      valid = await verifyPin(pin, data.pin_code);
+    if (isBcryptHash(washroom?.pin_code)) {
+      valid = await verifyPin(pin, washroom.pin_code);
     } else {
       // Legacy plain text PIN - verify and upgrade to hash
-      valid = data?.pin_code === pin;
+      valid = washroom?.pin_code === pin;
       if (valid) {
         const hashedPin = await hashPin(pin);
         await supabase
@@ -712,6 +745,8 @@ export interface BusinessRow {
   is_admin: boolean;
   is_active: boolean;
   subscription_tier: SubscriptionTier;
+  staff_pin_hash: string | null;
+  staff_pin_display: string | null;
   created_at: string;
 }
 
@@ -724,6 +759,7 @@ export interface SafeBusinessRow {
   is_admin: boolean;
   is_active: boolean;
   subscription_tier: SubscriptionTier;
+  staff_pin_display: string | null;
   created_at: string;
 }
 
@@ -819,6 +855,7 @@ export async function loginBusiness(email: string, password: string): Promise<{ 
       is_admin: data.is_admin,
       is_active: data.is_active,
       subscription_tier: data.subscription_tier ?? 'standard',
+      staff_pin_display: data.staff_pin_display ?? null,
       created_at: data.created_at,
     };
 
@@ -877,6 +914,94 @@ export async function updateBusinessPassword(businessId: string, newPassword: st
     }
 
     return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Update business universal staff PIN (for all washroom locations)
+export async function updateBusinessStaffPin(businessId: string, newPin: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Hash the PIN before storing
+    const hashedPin = await hashPin(newPin);
+
+    const { error } = await supabase
+      .from('businesses')
+      .update({
+        staff_pin_hash: hashedPin,
+        staff_pin_display: newPin, // Store plain PIN for manager display
+      })
+      .eq('id', businessId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Verify universal business staff PIN
+export async function verifyBusinessStaffPin(businessId: string, pin: string): Promise<{ success: boolean; valid?: boolean; error?: string }> {
+  try {
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('id, staff_pin_hash')
+      .eq('id', businessId)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return { success: true, valid: false };
+      }
+      return { success: false, error: error.message };
+    }
+
+    if (!data?.staff_pin_hash) {
+      return { success: true, valid: false };
+    }
+
+    // Check if PIN is hashed or plain text
+    let valid = false;
+    if (isBcryptHash(data.staff_pin_hash)) {
+      valid = await verifyPin(pin, data.staff_pin_hash);
+    } else {
+      // Legacy plain text PIN - verify and upgrade to hash
+      valid = data.staff_pin_hash === pin;
+      if (valid) {
+        const hashedPin = await hashPin(pin);
+        await supabase
+          .from('businesses')
+          .update({ staff_pin_hash: hashedPin })
+          .eq('id', businessId);
+      }
+    }
+
+    return { success: true, valid };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Get business staff PIN display (for manager dashboard)
+export async function getBusinessStaffPinDisplay(businessId: string): Promise<{ success: boolean; pin?: string | null; error?: string }> {
+  try {
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('staff_pin_display')
+      .eq('id', businessId)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return { success: true, pin: null };
+      }
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, pin: data?.staff_pin_display ?? null };
   } catch (error) {
     return { success: false, error: String(error) };
   }

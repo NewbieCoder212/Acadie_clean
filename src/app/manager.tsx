@@ -41,6 +41,7 @@ import {
   updateWashroomAlertEmail,
   toggleWashroomActive,
   updateBusinessAddress,
+  updateBusinessStaffPin,
   ReportedIssueRow,
   getIssuesForBusinessByName,
   resolveReportedIssue,
@@ -144,6 +145,12 @@ export default function ManagerDashboard() {
   const [showPremiumStartPicker, setShowPremiumStartPicker] = useState(false);
   const [showPremiumEndPicker, setShowPremiumEndPicker] = useState(false);
   const [isPremiumExporting, setIsPremiumExporting] = useState(false);
+
+  // Universal Staff PIN management
+  const [showPinManagement, setShowPinManagement] = useState(false);
+  const [newStaffPin, setNewStaffPin] = useState('');
+  const [confirmStaffPin, setConfirmStaffPin] = useState('');
+  const [isSavingPin, setIsSavingPin] = useState(false);
 
   const managerPasswordHash = useStore((s) => s.managerPasswordHash);
   const setManagerPasswordHash = useStore((s) => s.setManagerPasswordHash);
@@ -484,6 +491,42 @@ export default function ManagerDashboard() {
       Alert.alert('Error', 'Network error. Please try again.');
     } finally {
       setIsSavingAddress(false);
+    }
+  };
+
+  const handleSaveStaffPin = async () => {
+    if (!currentBusiness?.id) return;
+
+    // Validate PIN
+    if (!newStaffPin || newStaffPin.length < 4 || newStaffPin.length > 5 || !/^\d{4,5}$/.test(newStaffPin)) {
+      Alert.alert('Error', 'Please enter a valid 4 or 5-digit PIN\nVeuillez entrer un NIP de 4 ou 5 chiffres');
+      return;
+    }
+
+    if (newStaffPin !== confirmStaffPin) {
+      Alert.alert('Error', 'PINs do not match\nLes NIP ne correspondent pas');
+      return;
+    }
+
+    setIsSavingPin(true);
+    try {
+      const result = await updateBusinessStaffPin(currentBusiness.id, newStaffPin);
+      if (result.success) {
+        // Update local storage with new PIN display
+        const updatedBusiness = { ...currentBusiness, staff_pin_display: newStaffPin };
+        await AsyncStorage.setItem('currentBusiness', JSON.stringify(updatedBusiness));
+        setCurrentBusiness(updatedBusiness);
+        setNewStaffPin('');
+        setConfirmStaffPin('');
+        setShowPinManagement(false);
+        Alert.alert('Success', 'Staff PIN updated!\nNIP du personnel mis à jour!');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to update PIN');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setIsSavingPin(false);
     }
   };
 
@@ -1698,6 +1741,132 @@ export default function ManagerDashboard() {
 
         {/* Install App Banner for PWA */}
         <InstallAppBanner />
+
+        {/* Universal Staff PIN Management Card */}
+        <Animated.View
+          entering={FadeInDown.delay(50).duration(500)}
+          className="px-5 pt-4"
+        >
+          <Pressable
+            onPress={() => setShowPinManagement(!showPinManagement)}
+            className="rounded-xl p-4"
+            style={{
+              backgroundColor: COLORS.amberLight,
+              borderWidth: 1,
+              borderColor: '#fcd34d',
+            }}
+          >
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center flex-1">
+                <View
+                  className="w-10 h-10 rounded-full items-center justify-center"
+                  style={{ backgroundColor: '#fde68a' }}
+                >
+                  <Key size={20} color="#92400e" />
+                </View>
+                <View className="ml-3 flex-1">
+                  <Text className="text-sm font-bold" style={{ color: '#92400e' }}>
+                    Universal Staff PIN
+                  </Text>
+                  <Text className="text-xs" style={{ color: '#b45309' }}>
+                    NIP universel du personnel
+                  </Text>
+                  {currentBusiness?.staff_pin_display ? (
+                    <Text className="text-xl font-black tracking-widest mt-1" style={{ color: '#92400e' }}>
+                      {currentBusiness.staff_pin_display}
+                    </Text>
+                  ) : (
+                    <Text className="text-xs italic mt-1" style={{ color: '#b45309' }}>
+                      No PIN set - Tap to configure
+                    </Text>
+                  )}
+                </View>
+              </View>
+              <ChevronRight
+                size={20}
+                color="#92400e"
+                style={{ transform: [{ rotate: showPinManagement ? '90deg' : '0deg' }] }}
+              />
+            </View>
+
+            {showPinManagement && (
+              <Pressable onPress={(e) => e.stopPropagation()}>
+                <View className="mt-4 pt-4" style={{ borderTopWidth: 1, borderTopColor: '#fcd34d' }}>
+                  <Text className="text-xs mb-3" style={{ color: '#92400e' }}>
+                    This PIN works for all your washroom locations. Share it with your cleaning staff.
+                  </Text>
+                  <Text className="text-xs mb-3 italic" style={{ color: '#b45309' }}>
+                    Ce NIP fonctionne pour tous vos emplacements. Partagez-le avec votre personnel.
+                  </Text>
+
+                  <View className="mb-3">
+                    <Text className="text-xs font-medium mb-2" style={{ color: '#92400e' }}>
+                      New PIN (4-5 digits) / Nouveau NIP (4-5 chiffres)
+                    </Text>
+                    <TextInput
+                      value={newStaffPin}
+                      onChangeText={setNewStaffPin}
+                      placeholder="Enter new PIN"
+                      placeholderTextColor="#d97706"
+                      keyboardType="numeric"
+                      maxLength={5}
+                      secureTextEntry
+                      className="rounded-lg px-4 py-3 text-base"
+                      style={{
+                        backgroundColor: '#fef3c7',
+                        borderWidth: 1,
+                        borderColor: '#fcd34d',
+                        color: '#92400e',
+                      }}
+                    />
+                  </View>
+
+                  <View className="mb-4">
+                    <Text className="text-xs font-medium mb-2" style={{ color: '#92400e' }}>
+                      Confirm PIN / Confirmer le NIP
+                    </Text>
+                    <TextInput
+                      value={confirmStaffPin}
+                      onChangeText={setConfirmStaffPin}
+                      placeholder="Confirm new PIN"
+                      placeholderTextColor="#d97706"
+                      keyboardType="numeric"
+                      maxLength={5}
+                      secureTextEntry
+                      className="rounded-lg px-4 py-3 text-base"
+                      style={{
+                        backgroundColor: '#fef3c7',
+                        borderWidth: 1,
+                        borderColor: '#fcd34d',
+                        color: '#92400e',
+                      }}
+                    />
+                  </View>
+
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleSaveStaffPin();
+                    }}
+                    disabled={isSavingPin}
+                    className="flex-row items-center justify-center py-3 rounded-lg"
+                    style={{ backgroundColor: isSavingPin ? '#d97706' : '#92400e' }}
+                  >
+                    {isSavingPin ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <Save size={18} color="#fff" />
+                        <Text className="text-white font-bold ml-2">Save PIN</Text>
+                        <Text className="text-white/80 text-xs ml-1">/ Enregistrer</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+              </Pressable>
+            )}
+          </Pressable>
+        </Animated.View>
 
         {/* CURRENT STATUS GRID */}
         <Animated.View
