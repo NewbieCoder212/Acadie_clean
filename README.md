@@ -49,9 +49,28 @@ The app uses a consistent color palette across all screens:
 - **Manager Resolution**: Managers can mark "Attention Required" entries as resolved, which removes the yellow warning from the public badge while keeping the note for audit purposes
 - **Compliance Record**: Displays the 2 most recent cleaning entries with date, time, staff name, and status
 - **Password-Protected Access**: Manager Dashboard requires password authentication from the main page
-- **CSV Export**: Managers can export 1-month (30 days max) cleaning history for each washroom location. Admins have full date range export for all businesses.
 - **NEW Washroom Badge**: New washrooms without any cleaning logs are highlighted with a blue "NEW" badge and "NEEDS QR CODE" status to remind admins to generate QR codes.
 - **Admin Email Notifications**: When a manager adds a new washroom, the admin (chris@acadiacleaniq.ca) receives an email notification with washroom details and a reminder to generate QR codes.
+
+## Subscription Tiers
+
+The app supports two subscription tiers with different feature access:
+
+### Standard Tier (Default)
+- **View Last 14 Days**: View-only modal showing cleaning logs for the past 14 days per location (no export)
+- **All Core Features**: Location management, cleaning logs, issue reporting, email alerts
+- **Inspector Mode Locked**: Shows upgrade prompt when tapping "Send to Inspector"
+
+### Premium Tier
+- **Export 1-Month History (PDF)**: Export cleaning history for each location as a professional PDF
+- **Send to Inspector**: Full audit report generation with custom date ranges for health inspectors
+- **Custom Date Range Selection**: Choose any date range for compliance reports
+- **Professional Compliance Reports**: Formatted PDF reports suitable for NB Department of Health audits
+
+### Admin Management
+- Admins can toggle subscription tier (Standard/Premium) for each business from the Admin Dashboard
+- Tier changes take effect immediately
+- Upgrade prompts direct users to contact jay@acadiacleaniq.ca
 
 ## Security
 

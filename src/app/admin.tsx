@@ -29,6 +29,7 @@ import {
   Calendar,
   QrCode,
   TrendingUp,
+  Crown,
 } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -44,6 +45,7 @@ import {
   getAllLocations,
   getAllWashrooms,
   toggleBusinessActive,
+  updateBusinessSubscriptionTier,
   getLogsForDateRange,
   getLogsForBusinessByNameAndDateRange,
   getQrScanStatsForLocations,
@@ -52,6 +54,7 @@ import {
   CleaningLogRow,
   ReportedIssueRow,
   QrScanStatRow,
+  SubscriptionTier,
 } from '@/lib/supabase';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
 
@@ -232,6 +235,30 @@ export default function AdminDashboardScreen() {
               await loadData();
             } else {
               Alert.alert('Error', result.error || 'Failed to update business status');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleToggleSubscriptionTier = async (business: BusinessRow) => {
+    const currentTier = business.subscription_tier || 'standard';
+    const newTier: SubscriptionTier = currentTier === 'standard' ? 'premium' : 'standard';
+
+    Alert.alert(
+      `Change Subscription Tier`,
+      `Change "${business.name}" from ${currentTier.toUpperCase()} to ${newTier.toUpperCase()}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: `Switch to ${newTier}`,
+          onPress: async () => {
+            const result = await updateBusinessSubscriptionTier(business.id, newTier);
+            if (result.success) {
+              await loadData();
+            } else {
+              Alert.alert('Error', result.error || 'Failed to update subscription tier');
             }
           },
         },
@@ -679,6 +706,25 @@ export default function AdminDashboardScreen() {
                             >
                               {business.name}
                             </Text>
+                            {/* Subscription Tier Badge */}
+                            <View
+                              className="ml-2 px-2 py-0.5 rounded-full flex-row items-center"
+                              style={{
+                                backgroundColor: (business.subscription_tier || 'standard') === 'premium' ? '#fef3c7' : '#f1f5f9',
+                              }}
+                            >
+                              {(business.subscription_tier || 'standard') === 'premium' && (
+                                <Crown size={10} color="#d97706" style={{ marginRight: 2 }} />
+                              )}
+                              <Text
+                                className="text-xs font-semibold"
+                                style={{
+                                  color: (business.subscription_tier || 'standard') === 'premium' ? '#d97706' : '#64748b',
+                                }}
+                              >
+                                {(business.subscription_tier || 'standard').toUpperCase()}
+                              </Text>
+                            </View>
                           </View>
                           <Text className="text-sm" style={{ color: COLORS.textMuted }}>
                             {business.email}
@@ -708,9 +754,32 @@ export default function AdminDashboardScreen() {
                     <View className="flex-row items-center justify-between mt-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
                       <View className="flex-row items-center">
                         <MapPin size={14} color={COLORS.textMuted} />
-                        <Text className="text-xs ml-1" style={{ color: COLORS.textMuted }}>
+                        <Text className="text-xs ml-1 mr-3" style={{ color: COLORS.textMuted }}>
                           {getLocationCountForBusiness(business)} locations
                         </Text>
+                        {/* Subscription Tier Toggle */}
+                        <Pressable
+                          onPress={() => handleToggleSubscriptionTier(business)}
+                          className="flex-row items-center px-2 py-1 rounded-md active:opacity-70"
+                          style={{
+                            backgroundColor: (business.subscription_tier || 'standard') === 'premium' ? '#fef3c7' : '#f1f5f9',
+                            borderWidth: 1,
+                            borderColor: (business.subscription_tier || 'standard') === 'premium' ? '#fcd34d' : '#e2e8f0',
+                          }}
+                        >
+                          <Crown
+                            size={12}
+                            color={(business.subscription_tier || 'standard') === 'premium' ? '#d97706' : '#94a3b8'}
+                          />
+                          <Text
+                            className="text-xs font-medium ml-1"
+                            style={{
+                              color: (business.subscription_tier || 'standard') === 'premium' ? '#d97706' : '#64748b',
+                            }}
+                          >
+                            {(business.subscription_tier || 'standard') === 'premium' ? 'Downgrade' : 'Upgrade'}
+                          </Text>
+                        </Pressable>
                       </View>
 
                       <View className="flex-row items-center">

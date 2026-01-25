@@ -157,6 +157,29 @@ export async function getLogs6Months(locationId: string): Promise<{ success: boo
   }
 }
 
+// Get logs for the last 14 days for a specific location
+export async function getLogs14Days(locationId: string): Promise<{ success: boolean; data?: CleaningLogRow[]; error?: string }> {
+  try {
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+
+    const { data, error } = await supabase
+      .from('cleaning_logs')
+      .select('*')
+      .eq('location_id', locationId)
+      .gte('timestamp', fourteenDaysAgo.toISOString())
+      .order('timestamp', { ascending: false });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data ?? [] };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
 // Get logs for the last 1 month for a specific location (30 days max)
 export async function getLogs1Month(locationId: string): Promise<{ success: boolean; data?: CleaningLogRow[]; error?: string }> {
   try {
@@ -678,6 +701,8 @@ export async function getLogsForDateRange(
 }
 
 // Business table types
+export type SubscriptionTier = 'standard' | 'premium';
+
 export interface BusinessRow {
   id: string;
   name: string;
@@ -686,6 +711,7 @@ export interface BusinessRow {
   address: string | null;
   is_admin: boolean;
   is_active: boolean;
+  subscription_tier: SubscriptionTier;
   created_at: string;
 }
 
@@ -697,6 +723,7 @@ export interface SafeBusinessRow {
   address: string | null;
   is_admin: boolean;
   is_active: boolean;
+  subscription_tier: SubscriptionTier;
   created_at: string;
 }
 
@@ -706,6 +733,7 @@ export interface InsertBusiness {
   password: string;
   is_admin?: boolean;
   is_active?: boolean;
+  subscription_tier?: SubscriptionTier;
 }
 
 // Insert a new business with properly hashed password
@@ -722,6 +750,7 @@ export async function insertBusiness(business: InsertBusiness): Promise<{ succes
         password_hash: hashedPassword,
         is_admin: business.is_admin ?? false,
         is_active: business.is_active ?? true,
+        subscription_tier: business.subscription_tier ?? 'standard',
         created_at: new Date().toISOString(),
       }])
       .select()
@@ -789,6 +818,7 @@ export async function loginBusiness(email: string, password: string): Promise<{ 
       address: data.address ?? null,
       is_admin: data.is_admin,
       is_active: data.is_active,
+      subscription_tier: data.subscription_tier ?? 'standard',
       created_at: data.created_at,
     };
 
@@ -1183,6 +1213,24 @@ export async function toggleBusinessActive(businessId: string, isActive: boolean
     const { error } = await supabase
       .from('businesses')
       .update({ is_active: isActive })
+      .eq('id', businessId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Update business subscription tier (admin only)
+export async function updateBusinessSubscriptionTier(businessId: string, tier: SubscriptionTier): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('businesses')
+      .update({ subscription_tier: tier })
       .eq('id', businessId);
 
     if (error) {

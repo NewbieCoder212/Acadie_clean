@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Shield, Lock, Eye, EyeOff, Download, MapPin, AlertTriangle, CheckCircle2, Mail, ExternalLink, Plus, Link, Copy, LogOut, Trash2, Key, FileText, Calendar, ClipboardList, RefreshCw, Sparkles, ChevronRight, Save, Power, AlertOctagon } from 'lucide-react-native';
+import { Shield, Lock, Eye, EyeOff, Download, MapPin, AlertTriangle, CheckCircle2, Mail, ExternalLink, Plus, Link, Copy, LogOut, Trash2, Key, FileText, Calendar, ClipboardList, RefreshCw, Sparkles, ChevronRight, Save, Power, AlertOctagon, Crown, X } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
@@ -27,6 +27,7 @@ import { useStore, WashroomLocation } from '@/lib/store';
 import {
   getLogs6Months as getSupabase6MonthLogs,
   getLogs1Month as getSupabase1MonthLogs,
+  getLogs14Days,
   deleteLogsForLocation as supabaseDeleteLogsForLocation,
   insertWashroom as supabaseInsertWashroom,
   deleteWashroom as supabaseDeleteWashroom,
@@ -43,6 +44,7 @@ import {
   ReportedIssueRow,
   getIssuesForBusinessByName,
   resolveReportedIssue,
+  SubscriptionTier,
 } from '@/lib/supabase';
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { sendNewWashroomNotification } from '@/lib/email';
@@ -123,6 +125,16 @@ export default function ManagerDashboard() {
   const [isSavingEmail, setIsSavingEmail] = useState(false);
   const [isTogglingActive, setIsTogglingActive] = useState(false);
 
+  // View 14 Days modal state
+  const [show14DaysModal, setShow14DaysModal] = useState(false);
+  const [viewing14DaysLocationId, setViewing14DaysLocationId] = useState<string | null>(null);
+  const [viewing14DaysLocationName, setViewing14DaysLocationName] = useState<string>('');
+  const [fourteenDaysLogs, setFourteenDaysLogs] = useState<CleaningLogRow[]>([]);
+  const [isLoading14DaysLogs, setIsLoading14DaysLogs] = useState(false);
+
+  // Upgrade prompt modal state
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
   const managerPasswordHash = useStore((s) => s.managerPasswordHash);
   const setManagerPasswordHash = useStore((s) => s.setManagerPasswordHash);
   const isAuthenticated = useStore((s) => s.isManagerAuthenticated);
@@ -135,6 +147,10 @@ export default function ManagerDashboard() {
   const deleteLocation = useStore((s) => s.deleteLocation);
 
   const needsSetup = !managerPasswordHash;
+
+  // Check subscription tier - default to 'standard' if not set
+  const subscriptionTier: SubscriptionTier = currentBusiness?.subscription_tier || 'standard';
+  const isPremium = subscriptionTier === 'premium';
 
   // Determine which locations to display
   const displayLocations: WashroomLocation[] = currentBusiness
@@ -541,6 +557,7 @@ export default function ManagerDashboard() {
     return date.toLocaleString('en-US', {
       month: 'short',
       day: 'numeric',
+      year: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
@@ -592,6 +609,30 @@ export default function ManagerDashboard() {
     return `${businessDisplayName}\nLocation / Emplacement: ${locationName}\n1 Month History / Historique de 1 mois (30 jours)\n\n${headers}\n${rows.join('\n')}`;
   };
 
+  // Handle viewing 14 days history (for standard tier)
+  const handleView14Days = async (locationId: string) => {
+    const location = displayLocations.find(l => l.id === locationId);
+    if (!location) return;
+
+    setViewing14DaysLocationId(locationId);
+    setViewing14DaysLocationName(location.name);
+    setShow14DaysModal(true);
+    setIsLoading14DaysLogs(true);
+
+    try {
+      const result = await getLogs14Days(locationId);
+      if (result.success && result.data) {
+        setFourteenDaysLogs(result.data);
+      } else {
+        setFourteenDaysLogs([]);
+      }
+    } catch (error) {
+      setFourteenDaysLogs([]);
+    } finally {
+      setIsLoading14DaysLogs(false);
+    }
+  };
+
   const handleExport = async (locationId: string) => {
     try {
       setExportingId(locationId);
@@ -606,28 +647,259 @@ export default function ManagerDashboard() {
       }
 
       const businessDisplayName = currentBusiness?.name || 'Acadia Clean';
-      const csv = generateCSV(result.data, location.name, businessDisplayName);
-      const fileName = `${location.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-1-month-history.csv`;
+      const businessAddress = currentBusiness?.address || '';
+      const logs = result.data;
+
+      // Calculate date range (past 30 days)
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+
+      // Helper function to render checkmark or X
+      const checkIcon = (checked: boolean) => checked
+        ? '<span style="color: #059669; font-weight: bold;">✓</span>'
+        : '<span style="color: #dc2626; font-weight: bold;">✗</span>';
+
+      // Helper to truncate text
+      const truncate = (text: string, maxLength: number) => {
+        if (!text) return '-';
+        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+      };
+
+      const tableRows = logs.map((log) => `
+        <tr>
+          <td style="text-align: center;">${formatDateTime(log.timestamp)}</td>
+          <td>${truncate(log.staff_name, 15)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_supplies)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_supplies)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_trash)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_surfaces)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_floor)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">
+            <span style="padding: 1px 4px; border-radius: 3px; font-weight: 600; font-size: 9px; ${
+              log.status === 'complete' ? 'background-color: #dcfce7; color: #166534;' : 'background-color: #fef3c7; color: #92400e;'
+            }">${log.status === 'complete' ? 'Complete' : 'Partial'}</span>
+          </td>
+        </tr>
+      `).join('');
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>1 Month History - ${location.name}</title>
+            <style>
+              @page {
+                size: letter landscape;
+                margin: 8mm;
+              }
+              @media print {
+                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                .footer { page-break-inside: avoid; }
+              }
+              * { box-sizing: border-box; margin: 0; padding: 0; }
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                color: #1e293b;
+                padding: 12px 16px;
+                font-size: 11px;
+                background: white;
+              }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+              }
+              th {
+                background-color: #f1f5f9;
+                padding: 6px 4px;
+                text-align: left;
+                font-size: 9px;
+                font-weight: 600;
+                color: #475569;
+                border-bottom: 2px solid #e2e8f0;
+              }
+              th.center { text-align: center; }
+              td {
+                padding: 5px 4px;
+                border-bottom: 1px solid #e2e8f0;
+                font-size: 10px;
+              }
+              .legend {
+                margin-top: 10px;
+                padding: 8px;
+                background: #f8fafc;
+                border-radius: 4px;
+                font-size: 8px;
+                color: #475569;
+              }
+              .legend-title { font-weight: 600; margin-bottom: 4px; }
+              .legend-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+              .footer {
+                margin-top: 12px;
+                text-align: center;
+              }
+              .footer-logo {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+              }
+            </style>
+          </head>
+          <body>
+            <h1 style="font-size: 20px; font-weight: bold; margin: 0 0 2px 0;">${businessDisplayName}</h1>
+            ${businessAddress ? `<p style="font-size: 11px; color: #64748b; margin: 0 0 2px 0;">${businessAddress}</p>` : ''}
+            <h2 style="font-size: 14px; font-weight: 600; margin: 0 0 2px 0; color: #065f46;">${location.name}</h2>
+            <h3 style="font-size: 10px; font-weight: 600; margin: 0 0 10px 0; color: #64748b;">1 Month Cleaning History / Historique de nettoyage</h3>
+
+            <table style="border: 1px solid #e2e8f0;">
+              <thead>
+                <tr>
+                  <th>Date/Time</th>
+                  <th>Staff</th>
+                  <th class="center">HS</th>
+                  <th class="center">TP</th>
+                  <th class="center">BN</th>
+                  <th class="center">SD</th>
+                  <th class="center">FX</th>
+                  <th class="center">WT</th>
+                  <th class="center">FL</th>
+                  <th class="center">VL</th>
+                  <th class="center">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows}
+              </tbody>
+            </table>
+
+            <div class="legend">
+              <div class="legend-title">Legend / Légende:</div>
+              <div class="legend-grid">
+                <span><strong>HS</strong>=Hand Soap / Savon</span>
+                <span><strong>TP</strong>=Toilet Paper / Papier</span>
+                <span><strong>BN</strong>=Bins / Poubelles</span>
+                <span><strong>SD</strong>=Surfaces Disinfected / Surfaces désinfectées</span>
+                <span><strong>FX</strong>=Fixtures / Accessoires</span>
+                <span><strong>WT</strong>=Water Temp / Température</span>
+                <span><strong>FL</strong>=Floors / Planchers</span>
+                <span><strong>VL</strong>=Ventilation/Lighting / Éclairage</span>
+                <span style="margin-left: 8px;"><span style="color: #059669;">✓</span>=Complete / Complété</span>
+                <span><span style="color: #dc2626;">✗</span>=Incomplete / Incomplet</span>
+              </div>
+            </div>
+
+            <div style="margin-top: 8px; text-align: center; color: #64748b; font-size: 9px;">
+              Date Range: ${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')} — ${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}
+            </div>
+
+            <div class="footer">
+              <div class="footer-logo">
+                <svg width="32" height="32" viewBox="0 0 100 100">
+                  <!-- Corner squares -->
+                  <rect x="5" y="5" width="25" height="25" rx="4" fill="#065f46"/>
+                  <rect x="9" y="9" width="17" height="17" rx="2" fill="#fff"/>
+                  <rect x="13" y="13" width="9" height="9" rx="1" fill="#065f46"/>
+                  <rect x="70" y="5" width="25" height="25" rx="4" fill="#065f46"/>
+                  <rect x="74" y="9" width="17" height="17" rx="2" fill="#fff"/>
+                  <rect x="78" y="13" width="9" height="9" rx="1" fill="#065f46"/>
+                  <rect x="5" y="70" width="25" height="25" rx="4" fill="#065f46"/>
+                  <rect x="9" y="74" width="17" height="17" rx="2" fill="#fff"/>
+                  <rect x="13" y="78" width="9" height="9" rx="1" fill="#065f46"/>
+                  <!-- Data pattern dots - top -->
+                  <rect x="35" y="5" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="45" y="5" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="55" y="5" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="35" y="15" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="55" y="15" width="6" height="6" rx="1" fill="#065f46"/>
+                  <!-- Data pattern dots - left -->
+                  <rect x="5" y="35" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="15" y="35" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="5" y="45" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="5" y="55" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="15" y="55" width="6" height="6" rx="1" fill="#065f46"/>
+                  <!-- Data pattern dots - right -->
+                  <rect x="89" y="35" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="79" y="45" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="89" y="55" width="6" height="6" rx="1" fill="#065f46"/>
+                  <!-- Data pattern dots - bottom -->
+                  <rect x="35" y="89" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="45" y="89" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="55" y="89" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="65" y="89" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="75" y="79" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="35" y="79" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="55" y="79" width="6" height="6" rx="1" fill="#065f46"/>
+                  <!-- Center water drop with checkmark -->
+                  <path d="M50 28 C50 28 35 45 35 58 C35 68 41 75 50 75 C59 75 65 68 65 58 C65 45 50 28 50 28 Z" fill="#059669"/>
+                  <path d="M42 55 L47 62 L58 48" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                </svg>
+                <div style="text-align: left;">
+                  <div style="font-size: 11px; font-weight: 800; color: #065f46; letter-spacing: 0.5px;">Acadia</div>
+                  <div style="font-size: 10px; font-weight: 700; color: #059669;">Clean IQ</div>
+                </div>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
 
       if (Platform.OS === 'web') {
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } else {
-        const filePath = `${FileSystem.documentDirectory}${fileName}`;
-        await FileSystem.writeAsStringAsync(filePath, csv);
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(filePath, { mimeType: 'text/csv' });
+        const printWindow = window.open('', '_blank');
+
+        if (printWindow && printWindow.document) {
+          printWindow.document.write(html);
+          printWindow.document.close();
+          printWindow.focus();
+
+          const triggerPrint = () => {
+            printWindow.print();
+          };
+
+          if (printWindow.document.readyState === 'complete') {
+            setTimeout(triggerPrint, 500);
+          } else {
+            printWindow.onload = () => {
+              setTimeout(triggerPrint, 300);
+            };
+            setTimeout(triggerPrint, 800);
+          }
+        } else {
+          // Fallback for PWA mode
+          const iframe = document.createElement('iframe');
+          iframe.style.position = 'fixed';
+          iframe.style.right = '0';
+          iframe.style.bottom = '0';
+          iframe.style.width = '0';
+          iframe.style.height = '0';
+          iframe.style.border = 'none';
+          document.body.appendChild(iframe);
+
+          const iframeDoc = iframe.contentWindow?.document;
+          if (iframeDoc) {
+            iframeDoc.open();
+            iframeDoc.write(html);
+            iframeDoc.close();
+
+            setTimeout(() => {
+              iframe.contentWindow?.print();
+              setTimeout(() => {
+                document.body.removeChild(iframe);
+              }, 1000);
+            }, 500);
+          }
         }
+      } else {
+        // Mobile: use expo-print
+        const { printAsync } = await import('expo-print');
+        await printAsync({ html });
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to export CSV file');
+      Alert.alert('Error', 'Failed to generate PDF');
     } finally {
       setExportingId(null);
     }
@@ -805,12 +1077,13 @@ export default function ManagerDashboard() {
             </div>
 
             <div style="margin-top: 8px; text-align: center; color: #64748b; font-size: 9px;">
-              Date Range: ${auditStartDate.toLocaleDateString()} — ${auditEndDate.toLocaleDateString()}
+              Date Range: ${auditStartDate.getFullYear()}-${String(auditStartDate.getMonth() + 1).padStart(2, '0')}-${String(auditStartDate.getDate()).padStart(2, '0')} — ${auditEndDate.getFullYear()}-${String(auditEndDate.getMonth() + 1).padStart(2, '0')}-${String(auditEndDate.getDate()).padStart(2, '0')}
             </div>
 
             <div class="footer">
               <div class="footer-logo">
                 <svg width="32" height="32" viewBox="0 0 100 100">
+                  <!-- Corner squares -->
                   <rect x="5" y="5" width="25" height="25" rx="4" fill="#065f46"/>
                   <rect x="9" y="9" width="17" height="17" rx="2" fill="#fff"/>
                   <rect x="13" y="13" width="9" height="9" rx="1" fill="#065f46"/>
@@ -820,6 +1093,31 @@ export default function ManagerDashboard() {
                   <rect x="5" y="70" width="25" height="25" rx="4" fill="#065f46"/>
                   <rect x="9" y="74" width="17" height="17" rx="2" fill="#fff"/>
                   <rect x="13" y="78" width="9" height="9" rx="1" fill="#065f46"/>
+                  <!-- Data pattern dots - top -->
+                  <rect x="35" y="5" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="45" y="5" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="55" y="5" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="35" y="15" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="55" y="15" width="6" height="6" rx="1" fill="#065f46"/>
+                  <!-- Data pattern dots - left -->
+                  <rect x="5" y="35" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="15" y="35" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="5" y="45" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="5" y="55" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="15" y="55" width="6" height="6" rx="1" fill="#065f46"/>
+                  <!-- Data pattern dots - right -->
+                  <rect x="89" y="35" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="79" y="45" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="89" y="55" width="6" height="6" rx="1" fill="#065f46"/>
+                  <!-- Data pattern dots - bottom -->
+                  <rect x="35" y="89" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="45" y="89" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="55" y="89" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="65" y="89" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="75" y="79" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="35" y="79" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="55" y="79" width="6" height="6" rx="1" fill="#065f46"/>
+                  <!-- Center water drop with checkmark -->
                   <path d="M50 28 C50 28 35 45 35 58 C35 68 41 75 50 75 C59 75 65 68 65 58 C65 45 50 28 50 28 Z" fill="#059669"/>
                   <path d="M42 55 L47 62 L58 48" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
                 </svg>
@@ -1456,162 +1754,201 @@ export default function ManagerDashboard() {
           )}
         </Animated.View>
 
-        {/* INSPECTOR MODE - Updated colors */}
+        {/* INSPECTOR MODE - Premium Feature */}
         <Animated.View
           entering={FadeIn.delay(400).duration(500)}
           className="px-5 py-4 mb-4"
         >
-          <Pressable
-            onPress={() => setShowInspectorMode(!showInspectorMode)}
-            className="rounded-xl p-4"
-            style={{ backgroundColor: C.emeraldDark }}
-          >
-            <View className="flex-row items-center justify-between">
-              <View className="flex-row items-center">
-                <ClipboardList size={20} color={C.emeraldLight} />
-                <View className="ml-2">
-                  <Text className="text-base font-semibold text-white">
-                    Send to Inspector
-                  </Text>
-                  <Text className="text-xs" style={{ color: C.emeraldLight }}>
-                    Envoyer à l'inspecteur
-                  </Text>
+          {isPremium ? (
+            /* Premium: Full Inspector Mode */
+            <Pressable
+              onPress={() => setShowInspectorMode(!showInspectorMode)}
+              className="rounded-xl p-4"
+              style={{ backgroundColor: C.emeraldDark }}
+            >
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center">
+                  <ClipboardList size={20} color={C.emeraldLight} />
+                  <View className="ml-2">
+                    <Text className="text-base font-semibold text-white">
+                      Send to Inspector
+                    </Text>
+                    <Text className="text-xs" style={{ color: C.emeraldLight }}>
+                      Envoyer à l'inspecteur
+                    </Text>
+                  </View>
                 </View>
-              </View>
-              <ChevronRight
-                size={20}
-                color={C.emeraldLight}
-                style={{ transform: [{ rotate: showInspectorMode ? '90deg' : '0deg' }] }}
-              />
-            </View>
-
-            {showInspectorMode && (
-              <Pressable onPress={(e) => e.stopPropagation()}>
-                <View className="mt-4">
-                <Text className="text-sm mb-4" style={{ color: C.emeraldLight }}>
-                  Generate audit reports for NB Department of Health compliance.
-                </Text>
-
-                <View className="mb-3">
-                  <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>
-                    Business Name / Nom de l'entreprise
-                  </Text>
-                  <TextInput
-                    value={businessName}
-                    onChangeText={setBusinessName}
-                    placeholder="Enter business name"
-                    placeholderTextColor="rgba(255,255,255,0.5)"
-                    className="rounded-lg px-4 py-3 text-base text-white"
-                    style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
+                <View className="flex-row items-center">
+                  <View className="bg-amber-400 px-2 py-0.5 rounded-full mr-2">
+                    <Text className="text-xs font-bold text-amber-900">PREMIUM</Text>
+                  </View>
+                  <ChevronRight
+                    size={20}
+                    color={C.emeraldLight}
+                    style={{ transform: [{ rotate: showInspectorMode ? '90deg' : '0deg' }] }}
                   />
                 </View>
+              </View>
 
-                <View className="mb-3">
-                  <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>
-                    Business Address / Adresse de l'entreprise
+              {showInspectorMode && (
+                <Pressable onPress={(e) => e.stopPropagation()}>
+                  <View className="mt-4">
+                  <Text className="text-sm mb-4" style={{ color: C.emeraldLight }}>
+                    Generate audit reports for NB Department of Health compliance.
                   </Text>
-                  <View className="flex-row items-center gap-2">
+
+                  <View className="mb-3">
+                    <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>
+                      Business Name / Nom de l'entreprise
+                    </Text>
                     <TextInput
-                      value={businessAddress}
-                      onChangeText={setBusinessAddress}
-                      placeholder="Enter business address"
+                      value={businessName}
+                      onChangeText={setBusinessName}
+                      placeholder="Enter business name"
                       placeholderTextColor="rgba(255,255,255,0.5)"
-                      className="flex-1 rounded-lg px-4 py-3 text-base text-white"
+                      className="rounded-lg px-4 py-3 text-base text-white"
                       style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
                     />
-                    <Pressable
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleSaveBusinessAddress();
-                      }}
-                      disabled={isSavingAddress}
-                      className="rounded-lg px-3 py-3"
-                      style={{ backgroundColor: C.actionGreen }}
-                    >
-                      {isSavingAddress ? (
-                        <ActivityIndicator size="small" color="#fff" />
+                  </View>
+
+                  <View className="mb-3">
+                    <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>
+                      Business Address / Adresse de l'entreprise
+                    </Text>
+                    <View className="flex-row items-center gap-2">
+                      <TextInput
+                        value={businessAddress}
+                        onChangeText={setBusinessAddress}
+                        placeholder="Enter business address"
+                        placeholderTextColor="rgba(255,255,255,0.5)"
+                        className="flex-1 rounded-lg px-4 py-3 text-base text-white"
+                        style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
+                      />
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleSaveBusinessAddress();
+                        }}
+                        disabled={isSavingAddress}
+                        className="rounded-lg px-3 py-3"
+                        style={{ backgroundColor: C.actionGreen }}
+                      >
+                        {isSavingAddress ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Save size={18} color="#fff" />
+                        )}
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  <View className="flex-row gap-3 mb-4">
+                    <View className="flex-1">
+                      <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>Start Date</Text>
+                      {Platform.OS === 'web' ? (
+                        <input
+                          type="date"
+                          value={auditStartDate.toISOString().split('T')[0]}
+                          onChange={(e) => setAuditStartDate(new Date(e.target.value))}
+                          style={{
+                            backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8,
+                            padding: 12, color: '#fff', fontSize: 14, width: '100%',
+                          }}
+                        />
                       ) : (
-                        <Save size={18} color="#fff" />
+                        <Pressable
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            setShowStartPicker(true);
+                          }}
+                          className="flex-row items-center rounded-lg px-4 py-3"
+                          style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
+                        >
+                          <Calendar size={16} color={C.emeraldLight} />
+                          <Text className="text-white ml-2">
+                            {auditStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </Text>
+                        </Pressable>
                       )}
-                    </Pressable>
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>End Date</Text>
+                      {Platform.OS === 'web' ? (
+                        <input
+                          type="date"
+                          value={auditEndDate.toISOString().split('T')[0]}
+                          onChange={(e) => setAuditEndDate(new Date(e.target.value))}
+                          style={{
+                            backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8,
+                            padding: 12, color: '#fff', fontSize: 14, width: '100%',
+                          }}
+                        />
+                      ) : (
+                        <Pressable
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            setShowEndPicker(true);
+                          }}
+                          className="flex-row items-center rounded-lg px-4 py-3"
+                          style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
+                        >
+                          <Calendar size={16} color={C.emeraldLight} />
+                          <Text className="text-white ml-2">
+                            {auditEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </Text>
+                        </Pressable>
+                      )}
+                    </View>
                   </View>
-                </View>
 
-                <View className="flex-row gap-3 mb-4">
-                  <View className="flex-1">
-                    <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>Start Date</Text>
-                    {Platform.OS === 'web' ? (
-                      <input
-                        type="date"
-                        value={auditStartDate.toISOString().split('T')[0]}
-                        onChange={(e) => setAuditStartDate(new Date(e.target.value))}
-                        style={{
-                          backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8,
-                          padding: 12, color: '#fff', fontSize: 14, width: '100%',
-                        }}
-                      />
+                  <Pressable
+                    onPress={generateAuditReportPDF}
+                    disabled={isGeneratingReport}
+                    className="flex-row items-center justify-center py-4 rounded-lg"
+                    style={{ backgroundColor: C.actionGreen }}
+                  >
+                    {isGeneratingReport ? (
+                      <><ActivityIndicator size="small" color="#fff" /><Text className="text-white font-bold ml-2">Generating...</Text></>
                     ) : (
-                      <Pressable
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          setShowStartPicker(true);
-                        }}
-                        className="flex-row items-center rounded-lg px-4 py-3"
-                        style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
-                      >
-                        <Calendar size={16} color={C.emeraldLight} />
-                        <Text className="text-white ml-2">
-                          {auditStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </Text>
-                      </Pressable>
+                      <><FileText size={20} color="#fff" /><Text className="text-white font-bold ml-2">Generate Audit Report (PDF)</Text></>
                     )}
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>End Date</Text>
-                    {Platform.OS === 'web' ? (
-                      <input
-                        type="date"
-                        value={auditEndDate.toISOString().split('T')[0]}
-                        onChange={(e) => setAuditEndDate(new Date(e.target.value))}
-                        style={{
-                          backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8,
-                          padding: 12, color: '#fff', fontSize: 14, width: '100%',
-                        }}
-                      />
-                    ) : (
-                      <Pressable
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          setShowEndPicker(true);
-                        }}
-                        className="flex-row items-center rounded-lg px-4 py-3"
-                        style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
-                      >
-                        <Calendar size={16} color={C.emeraldLight} />
-                        <Text className="text-white ml-2">
-                          {auditEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </Text>
-                      </Pressable>
-                    )}
-                  </View>
+                  </Pressable>
                 </View>
-
-                <Pressable
-                  onPress={generateAuditReportPDF}
-                  disabled={isGeneratingReport}
-                  className="flex-row items-center justify-center py-4 rounded-lg"
-                  style={{ backgroundColor: C.actionGreen }}
-                >
-                  {isGeneratingReport ? (
-                    <><ActivityIndicator size="small" color="#fff" /><Text className="text-white font-bold ml-2">Generating...</Text></>
-                  ) : (
-                    <><FileText size={20} color="#fff" /><Text className="text-white font-bold ml-2">Generate Audit Report (PDF)</Text></>
-                  )}
                 </Pressable>
+              )}
+            </Pressable>
+          ) : (
+            /* Standard: Upgrade Prompt */
+            <Pressable
+              onPress={() => setShowUpgradeModal(true)}
+              className="rounded-xl p-4"
+              style={{ backgroundColor: '#94a3b8' }}
+            >
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center flex-1">
+                  <ClipboardList size={20} color="#fff" />
+                  <View className="ml-2 flex-1">
+                    <Text className="text-base font-semibold text-white">
+                      Send to Inspector
+                    </Text>
+                    <Text className="text-xs text-white/70">
+                      Envoyer à l'inspecteur
+                    </Text>
+                  </View>
+                </View>
+                <View className="flex-row items-center">
+                  <View className="bg-amber-400 px-2 py-1 rounded-full flex-row items-center">
+                    <Crown size={12} color="#92400e" />
+                    <Text className="text-xs font-bold text-amber-900 ml-1">PREMIUM</Text>
+                  </View>
+                  <Lock size={18} color="#fff" className="ml-2" style={{ marginLeft: 8 }} />
+                </View>
               </View>
-              </Pressable>
-            )}
-          </Pressable>
+              <Text className="text-xs text-white/70 mt-2">
+                Upgrade to Premium to generate audit reports for health inspectors.
+              </Text>
+            </Pressable>
+          )}
         </Animated.View>
 
         {/* Compliance Footer */}
@@ -1865,23 +2202,43 @@ export default function ManagerDashboard() {
                     </Pressable>
                   </View>
 
-                  {/* Export CSV */}
-                  <Pressable
-                    onPress={() => handleExport(location.id)}
-                    disabled={exportingId === location.id}
-                    className="items-center justify-center py-4 rounded-xl mb-4"
-                    style={{ backgroundColor: '#2563eb' }}
-                  >
-                    <View className="flex-row items-center">
-                      <Download size={20} color="#fff" />
-                      <Text className="text-white font-bold ml-2">
-                        {exportingId === location.id ? 'Exporting...' : 'View 1-Month History'}
+                  {/* View History - Different button based on subscription tier */}
+                  {isPremium ? (
+                    /* Premium: Export PDF (1 Month) */
+                    <Pressable
+                      onPress={() => handleExport(location.id)}
+                      disabled={exportingId === location.id}
+                      className="items-center justify-center py-4 rounded-xl mb-4"
+                      style={{ backgroundColor: '#2563eb' }}
+                    >
+                      <View className="flex-row items-center">
+                        <Download size={20} color="#fff" />
+                        <Text className="text-white font-bold ml-2">
+                          {exportingId === location.id ? 'Exporting...' : 'Export 1-Month History (PDF)'}
+                        </Text>
+                      </View>
+                      <Text className="text-white/80 text-xs">
+                        {exportingId === location.id ? 'Exportation...' : 'Exporter l\'historique de 1 mois (PDF)'}
                       </Text>
-                    </View>
-                    <Text className="text-white/80 text-xs">
-                      {exportingId === location.id ? 'Exportation...' : 'Voir l\'historique de 1 mois (30 jours max)'}
-                    </Text>
-                  </Pressable>
+                    </Pressable>
+                  ) : (
+                    /* Standard: View 14 Days (No Export) */
+                    <Pressable
+                      onPress={() => handleView14Days(location.id)}
+                      className="items-center justify-center py-4 rounded-xl mb-4"
+                      style={{ backgroundColor: '#64748b' }}
+                    >
+                      <View className="flex-row items-center">
+                        <ClipboardList size={20} color="#fff" />
+                        <Text className="text-white font-bold ml-2">
+                          View Last 14 Days
+                        </Text>
+                      </View>
+                      <Text className="text-white/80 text-xs">
+                        Voir les 14 derniers jours
+                      </Text>
+                    </Pressable>
+                  )}
 
                   {/* Active Toggle */}
                   <View className="rounded-xl p-4 mb-4" style={{
@@ -2031,6 +2388,203 @@ export default function ManagerDashboard() {
           </View>
         </Modal>
       )}
+
+      {/* View 14 Days Modal */}
+      <Modal
+        visible={show14DaysModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShow14DaysModal(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: C.mintBackground }}>
+          <View className="flex-1">
+            {/* Header */}
+            <View className="flex-row items-center justify-between px-5 py-4 border-b" style={{ borderBottomColor: C.borderLight }}>
+              <View className="flex-1">
+                <Text className="text-lg font-bold" style={{ color: C.emeraldDark }}>
+                  {viewing14DaysLocationName}
+                </Text>
+                <Text className="text-sm" style={{ color: C.textSecondary }}>
+                  Last 14 Days / 14 derniers jours
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setShow14DaysModal(false)}
+                className="p-2 rounded-full"
+                style={{ backgroundColor: C.borderLight }}
+              >
+                <X size={20} color={C.textSecondary} />
+              </Pressable>
+            </View>
+
+            {/* Content */}
+            {isLoading14DaysLogs ? (
+              <View className="flex-1 items-center justify-center">
+                <ActivityIndicator size="large" color={C.actionGreen} />
+                <Text className="mt-3 text-sm" style={{ color: C.textSecondary }}>Loading logs...</Text>
+              </View>
+            ) : fourteenDaysLogs.length === 0 ? (
+              <View className="flex-1 items-center justify-center px-8">
+                <ClipboardList size={48} color={C.textMuted} />
+                <Text className="text-base font-medium mt-4 text-center" style={{ color: C.textSecondary }}>
+                  No cleaning logs found
+                </Text>
+                <Text className="text-sm mt-2 text-center" style={{ color: C.textMuted }}>
+                  Aucun journal de nettoyage trouvé
+                </Text>
+              </View>
+            ) : (
+              <ScrollView className="flex-1 px-5 py-4">
+                {fourteenDaysLogs.map((log, index) => (
+                  <View
+                    key={log.id}
+                    className="rounded-xl p-4 mb-3"
+                    style={{
+                      backgroundColor: C.white,
+                      borderWidth: 1,
+                      borderColor: log.status === 'complete' ? '#86efac' : '#fcd34d',
+                    }}
+                  >
+                    <View className="flex-row items-center justify-between mb-2">
+                      <Text className="text-sm font-semibold" style={{ color: C.emeraldDark }}>
+                        {new Date(log.timestamp).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                        {' '}
+                        {new Date(log.timestamp).toLocaleTimeString('en-US', {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true,
+                        })}
+                      </Text>
+                      <View
+                        className="px-2 py-1 rounded-full"
+                        style={{
+                          backgroundColor: log.status === 'complete' ? '#dcfce7' : '#fef3c7',
+                        }}
+                      >
+                        <Text
+                          className="text-xs font-semibold"
+                          style={{
+                            color: log.status === 'complete' ? '#166534' : '#92400e',
+                          }}
+                        >
+                          {log.status === 'complete' ? '✓ Complete' : '⚠ Attention'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text className="text-sm" style={{ color: C.textSecondary }}>
+                      Staff: {log.staff_name}
+                    </Text>
+                    {log.status !== 'complete' && log.notes && (
+                      <Text className="text-xs mt-2 italic" style={{ color: C.warning }}>
+                        Note: {log.notes}
+                      </Text>
+                    )}
+                  </View>
+                ))}
+
+                {/* Upgrade Prompt at Bottom */}
+                <View className="rounded-xl p-4 mt-2 mb-6" style={{ backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0' }}>
+                  <View className="flex-row items-center mb-2">
+                    <Crown size={16} color="#d97706" />
+                    <Text className="text-sm font-semibold ml-2" style={{ color: '#1e293b' }}>
+                      Need to export?
+                    </Text>
+                  </View>
+                  <Text className="text-xs" style={{ color: '#64748b' }}>
+                    Upgrade to Premium for PDF exports, custom date ranges, and audit reports for inspectors.
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      setShow14DaysModal(false);
+                      setShowUpgradeModal(true);
+                    }}
+                    className="mt-3 py-2 rounded-lg items-center"
+                    style={{ backgroundColor: '#fbbf24' }}
+                  >
+                    <Text className="text-sm font-bold" style={{ color: '#78350f' }}>
+                      Upgrade to Premium
+                    </Text>
+                  </Pressable>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Upgrade to Premium Modal */}
+      <Modal
+        visible={showUpgradeModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowUpgradeModal(false)}
+      >
+        <View className="flex-1 items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View className="mx-6 rounded-2xl p-6" style={{ backgroundColor: C.white, maxWidth: 340, width: '100%' }}>
+            <View className="items-center mb-4">
+              <View className="w-16 h-16 rounded-full items-center justify-center mb-3" style={{ backgroundColor: '#fef3c7' }}>
+                <Crown size={32} color="#d97706" />
+              </View>
+              <Text className="text-xl font-bold text-center" style={{ color: C.emeraldDark }}>
+                Upgrade to Premium
+              </Text>
+              <Text className="text-sm text-center mt-2" style={{ color: C.textSecondary }}>
+                Passez à Premium
+              </Text>
+            </View>
+
+            <View className="mb-4">
+              <View className="flex-row items-center mb-2">
+                <CheckCircle2 size={16} color={C.actionGreen} />
+                <Text className="text-sm ml-2" style={{ color: C.textPrimary }}>
+                  Export 1-month history (PDF)
+                </Text>
+              </View>
+              <View className="flex-row items-center mb-2">
+                <CheckCircle2 size={16} color={C.actionGreen} />
+                <Text className="text-sm ml-2" style={{ color: C.textPrimary }}>
+                  Send to Inspector audit reports
+                </Text>
+              </View>
+              <View className="flex-row items-center mb-2">
+                <CheckCircle2 size={16} color={C.actionGreen} />
+                <Text className="text-sm ml-2" style={{ color: C.textPrimary }}>
+                  Custom date range selection
+                </Text>
+              </View>
+              <View className="flex-row items-center">
+                <CheckCircle2 size={16} color={C.actionGreen} />
+                <Text className="text-sm ml-2" style={{ color: C.textPrimary }}>
+                  Professional compliance reports
+                </Text>
+              </View>
+            </View>
+
+            <View className="rounded-xl p-3 mb-4" style={{ backgroundColor: '#f0fdf4' }}>
+              <Text className="text-xs text-center" style={{ color: C.textSecondary }}>
+                Contact us to upgrade your account
+              </Text>
+              <Text className="text-sm font-semibold text-center mt-1" style={{ color: C.emeraldDark }}>
+                jay@acadiacleaniq.ca
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={() => setShowUpgradeModal(false)}
+              className="py-3 rounded-xl items-center"
+              style={{ backgroundColor: C.borderLight }}
+            >
+              <Text className="font-semibold" style={{ color: C.textSecondary }}>
+                Close / Fermer
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
