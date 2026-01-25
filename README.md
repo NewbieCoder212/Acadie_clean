@@ -51,26 +51,17 @@ The app uses a consistent color palette across all screens:
 - **Password-Protected Access**: Manager Dashboard requires password authentication from the main page
 - **NEW Washroom Badge**: New washrooms without any cleaning logs are highlighted with a blue "NEW" badge and "NEEDS QR CODE" status to remind admins to generate QR codes.
 - **Admin Email Notifications**: When a manager adds a new washroom, the admin (chris@acadiacleaniq.ca) receives an email notification with washroom details and a reminder to generate QR codes.
+- **Export History (PDF)**: Managers can export cleaning history for any location with custom date range selection (7, 14, 30, or 90 days, or custom dates)
+- **Send to Inspector**: Generate professional audit reports for NB Department of Health compliance with custom date ranges
 
-## Subscription Tiers
+## Subscription Tiers (Future)
 
-The app supports two subscription tiers with different feature access:
-
-### Standard Tier (Default)
-- **View Last 14 Days**: View-only modal showing cleaning logs for the past 14 days per location (no export)
-- **All Core Features**: Location management, cleaning logs, issue reporting, email alerts
-- **Inspector Mode Locked**: Shows upgrade prompt when tapping "Send to Inspector"
-
-### Premium Tier
-- **Export 1-Month History (PDF)**: Export cleaning history for each location as a professional PDF
-- **Send to Inspector**: Full audit report generation with custom date ranges for health inspectors
-- **Custom Date Range Selection**: Choose any date range for compliance reports
-- **Professional Compliance Reports**: Formatted PDF reports suitable for NB Department of Health audits
+The database supports subscription tiers for future premium features. Currently all features are available to all users.
 
 ### Admin Management
 - Admins can toggle subscription tier (Standard/Premium) for each business from the Admin Dashboard
-- Tier changes take effect immediately
-- Upgrade prompts direct users to contact jay@acadiacleaniq.ca
+- The `subscription_tier` column exists in the database for future feature gating
+- Future premium features may include: photo attachments, automated reminders, supply tracking, analytics dashboard
 
 ## Security
 

@@ -2060,201 +2060,162 @@ export default function ManagerDashboard() {
           )}
         </Animated.View>
 
-        {/* INSPECTOR MODE - Premium Feature */}
+        {/* INSPECTOR MODE - Available to all users */}
         <Animated.View
           entering={FadeIn.delay(400).duration(500)}
           className="px-5 py-4 mb-4"
         >
-          {isPremium ? (
-            /* Premium: Full Inspector Mode */
-            <Pressable
-              onPress={() => setShowInspectorMode(!showInspectorMode)}
-              className="rounded-xl p-4"
-              style={{ backgroundColor: C.emeraldDark }}
-            >
-              <View className="flex-row items-center justify-between">
-                <View className="flex-row items-center">
-                  <ClipboardList size={20} color={C.emeraldLight} />
-                  <View className="ml-2">
-                    <Text className="text-base font-semibold text-white">
-                      Send to Inspector
-                    </Text>
-                    <Text className="text-xs" style={{ color: C.emeraldLight }}>
-                      Envoyer à l'inspecteur
-                    </Text>
-                  </View>
-                </View>
-                <View className="flex-row items-center">
-                  <View className="bg-amber-400 px-2 py-0.5 rounded-full mr-2">
-                    <Text className="text-xs font-bold text-amber-900">PREMIUM</Text>
-                  </View>
-                  <ChevronRight
-                    size={20}
-                    color={C.emeraldLight}
-                    style={{ transform: [{ rotate: showInspectorMode ? '90deg' : '0deg' }] }}
-                  />
+          <Pressable
+            onPress={() => setShowInspectorMode(!showInspectorMode)}
+            className="rounded-xl p-4"
+            style={{ backgroundColor: C.emeraldDark }}
+          >
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center">
+                <ClipboardList size={20} color={C.emeraldLight} />
+                <View className="ml-2">
+                  <Text className="text-base font-semibold text-white">
+                    Send to Inspector
+                  </Text>
+                  <Text className="text-xs" style={{ color: C.emeraldLight }}>
+                    Envoyer à l'inspecteur
+                  </Text>
                 </View>
               </View>
+              <ChevronRight
+                size={20}
+                color={C.emeraldLight}
+                style={{ transform: [{ rotate: showInspectorMode ? '90deg' : '0deg' }] }}
+              />
+            </View>
 
-              {showInspectorMode && (
-                <Pressable onPress={(e) => e.stopPropagation()}>
-                  <View className="mt-4">
-                  <Text className="text-sm mb-4" style={{ color: C.emeraldLight }}>
-                    Generate audit reports for NB Department of Health compliance.
+            {showInspectorMode && (
+              <Pressable onPress={(e) => e.stopPropagation()}>
+                <View className="mt-4">
+                <Text className="text-sm mb-4" style={{ color: C.emeraldLight }}>
+                  Generate audit reports for NB Department of Health compliance.
+                </Text>
+
+                <View className="mb-3">
+                  <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>
+                    Business Name / Nom de l'entreprise
                   </Text>
+                  <TextInput
+                    value={businessName}
+                    onChangeText={setBusinessName}
+                    placeholder="Enter business name"
+                    placeholderTextColor="rgba(255,255,255,0.5)"
+                    className="rounded-lg px-4 py-3 text-base text-white"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
+                  />
+                </View>
 
-                  <View className="mb-3">
-                    <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>
-                      Business Name / Nom de l'entreprise
-                    </Text>
+                <View className="mb-3">
+                  <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>
+                    Business Address / Adresse de l'entreprise
+                  </Text>
+                  <View className="flex-row items-center gap-2">
                     <TextInput
-                      value={businessName}
-                      onChangeText={setBusinessName}
-                      placeholder="Enter business name"
+                      value={businessAddress}
+                      onChangeText={setBusinessAddress}
+                      placeholder="Enter business address"
                       placeholderTextColor="rgba(255,255,255,0.5)"
-                      className="rounded-lg px-4 py-3 text-base text-white"
+                      className="flex-1 rounded-lg px-4 py-3 text-base text-white"
                       style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
                     />
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleSaveBusinessAddress();
+                      }}
+                      disabled={isSavingAddress}
+                      className="rounded-lg px-3 py-3"
+                      style={{ backgroundColor: C.actionGreen }}
+                    >
+                      {isSavingAddress ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Save size={18} color="#fff" />
+                      )}
+                    </Pressable>
                   </View>
+                </View>
 
-                  <View className="mb-3">
-                    <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>
-                      Business Address / Adresse de l'entreprise
-                    </Text>
-                    <View className="flex-row items-center gap-2">
-                      <TextInput
-                        value={businessAddress}
-                        onChangeText={setBusinessAddress}
-                        placeholder="Enter business address"
-                        placeholderTextColor="rgba(255,255,255,0.5)"
-                        className="flex-1 rounded-lg px-4 py-3 text-base text-white"
-                        style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
+                <View className="flex-row gap-3 mb-4">
+                  <View className="flex-1">
+                    <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>Start Date</Text>
+                    {Platform.OS === 'web' ? (
+                      <input
+                        type="date"
+                        value={auditStartDate.toISOString().split('T')[0]}
+                        onChange={(e) => setAuditStartDate(new Date(e.target.value))}
+                        style={{
+                          backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8,
+                          padding: 12, color: '#fff', fontSize: 14, width: '100%',
+                        }}
                       />
+                    ) : (
                       <Pressable
                         onPress={(e) => {
                           e.stopPropagation();
-                          handleSaveBusinessAddress();
+                          setShowStartPicker(true);
                         }}
-                        disabled={isSavingAddress}
-                        className="rounded-lg px-3 py-3"
-                        style={{ backgroundColor: C.actionGreen }}
+                        className="flex-row items-center rounded-lg px-4 py-3"
+                        style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
                       >
-                        {isSavingAddress ? (
-                          <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                          <Save size={18} color="#fff" />
-                        )}
+                        <Calendar size={16} color={C.emeraldLight} />
+                        <Text className="text-white ml-2">
+                          {auditStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </Text>
                       </Pressable>
-                    </View>
-                  </View>
-
-                  <View className="flex-row gap-3 mb-4">
-                    <View className="flex-1">
-                      <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>Start Date</Text>
-                      {Platform.OS === 'web' ? (
-                        <input
-                          type="date"
-                          value={auditStartDate.toISOString().split('T')[0]}
-                          onChange={(e) => setAuditStartDate(new Date(e.target.value))}
-                          style={{
-                            backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8,
-                            padding: 12, color: '#fff', fontSize: 14, width: '100%',
-                          }}
-                        />
-                      ) : (
-                        <Pressable
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            setShowStartPicker(true);
-                          }}
-                          className="flex-row items-center rounded-lg px-4 py-3"
-                          style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
-                        >
-                          <Calendar size={16} color={C.emeraldLight} />
-                          <Text className="text-white ml-2">
-                            {auditStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                          </Text>
-                        </Pressable>
-                      )}
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>End Date</Text>
-                      {Platform.OS === 'web' ? (
-                        <input
-                          type="date"
-                          value={auditEndDate.toISOString().split('T')[0]}
-                          onChange={(e) => setAuditEndDate(new Date(e.target.value))}
-                          style={{
-                            backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8,
-                            padding: 12, color: '#fff', fontSize: 14, width: '100%',
-                          }}
-                        />
-                      ) : (
-                        <Pressable
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            setShowEndPicker(true);
-                          }}
-                          className="flex-row items-center rounded-lg px-4 py-3"
-                          style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
-                        >
-                          <Calendar size={16} color={C.emeraldLight} />
-                          <Text className="text-white ml-2">
-                            {auditEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                          </Text>
-                        </Pressable>
-                      )}
-                    </View>
-                  </View>
-
-                  <Pressable
-                    onPress={generateAuditReportPDF}
-                    disabled={isGeneratingReport}
-                    className="flex-row items-center justify-center py-4 rounded-lg"
-                    style={{ backgroundColor: C.actionGreen }}
-                  >
-                    {isGeneratingReport ? (
-                      <><ActivityIndicator size="small" color="#fff" /><Text className="text-white font-bold ml-2">Generating...</Text></>
-                    ) : (
-                      <><FileText size={20} color="#fff" /><Text className="text-white font-bold ml-2">Generate Audit Report (PDF)</Text></>
                     )}
-                  </Pressable>
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldLight }}>End Date</Text>
+                    {Platform.OS === 'web' ? (
+                      <input
+                        type="date"
+                        value={auditEndDate.toISOString().split('T')[0]}
+                        onChange={(e) => setAuditEndDate(new Date(e.target.value))}
+                        style={{
+                          backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8,
+                          padding: 12, color: '#fff', fontSize: 14, width: '100%',
+                        }}
+                      />
+                    ) : (
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setShowEndPicker(true);
+                        }}
+                        className="flex-row items-center rounded-lg px-4 py-3"
+                        style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
+                      >
+                        <Calendar size={16} color={C.emeraldLight} />
+                        <Text className="text-white ml-2">
+                          {auditEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
+
+                <Pressable
+                  onPress={generateAuditReportPDF}
+                  disabled={isGeneratingReport}
+                  className="flex-row items-center justify-center py-4 rounded-lg"
+                  style={{ backgroundColor: C.actionGreen }}
+                >
+                  {isGeneratingReport ? (
+                    <><ActivityIndicator size="small" color="#fff" /><Text className="text-white font-bold ml-2">Generating...</Text></>
+                  ) : (
+                    <><FileText size={20} color="#fff" /><Text className="text-white font-bold ml-2">Generate Audit Report (PDF)</Text></>
+                  )}
                 </Pressable>
-              )}
-            </Pressable>
-          ) : (
-            /* Standard: Upgrade Prompt */
-            <Pressable
-              onPress={() => setShowUpgradeModal(true)}
-              className="rounded-xl p-4"
-              style={{ backgroundColor: '#94a3b8' }}
-            >
-              <View className="flex-row items-center justify-between">
-                <View className="flex-row items-center flex-1">
-                  <ClipboardList size={20} color="#fff" />
-                  <View className="ml-2 flex-1">
-                    <Text className="text-base font-semibold text-white">
-                      Send to Inspector
-                    </Text>
-                    <Text className="text-xs text-white/70">
-                      Envoyer à l'inspecteur
-                    </Text>
-                  </View>
-                </View>
-                <View className="flex-row items-center">
-                  <View className="bg-amber-400 px-2 py-1 rounded-full flex-row items-center">
-                    <Crown size={12} color="#92400e" />
-                    <Text className="text-xs font-bold text-amber-900 ml-1">PREMIUM</Text>
-                  </View>
-                  <Lock size={18} color="#fff" className="ml-2" style={{ marginLeft: 8 }} />
-                </View>
               </View>
-              <Text className="text-xs text-white/70 mt-2">
-                Upgrade to Premium to generate audit reports for health inspectors.
-              </Text>
-            </Pressable>
-          )}
+              </Pressable>
+            )}
+          </Pressable>
         </Animated.View>
 
         {/* Compliance Footer */}
@@ -2508,42 +2469,22 @@ export default function ManagerDashboard() {
                     </Pressable>
                   </View>
 
-                  {/* View History - Different button based on subscription tier */}
-                  {isPremium ? (
-                    /* Premium: Export PDF with Date Range */
-                    <Pressable
-                      onPress={() => openPremiumExportModal(location.id)}
-                      className="items-center justify-center py-4 rounded-xl mb-4"
-                      style={{ backgroundColor: '#2563eb' }}
-                    >
-                      <View className="flex-row items-center">
-                        <Download size={20} color="#fff" />
-                        <Text className="text-white font-bold ml-2">
-                          Export History (PDF)
-                        </Text>
-                      </View>
-                      <Text className="text-white/80 text-xs">
-                        Exporter l'historique (PDF)
+                  {/* Export History - Available to all users */}
+                  <Pressable
+                    onPress={() => openPremiumExportModal(location.id)}
+                    className="items-center justify-center py-4 rounded-xl mb-4"
+                    style={{ backgroundColor: '#2563eb' }}
+                  >
+                    <View className="flex-row items-center">
+                      <Download size={20} color="#fff" />
+                      <Text className="text-white font-bold ml-2">
+                        Export History (PDF)
                       </Text>
-                    </Pressable>
-                  ) : (
-                    /* Standard: View 14 Days (No Export) */
-                    <Pressable
-                      onPress={() => handleView14Days(location.id)}
-                      className="items-center justify-center py-4 rounded-xl mb-4"
-                      style={{ backgroundColor: '#64748b' }}
-                    >
-                      <View className="flex-row items-center">
-                        <ClipboardList size={20} color="#fff" />
-                        <Text className="text-white font-bold ml-2">
-                          View Last 14 Days
-                        </Text>
-                      </View>
-                      <Text className="text-white/80 text-xs">
-                        Voir les 14 derniers jours
-                      </Text>
-                    </Pressable>
-                  )}
+                    </View>
+                    <Text className="text-white/80 text-xs">
+                      Exporter l'historique (PDF)
+                    </Text>
+                  </Pressable>
 
                   {/* Active Toggle */}
                   <View className="rounded-xl p-4 mb-4" style={{
