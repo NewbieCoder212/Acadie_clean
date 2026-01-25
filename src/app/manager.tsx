@@ -135,6 +135,16 @@ export default function ManagerDashboard() {
   // Upgrade prompt modal state
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
+  // Premium Export modal state (date range export per location)
+  const [showPremiumExportModal, setShowPremiumExportModal] = useState(false);
+  const [premiumExportLocationId, setPremiumExportLocationId] = useState<string | null>(null);
+  const [premiumExportLocationName, setPremiumExportLocationName] = useState<string>('');
+  const [premiumExportStartDate, setPremiumExportStartDate] = useState<Date>(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+  const [premiumExportEndDate, setPremiumExportEndDate] = useState<Date>(new Date());
+  const [showPremiumStartPicker, setShowPremiumStartPicker] = useState(false);
+  const [showPremiumEndPicker, setShowPremiumEndPicker] = useState(false);
+  const [isPremiumExporting, setIsPremiumExporting] = useState(false);
+
   const managerPasswordHash = useStore((s) => s.managerPasswordHash);
   const setManagerPasswordHash = useStore((s) => s.setManagerPasswordHash);
   const isAuthenticated = useStore((s) => s.isManagerAuthenticated);
@@ -630,6 +640,302 @@ export default function ManagerDashboard() {
       setFourteenDaysLogs([]);
     } finally {
       setIsLoading14DaysLogs(false);
+    }
+  };
+
+  // Open premium export modal (for premium tier)
+  const openPremiumExportModal = (locationId: string) => {
+    const location = displayLocations.find(l => l.id === locationId);
+    if (!location) return;
+
+    setPremiumExportLocationId(locationId);
+    setPremiumExportLocationName(location.name);
+    setPremiumExportStartDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+    setPremiumExportEndDate(new Date());
+    setShowPremiumExportModal(true);
+  };
+
+  // Handle premium export with date range
+  const handlePremiumExport = async () => {
+    if (!premiumExportLocationId) return;
+
+    setIsPremiumExporting(true);
+
+    try {
+      const startDate = new Date(premiumExportStartDate);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(premiumExportEndDate);
+      endDate.setHours(23, 59, 59, 999);
+
+      const result = await getLogsForDateRange(startDate, endDate);
+
+      if (!result.success || !result.data) {
+        Alert.alert('Error', 'Failed to load cleaning logs');
+        setIsPremiumExporting(false);
+        return;
+      }
+
+      // Filter logs for this specific location
+      const locationLogs = result.data.filter(log => log.location_id === premiumExportLocationId);
+
+      if (locationLogs.length === 0) {
+        Alert.alert('No Data', 'No cleaning logs found for the selected date range');
+        setIsPremiumExporting(false);
+        return;
+      }
+
+      const businessDisplayName = currentBusiness?.name || 'Acadia Clean';
+      const businessAddr = currentBusiness?.address || '';
+
+      // Helper function to render checkmark or X
+      const checkIcon = (checked: boolean) => checked
+        ? '<span style="color: #059669; font-weight: bold;">✓</span>'
+        : '<span style="color: #dc2626; font-weight: bold;">✗</span>';
+
+      // Helper to truncate text
+      const truncate = (text: string, maxLength: number) => {
+        if (!text) return '-';
+        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+      };
+
+      const tableRows = locationLogs.map((log) => `
+        <tr>
+          <td style="text-align: center;">${formatDateTime(log.timestamp)}</td>
+          <td>${truncate(log.staff_name, 15)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_supplies)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_supplies)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_trash)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_surfaces)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_floor)}</td>
+          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">
+            <span style="padding: 1px 4px; border-radius: 3px; font-weight: 600; font-size: 9px; ${
+              log.status === 'complete' ? 'background-color: #dcfce7; color: #166534;' : 'background-color: #fef3c7; color: #92400e;'
+            }">${log.status === 'complete' ? 'Complete' : 'Partial'}</span>
+          </td>
+        </tr>
+      `).join('');
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Cleaning History - ${premiumExportLocationName}</title>
+            <style>
+              @page {
+                size: letter landscape;
+                margin: 8mm;
+              }
+              @media print {
+                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                .footer { page-break-inside: avoid; }
+              }
+              * { box-sizing: border-box; margin: 0; padding: 0; }
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                color: #1e293b;
+                padding: 12px 16px;
+                font-size: 11px;
+                background: white;
+              }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+              }
+              th {
+                background-color: #f1f5f9;
+                padding: 6px 4px;
+                text-align: left;
+                font-size: 9px;
+                font-weight: 600;
+                color: #475569;
+                border-bottom: 2px solid #e2e8f0;
+              }
+              th.center { text-align: center; }
+              td {
+                padding: 5px 4px;
+                border-bottom: 1px solid #e2e8f0;
+                font-size: 10px;
+              }
+              .legend {
+                margin-top: 10px;
+                padding: 8px;
+                background: #f8fafc;
+                border-radius: 4px;
+                font-size: 8px;
+                color: #475569;
+              }
+              .legend-title { font-weight: 600; margin-bottom: 4px; }
+              .legend-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+              .footer {
+                margin-top: 12px;
+                text-align: center;
+              }
+              .footer-logo {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+              }
+            </style>
+          </head>
+          <body>
+            <h1 style="font-size: 20px; font-weight: bold; margin: 0 0 2px 0;">${businessDisplayName}</h1>
+            ${businessAddr ? `<p style="font-size: 11px; color: #64748b; margin: 0 0 2px 0;">${businessAddr}</p>` : ''}
+            <h2 style="font-size: 14px; font-weight: 600; margin: 0 0 2px 0; color: #065f46;">${premiumExportLocationName}</h2>
+            <h3 style="font-size: 10px; font-weight: 600; margin: 0 0 10px 0; color: #64748b;">Cleaning History Report / Rapport d'historique</h3>
+
+            <table style="border: 1px solid #e2e8f0;">
+              <thead>
+                <tr>
+                  <th>Date/Time</th>
+                  <th>Staff</th>
+                  <th class="center">HS</th>
+                  <th class="center">TP</th>
+                  <th class="center">BN</th>
+                  <th class="center">SD</th>
+                  <th class="center">FX</th>
+                  <th class="center">WT</th>
+                  <th class="center">FL</th>
+                  <th class="center">VL</th>
+                  <th class="center">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows}
+              </tbody>
+            </table>
+
+            <div class="legend">
+              <div class="legend-title">Legend / Légende:</div>
+              <div class="legend-grid">
+                <span><strong>HS</strong>=Hand Soap / Savon</span>
+                <span><strong>TP</strong>=Toilet Paper / Papier</span>
+                <span><strong>BN</strong>=Bins / Poubelles</span>
+                <span><strong>SD</strong>=Surfaces Disinfected / Surfaces désinfectées</span>
+                <span><strong>FX</strong>=Fixtures / Accessoires</span>
+                <span><strong>WT</strong>=Water Temp / Température</span>
+                <span><strong>FL</strong>=Floors / Planchers</span>
+                <span><strong>VL</strong>=Ventilation/Lighting / Éclairage</span>
+                <span style="margin-left: 8px;"><span style="color: #059669;">✓</span>=Complete / Complété</span>
+                <span><span style="color: #dc2626;">✗</span>=Incomplete / Incomplet</span>
+              </div>
+            </div>
+
+            <div style="margin-top: 8px; text-align: center; color: #64748b; font-size: 9px;">
+              Date Range: ${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')} — ${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}
+            </div>
+
+            <div class="footer">
+              <div class="footer-logo">
+                <svg width="32" height="32" viewBox="0 0 100 100">
+                  <!-- Corner squares -->
+                  <rect x="5" y="5" width="25" height="25" rx="4" fill="#065f46"/>
+                  <rect x="9" y="9" width="17" height="17" rx="2" fill="#fff"/>
+                  <rect x="13" y="13" width="9" height="9" rx="1" fill="#065f46"/>
+                  <rect x="70" y="5" width="25" height="25" rx="4" fill="#065f46"/>
+                  <rect x="74" y="9" width="17" height="17" rx="2" fill="#fff"/>
+                  <rect x="78" y="13" width="9" height="9" rx="1" fill="#065f46"/>
+                  <rect x="5" y="70" width="25" height="25" rx="4" fill="#065f46"/>
+                  <rect x="9" y="74" width="17" height="17" rx="2" fill="#fff"/>
+                  <rect x="13" y="78" width="9" height="9" rx="1" fill="#065f46"/>
+                  <!-- Data pattern dots - top -->
+                  <rect x="35" y="5" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="45" y="5" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="55" y="5" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="35" y="15" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="55" y="15" width="6" height="6" rx="1" fill="#065f46"/>
+                  <!-- Data pattern dots - left -->
+                  <rect x="5" y="35" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="15" y="35" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="5" y="45" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="5" y="55" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="15" y="55" width="6" height="6" rx="1" fill="#065f46"/>
+                  <!-- Data pattern dots - right -->
+                  <rect x="89" y="35" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="79" y="45" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="89" y="55" width="6" height="6" rx="1" fill="#065f46"/>
+                  <!-- Data pattern dots - bottom -->
+                  <rect x="35" y="89" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="45" y="89" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="55" y="89" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="65" y="89" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="75" y="79" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="35" y="79" width="6" height="6" rx="1" fill="#065f46"/>
+                  <rect x="55" y="79" width="6" height="6" rx="1" fill="#065f46"/>
+                  <!-- Center water drop with checkmark -->
+                  <path d="M50 28 C50 28 35 45 35 58 C35 68 41 75 50 75 C59 75 65 68 65 58 C65 45 50 28 50 28 Z" fill="#059669"/>
+                  <path d="M42 55 L47 62 L58 48" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                </svg>
+                <div style="text-align: left;">
+                  <div style="font-size: 11px; font-weight: 800; color: #065f46; letter-spacing: 0.5px;">Acadia</div>
+                  <div style="font-size: 10px; font-weight: 700; color: #059669;">Clean IQ</div>
+                </div>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      if (Platform.OS === 'web') {
+        const printWindow = window.open('', '_blank');
+
+        if (printWindow && printWindow.document) {
+          printWindow.document.write(html);
+          printWindow.document.close();
+          printWindow.focus();
+
+          const triggerPrint = () => {
+            printWindow.print();
+          };
+
+          if (printWindow.document.readyState === 'complete') {
+            setTimeout(triggerPrint, 500);
+          } else {
+            printWindow.onload = () => {
+              setTimeout(triggerPrint, 300);
+            };
+            setTimeout(triggerPrint, 800);
+          }
+        } else {
+          // Fallback for PWA mode
+          const iframe = document.createElement('iframe');
+          iframe.style.position = 'fixed';
+          iframe.style.right = '0';
+          iframe.style.bottom = '0';
+          iframe.style.width = '0';
+          iframe.style.height = '0';
+          iframe.style.border = 'none';
+          document.body.appendChild(iframe);
+
+          const iframeDoc = iframe.contentWindow?.document;
+          if (iframeDoc) {
+            iframeDoc.open();
+            iframeDoc.write(html);
+            iframeDoc.close();
+
+            setTimeout(() => {
+              iframe.contentWindow?.print();
+              setTimeout(() => {
+                document.body.removeChild(iframe);
+              }, 1000);
+            }, 500);
+          }
+        }
+      } else {
+        // Mobile: use expo-print
+        const { printAsync } = await import('expo-print');
+        await printAsync({ html });
+      }
+
+      setShowPremiumExportModal(false);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to generate PDF');
+    } finally {
+      setIsPremiumExporting(false);
     }
   };
 
@@ -2204,21 +2510,20 @@ export default function ManagerDashboard() {
 
                   {/* View History - Different button based on subscription tier */}
                   {isPremium ? (
-                    /* Premium: Export PDF (1 Month) */
+                    /* Premium: Export PDF with Date Range */
                     <Pressable
-                      onPress={() => handleExport(location.id)}
-                      disabled={exportingId === location.id}
+                      onPress={() => openPremiumExportModal(location.id)}
                       className="items-center justify-center py-4 rounded-xl mb-4"
                       style={{ backgroundColor: '#2563eb' }}
                     >
                       <View className="flex-row items-center">
                         <Download size={20} color="#fff" />
                         <Text className="text-white font-bold ml-2">
-                          {exportingId === location.id ? 'Exporting...' : 'Export 1-Month History (PDF)'}
+                          Export History (PDF)
                         </Text>
                       </View>
                       <Text className="text-white/80 text-xs">
-                        {exportingId === location.id ? 'Exportation...' : 'Exporter l\'historique de 1 mois (PDF)'}
+                        Exporter l'historique (PDF)
                       </Text>
                     </Pressable>
                   ) : (
@@ -2585,6 +2890,250 @@ export default function ManagerDashboard() {
           </View>
         </View>
       </Modal>
+
+      {/* Premium Export Modal - Date Range Selection */}
+      <Modal
+        visible={showPremiumExportModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowPremiumExportModal(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: C.mintBackground }}>
+          <View className="flex-1">
+            {/* Header */}
+            <View className="flex-row items-center justify-between px-5 py-4 border-b" style={{ borderBottomColor: C.borderLight }}>
+              <View className="flex-1">
+                <Text className="text-lg font-bold" style={{ color: C.emeraldDark }}>
+                  Export History
+                </Text>
+                <Text className="text-sm" style={{ color: C.textSecondary }}>
+                  {premiumExportLocationName}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setShowPremiumExportModal(false)}
+                className="p-2 rounded-full"
+                style={{ backgroundColor: C.borderLight }}
+              >
+                <X size={20} color={C.textSecondary} />
+              </Pressable>
+            </View>
+
+            <ScrollView className="flex-1 px-5 py-4">
+              {/* Date Range Selection */}
+              <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.borderMedium }}>
+                <Text className="text-sm font-semibold mb-3" style={{ color: C.emeraldDark }}>
+                  Select Date Range / Sélectionner la période
+                </Text>
+
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <Text className="text-xs font-medium mb-2" style={{ color: C.textSecondary }}>Start Date</Text>
+                    {Platform.OS === 'web' ? (
+                      <input
+                        type="date"
+                        value={premiumExportStartDate.toISOString().split('T')[0]}
+                        onChange={(e) => setPremiumExportStartDate(new Date(e.target.value))}
+                        style={{
+                          backgroundColor: '#f1f5f9',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 8,
+                          padding: 12,
+                          color: '#1e293b',
+                          fontSize: 14,
+                          width: '100%',
+                        }}
+                      />
+                    ) : (
+                      <Pressable
+                        onPress={() => setShowPremiumStartPicker(true)}
+                        className="flex-row items-center rounded-lg px-4 py-3"
+                        style={{ backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0' }}
+                      >
+                        <Calendar size={16} color={C.textSecondary} />
+                        <Text className="ml-2" style={{ color: C.textPrimary }}>
+                          {premiumExportStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-xs font-medium mb-2" style={{ color: C.textSecondary }}>End Date</Text>
+                    {Platform.OS === 'web' ? (
+                      <input
+                        type="date"
+                        value={premiumExportEndDate.toISOString().split('T')[0]}
+                        onChange={(e) => setPremiumExportEndDate(new Date(e.target.value))}
+                        style={{
+                          backgroundColor: '#f1f5f9',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 8,
+                          padding: 12,
+                          color: '#1e293b',
+                          fontSize: 14,
+                          width: '100%',
+                        }}
+                      />
+                    ) : (
+                      <Pressable
+                        onPress={() => setShowPremiumEndPicker(true)}
+                        className="flex-row items-center rounded-lg px-4 py-3"
+                        style={{ backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0' }}
+                      >
+                        <Calendar size={16} color={C.textSecondary} />
+                        <Text className="ml-2" style={{ color: C.textPrimary }}>
+                          {premiumExportEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                </View>
+              </View>
+
+              {/* Quick Select Buttons */}
+              <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.borderMedium }}>
+                <Text className="text-xs font-medium mb-3" style={{ color: C.textSecondary }}>
+                  Quick Select / Sélection rapide
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
+                  <Pressable
+                    onPress={() => {
+                      const end = new Date();
+                      const start = new Date();
+                      start.setDate(start.getDate() - 7);
+                      setPremiumExportStartDate(start);
+                      setPremiumExportEndDate(end);
+                    }}
+                    className="px-3 py-2 rounded-lg"
+                    style={{ backgroundColor: '#f1f5f9' }}
+                  >
+                    <Text className="text-xs font-medium" style={{ color: C.textPrimary }}>Last 7 Days</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      const end = new Date();
+                      const start = new Date();
+                      start.setDate(start.getDate() - 14);
+                      setPremiumExportStartDate(start);
+                      setPremiumExportEndDate(end);
+                    }}
+                    className="px-3 py-2 rounded-lg"
+                    style={{ backgroundColor: '#f1f5f9' }}
+                  >
+                    <Text className="text-xs font-medium" style={{ color: C.textPrimary }}>Last 14 Days</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      const end = new Date();
+                      const start = new Date();
+                      start.setDate(start.getDate() - 30);
+                      setPremiumExportStartDate(start);
+                      setPremiumExportEndDate(end);
+                    }}
+                    className="px-3 py-2 rounded-lg"
+                    style={{ backgroundColor: '#f1f5f9' }}
+                  >
+                    <Text className="text-xs font-medium" style={{ color: C.textPrimary }}>Last 30 Days</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      const end = new Date();
+                      const start = new Date();
+                      start.setDate(start.getDate() - 90);
+                      setPremiumExportStartDate(start);
+                      setPremiumExportEndDate(end);
+                    }}
+                    className="px-3 py-2 rounded-lg"
+                    style={{ backgroundColor: '#f1f5f9' }}
+                  >
+                    <Text className="text-xs font-medium" style={{ color: C.textPrimary }}>Last 90 Days</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Export Button */}
+              <Pressable
+                onPress={handlePremiumExport}
+                disabled={isPremiumExporting}
+                className="flex-row items-center justify-center py-4 rounded-xl mb-4"
+                style={{ backgroundColor: isPremiumExporting ? '#94a3b8' : C.actionGreen }}
+              >
+                {isPremiumExporting ? (
+                  <>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text className="text-white font-bold ml-2">Generating PDF...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Download size={20} color="#fff" />
+                    <Text className="text-white font-bold ml-2">Export to PDF</Text>
+                  </>
+                )}
+              </Pressable>
+
+              <Text className="text-xs text-center mb-6" style={{ color: C.textMuted }}>
+                PDF will include all cleaning logs for the selected location within the date range.
+              </Text>
+            </ScrollView>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Premium Export Date Pickers (Mobile) */}
+      {Platform.OS !== 'web' && showPremiumStartPicker && (
+        <Modal transparent animationType="slide" visible={showPremiumStartPicker} onRequestClose={() => setShowPremiumStartPicker(false)}>
+          <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
+            <View className="bg-white rounded-t-3xl p-4">
+              <View className="flex-row justify-between items-center mb-2">
+                <Text className="text-lg font-semibold" style={{ color: C.emeraldDark }}>Start Date</Text>
+                <Pressable onPress={() => setShowPremiumStartPicker(false)} className="px-4 py-2">
+                  <Text className="font-semibold" style={{ color: C.actionGreen }}>Done</Text>
+                </Pressable>
+              </View>
+              <DateTimePicker
+                value={premiumExportStartDate}
+                mode="date"
+                display="spinner"
+                onChange={(event, date) => {
+                  if (date) {
+                    setPremiumExportStartDate(date);
+                  }
+                }}
+                maximumDate={premiumExportEndDate}
+                style={{ height: 200, width: '100%' }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {Platform.OS !== 'web' && showPremiumEndPicker && (
+        <Modal transparent animationType="slide" visible={showPremiumEndPicker} onRequestClose={() => setShowPremiumEndPicker(false)}>
+          <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
+            <View className="bg-white rounded-t-3xl p-4">
+              <View className="flex-row justify-between items-center mb-2">
+                <Text className="text-lg font-semibold" style={{ color: C.emeraldDark }}>End Date</Text>
+                <Pressable onPress={() => setShowPremiumEndPicker(false)} className="px-4 py-2">
+                  <Text className="font-semibold" style={{ color: C.actionGreen }}>Done</Text>
+                </Pressable>
+              </View>
+              <DateTimePicker
+                value={premiumExportEndDate}
+                mode="date"
+                display="spinner"
+                onChange={(event, date) => {
+                  if (date) {
+                    setPremiumExportEndDate(date);
+                  }
+                }}
+                minimumDate={premiumExportStartDate}
+                maximumDate={new Date()}
+                style={{ height: 200, width: '100%' }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
