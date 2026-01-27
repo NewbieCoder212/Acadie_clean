@@ -1286,21 +1286,40 @@ export async function resolveReportedIssue(issueId: string): Promise<{ success: 
   }
 }
 
-// Issue types that can be auto-resolved by a complete cleaning
-// These are issues that cleaning staff can address
-const AUTO_RESOLVABLE_ISSUE_TYPES = ['out_of_supplies', 'needs_cleaning'];
+// Get open reported issues for a specific location (for public status card)
+export async function getOpenIssuesForLocation(locationId: string): Promise<{ success: boolean; data?: ReportedIssueRow[]; error?: string }> {
+  try {
+    const { data, error } = await supabase
+      .from('reported_issues')
+      .select('*')
+      .eq('location_id', locationId)
+      .eq('status', 'open')
+      .order('created_at', { ascending: false });
 
-// Auto-resolve supply/cleaning issues for a location when a complete cleaning is logged
-// Maintenance and safety issues remain open for manual resolution
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data ?? [] };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Issue types that can be auto-resolved by a complete cleaning
+// All issue types are now resolved when a complete cleaning log is submitted
+// This resets the public status card back to "Clean"
+
+// Auto-resolve ALL open issues for a location when a complete cleaning is logged
+// This ensures the public status card resets to "Clean" after successful cleaning
 export async function autoResolveIssuesForLocation(locationId: string): Promise<{ success: boolean; resolvedCount?: number; error?: string }> {
   try {
-    // First get count of auto-resolvable open issues
+    // First get count of all open issues
     const { data: openIssues, error: fetchError } = await supabase
       .from('reported_issues')
       .select('id')
       .eq('location_id', locationId)
-      .eq('status', 'open')
-      .in('issue_type', AUTO_RESOLVABLE_ISSUE_TYPES);
+      .eq('status', 'open');
 
     if (fetchError) {
       return { success: false, error: fetchError.message };
@@ -1311,7 +1330,7 @@ export async function autoResolveIssuesForLocation(locationId: string): Promise<
       return { success: true, resolvedCount: 0 };
     }
 
-    // Update all auto-resolvable open issues for this location
+    // Update ALL open issues for this location
     const { error } = await supabase
       .from('reported_issues')
       .update({
@@ -1319,8 +1338,7 @@ export async function autoResolveIssuesForLocation(locationId: string): Promise<
         resolved_at: new Date().toISOString(),
       })
       .eq('location_id', locationId)
-      .eq('status', 'open')
-      .in('issue_type', AUTO_RESOLVABLE_ISSUE_TYPES);
+      .eq('status', 'open');
 
     if (error) {
       return { success: false, error: error.message };

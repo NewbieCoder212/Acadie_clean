@@ -99,12 +99,7 @@ export default function ManagerDashboard() {
   const [emailInput, setEmailInput] = useState('');
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
 
-  // New location form state
-  const [showAddLocation, setShowAddLocation] = useState(false);
-  const [newLocationName, setNewLocationName] = useState('');
-  const [newLocationEmail, setNewLocationEmail] = useState('');
-  const [newLocationPin, setNewLocationPin] = useState('');
-  const [isAddingLocation, setIsAddingLocation] = useState(false);
+  // Newly created location success modal (kept for when admin creates via admin page)
   const [newlyCreatedLocation, setNewlyCreatedLocation] = useState<{ id: string; name: string } | null>(null);
 
   const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
@@ -365,69 +360,6 @@ export default function ManagerDashboard() {
     updateLocationEmail(locationId, emailInput.trim());
     setEditingEmailId(null);
     setEmailInput('');
-  };
-
-  const handleAddNewLocation = async () => {
-    if (!newLocationName.trim()) {
-      Alert.alert('Error', 'Please enter a location name');
-      return;
-    }
-    if (!newLocationPin || newLocationPin.length < 4 || newLocationPin.length > 5 || !/^\d{4,5}$/.test(newLocationPin)) {
-      Alert.alert('Error', 'Please enter a valid 4 or 5-digit PIN');
-      return;
-    }
-    if (!newLocationEmail.trim() || !newLocationEmail.includes('@')) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-
-    setIsAddingLocation(true);
-
-    try {
-      const pinHash = await hashPassword(newLocationPin);
-      const locationId = addLocation(
-        newLocationName.trim(),
-        newLocationEmail.trim(),
-        pinHash,
-        newLocationPin
-      );
-
-      const supabaseResult = await supabaseInsertWashroom({
-        id: locationId,
-        room_name: newLocationName.trim(),
-        business_name: currentBusiness?.name || 'Default Business',
-        pin_code: newLocationPin,
-        alert_email: newLocationEmail.trim(),
-      });
-
-      if (supabaseResult.success && currentBusiness) {
-        const washroomsResult = await getWashroomsForBusiness(currentBusiness.name);
-        if (washroomsResult.success && washroomsResult.data) {
-          setBusinessLocations(washroomsResult.data);
-        }
-
-        // Send notification email to admin about new washroom
-        sendNewWashroomNotification({
-          businessName: currentBusiness.name,
-          washroomName: newLocationName.trim(),
-          washroomId: locationId,
-          alertEmail: newLocationEmail.trim(),
-          timestamp: new Date(),
-        }).catch((err) => {
-          console.log('Failed to send new washroom notification:', err);
-        });
-      }
-
-      setNewlyCreatedLocation({ id: locationId, name: newLocationName.trim() });
-      setNewLocationName('');
-      setNewLocationEmail('');
-      setNewLocationPin('');
-      setShowAddLocation(false);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to create location.');
-    }
-
-    setIsAddingLocation(false);
   };
 
   const handleCopyUrl = async (url: string) => {
@@ -1704,17 +1636,6 @@ export default function ManagerDashboard() {
             >
               <RefreshCw size={18} color="#ffffff" />
             </Pressable>
-            <Pressable
-              onPress={() => setShowAddLocation(true)}
-              className="flex-row items-center px-3 py-2 rounded-lg active:opacity-70"
-              style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-            >
-              <Plus size={16} color="#ffffff" />
-              <View className="ml-1">
-                <Text className="text-white font-medium text-xs">Add Washroom</Text>
-                <Text className="text-white/80 text-[10px]">Ajouter</Text>
-              </View>
-            </Pressable>
           </View>
 
           <View className="items-center py-4">
@@ -1742,132 +1663,6 @@ export default function ManagerDashboard() {
         {/* Install App Banner for PWA */}
         <InstallAppBanner />
 
-        {/* Universal Staff PIN Management Card */}
-        <Animated.View
-          entering={FadeInDown.delay(50).duration(500)}
-          className="px-5 pt-4"
-        >
-          <Pressable
-            onPress={() => setShowPinManagement(!showPinManagement)}
-            className="rounded-xl p-4"
-            style={{
-              backgroundColor: COLORS.amberLight,
-              borderWidth: 1,
-              borderColor: '#fcd34d',
-            }}
-          >
-            <View className="flex-row items-center justify-between">
-              <View className="flex-row items-center flex-1">
-                <View
-                  className="w-10 h-10 rounded-full items-center justify-center"
-                  style={{ backgroundColor: '#fde68a' }}
-                >
-                  <Key size={20} color="#92400e" />
-                </View>
-                <View className="ml-3 flex-1">
-                  <Text className="text-sm font-bold" style={{ color: '#92400e' }}>
-                    Universal Staff PIN
-                  </Text>
-                  <Text className="text-xs" style={{ color: '#b45309' }}>
-                    NIP universel du personnel
-                  </Text>
-                  {currentBusiness?.staff_pin_display ? (
-                    <Text className="text-xl font-black tracking-widest mt-1" style={{ color: '#92400e' }}>
-                      {currentBusiness.staff_pin_display}
-                    </Text>
-                  ) : (
-                    <Text className="text-xs italic mt-1" style={{ color: '#b45309' }}>
-                      No PIN set - Tap to configure
-                    </Text>
-                  )}
-                </View>
-              </View>
-              <ChevronRight
-                size={20}
-                color="#92400e"
-                style={{ transform: [{ rotate: showPinManagement ? '90deg' : '0deg' }] }}
-              />
-            </View>
-
-            {showPinManagement && (
-              <Pressable onPress={(e) => e.stopPropagation()}>
-                <View className="mt-4 pt-4" style={{ borderTopWidth: 1, borderTopColor: '#fcd34d' }}>
-                  <Text className="text-xs mb-3" style={{ color: '#92400e' }}>
-                    This PIN works for all your washroom locations. Share it with your cleaning staff.
-                  </Text>
-                  <Text className="text-xs mb-3 italic" style={{ color: '#b45309' }}>
-                    Ce NIP fonctionne pour tous vos emplacements. Partagez-le avec votre personnel.
-                  </Text>
-
-                  <View className="mb-3">
-                    <Text className="text-xs font-medium mb-2" style={{ color: '#92400e' }}>
-                      New PIN (4-5 digits) / Nouveau NIP (4-5 chiffres)
-                    </Text>
-                    <TextInput
-                      value={newStaffPin}
-                      onChangeText={setNewStaffPin}
-                      placeholder="Enter new PIN"
-                      placeholderTextColor="#d97706"
-                      keyboardType="numeric"
-                      maxLength={5}
-                      secureTextEntry
-                      className="rounded-lg px-4 py-3 text-base"
-                      style={{
-                        backgroundColor: '#fef3c7',
-                        borderWidth: 1,
-                        borderColor: '#fcd34d',
-                        color: '#92400e',
-                      }}
-                    />
-                  </View>
-
-                  <View className="mb-4">
-                    <Text className="text-xs font-medium mb-2" style={{ color: '#92400e' }}>
-                      Confirm PIN / Confirmer le NIP
-                    </Text>
-                    <TextInput
-                      value={confirmStaffPin}
-                      onChangeText={setConfirmStaffPin}
-                      placeholder="Confirm new PIN"
-                      placeholderTextColor="#d97706"
-                      keyboardType="numeric"
-                      maxLength={5}
-                      secureTextEntry
-                      className="rounded-lg px-4 py-3 text-base"
-                      style={{
-                        backgroundColor: '#fef3c7',
-                        borderWidth: 1,
-                        borderColor: '#fcd34d',
-                        color: '#92400e',
-                      }}
-                    />
-                  </View>
-
-                  <Pressable
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleSaveStaffPin();
-                    }}
-                    disabled={isSavingPin}
-                    className="flex-row items-center justify-center py-3 rounded-lg"
-                    style={{ backgroundColor: isSavingPin ? '#d97706' : '#92400e' }}
-                  >
-                    {isSavingPin ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <>
-                        <Save size={18} color="#fff" />
-                        <Text className="text-white font-bold ml-2">Save PIN</Text>
-                        <Text className="text-white/80 text-xs ml-1">/ Enregistrer</Text>
-                      </>
-                    )}
-                  </Pressable>
-                </View>
-              </Pressable>
-            )}
-          </Pressable>
-        </Animated.View>
-
         {/* CURRENT STATUS GRID */}
         <Animated.View
           entering={FadeInDown.delay(100).duration(500)}
@@ -1880,10 +1675,10 @@ export default function ManagerDashboard() {
             >
               <MapPin size={40} color={COLORS.slate400} />
               <Text className="text-base text-center mt-3" style={{ color: COLORS.slate500 }}>
-                No washroom locations yet. Tap "Add Washroom" to create your first.
+                No washroom locations yet. Contact your administrator to add locations.
               </Text>
               <Text className="text-sm text-center mt-1" style={{ color: COLORS.slate400 }}>
-                Aucun emplacement. Appuyez sur "Ajouter un emplacement" pour créer le premier.
+                Aucun emplacement. Contactez votre administrateur pour ajouter des emplacements.
               </Text>
             </View>
           ) : (
@@ -2416,90 +2211,6 @@ export default function ManagerDashboard() {
         </View>
       </ScrollView>
 
-      {/* Add Location Modal */}
-      <Modal
-        visible={showAddLocation}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowAddLocation(false)}
-      >
-        <SafeAreaView className="flex-1" style={{ backgroundColor: COLORS.background }}>
-          <View className="flex-row items-center justify-between px-5 py-4 border-b" style={{ borderColor: COLORS.slate200 }}>
-            <Pressable onPress={() => setShowAddLocation(false)}>
-              <Text className="text-base font-medium" style={{ color: COLORS.slate500 }}>Cancel</Text>
-            </Pressable>
-            <View>
-              <Text className="text-lg font-bold text-center" style={{ color: COLORS.slate800 }}>New Location</Text>
-              <Text className="text-xs text-center" style={{ color: COLORS.slate400 }}>Nouvel emplacement</Text>
-            </View>
-            <View style={{ width: 50 }} />
-          </View>
-          <ScrollView className="flex-1 px-5 py-6">
-            <View className="mb-4">
-              <Text className="text-sm font-semibold" style={{ color: COLORS.slate700 }}>Location Name</Text>
-              <Text className="text-xs mb-2" style={{ color: COLORS.slate400 }}>Nom de l'emplacement</Text>
-              <TextInput
-                value={newLocationName}
-                onChangeText={setNewLocationName}
-                placeholder="e.g., Main Floor Restroom"
-                placeholderTextColor={COLORS.slate400}
-                className="rounded-xl px-4 py-4 text-base"
-                style={{ backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.slate200, color: COLORS.slate800 }}
-              />
-            </View>
-            <View className="mb-4">
-              <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.slate700 }}>PIN / NIP (4-5 digits)</Text>
-              <TextInput
-                value={newLocationPin}
-                onChangeText={(text) => setNewLocationPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
-                placeholder="e.g., 1234 or 12345"
-                placeholderTextColor={COLORS.slate400}
-                keyboardType="number-pad"
-                maxLength={5}
-                className="rounded-xl px-4 py-4 text-base"
-                style={{ backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.slate200, color: COLORS.slate800 }}
-              />
-              <Text className="text-xs mt-1" style={{ color: COLORS.slate500 }}>Enter 4 or 5-digit PIN to submit cleaning logs</Text>
-              <Text className="text-xs" style={{ color: COLORS.slate400 }}>Entrez un NIP de 4 ou 5 chiffres pour soumettre les journaux</Text>
-            </View>
-            <View className="mb-6">
-              <Text className="text-sm font-semibold" style={{ color: COLORS.slate700 }}>Alert Email</Text>
-              <Text className="text-xs mb-2" style={{ color: COLORS.slate400 }}>Courriel d'alerte</Text>
-              <TextInput
-                value={newLocationEmail}
-                onChangeText={setNewLocationEmail}
-                placeholder="supervisor@example.com"
-                placeholderTextColor={COLORS.slate400}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                className="rounded-xl px-4 py-4 text-base"
-                style={{ backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.slate200, color: COLORS.slate800 }}
-              />
-              <Text className="text-xs mt-1" style={{ color: COLORS.slate500 }}>Receives alerts when issues need attention</Text>
-              <Text className="text-xs" style={{ color: COLORS.slate400 }}>Reçoit des alertes lorsque des problèmes nécessitent une attention particulière</Text>
-            </View>
-            <Pressable
-              onPress={handleAddNewLocation}
-              disabled={isAddingLocation}
-              className="flex-row items-center justify-center py-4 rounded-xl"
-              style={{ backgroundColor: isAddingLocation ? COLORS.slate400 : COLORS.primary }}
-            >
-              {isAddingLocation ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <View className="items-center">
-                  <View className="flex-row items-center">
-                    <Plus size={20} color="#fff" />
-                    <Text className="text-white font-bold text-base ml-2">Create Location</Text>
-                  </View>
-                  <Text className="text-white/80 text-xs mt-0.5">Créer l'emplacement</Text>
-                </View>
-              )}
-            </Pressable>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-
       {/* Location Settings Modal */}
       <Modal
         visible={!!selectedLocationId}
@@ -2560,26 +2271,110 @@ export default function ManagerDashboard() {
                     </View>
                   </View>
 
-                  {/* Staff PIN */}
+                  {/* Universal Staff PIN - Managed here */}
                   <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: COLORS.amberLight, borderWidth: 1, borderColor: '#fcd34d' }}>
-                    <View className="mb-2">
-                      <View className="flex-row items-center">
-                        <Key size={16} color={COLORS.amber} />
-                        <Text className="text-sm font-semibold ml-2" style={{ color: '#92400e' }}>Staff PIN</Text>
+                    <Pressable
+                      onPress={() => setShowPinManagement(!showPinManagement)}
+                    >
+                      <View className="flex-row items-center justify-between">
+                        <View className="flex-row items-center">
+                          <Key size={16} color="#92400e" />
+                          <Text className="text-sm font-semibold ml-2" style={{ color: '#92400e' }}>Universal Staff PIN</Text>
+                        </View>
+                        <ChevronRight
+                          size={18}
+                          color="#92400e"
+                          style={{ transform: [{ rotate: showPinManagement ? '90deg' : '0deg' }] }}
+                        />
                       </View>
-                      <Text className="text-xs ml-6" style={{ color: '#b45309' }}>NIP du personnel</Text>
-                    </View>
-                    {location.pinCode ? (
-                      <View>
-                        <Text className="text-3xl font-black tracking-widest" style={{ color: '#92400e' }}>{location.pinCode}</Text>
-                        <Text className="text-xs mt-1" style={{ color: '#b45309' }}>Share with staff only</Text>
-                        <Text className="text-[10px]" style={{ color: '#b45309' }}>Partager avec le personnel seulement</Text>
-                      </View>
-                    ) : (
-                      <View>
-                        <Text className="text-sm italic" style={{ color: '#b45309' }}>No PIN set</Text>
-                        <Text className="text-xs italic" style={{ color: '#b45309' }}>Aucun NIP défini</Text>
-                      </View>
+                      <Text className="text-xs mt-1" style={{ color: '#b45309' }}>NIP universel du personnel</Text>
+                      {currentBusiness?.staff_pin_display ? (
+                        <Text className="text-3xl font-black tracking-widest mt-2" style={{ color: '#92400e' }}>
+                          {currentBusiness.staff_pin_display}
+                        </Text>
+                      ) : (
+                        <Text className="text-sm italic mt-2" style={{ color: '#b45309' }}>
+                          No PIN set - Tap to configure
+                        </Text>
+                      )}
+                      <Text className="text-xs mt-1" style={{ color: '#b45309' }}>Share with staff only / Partager avec le personnel seulement</Text>
+                    </Pressable>
+
+                    {showPinManagement && (
+                      <Pressable onPress={(e) => e.stopPropagation()}>
+                        <View className="mt-4 pt-4" style={{ borderTopWidth: 1, borderTopColor: '#fcd34d' }}>
+                          <Text className="text-xs mb-3" style={{ color: '#92400e' }}>
+                            This PIN works for all your washroom locations. When changed, the old PIN is immediately invalidated.
+                          </Text>
+                          <Text className="text-xs mb-3 italic" style={{ color: '#b45309' }}>
+                            Ce NIP fonctionne pour tous vos emplacements. Lorsqu'il est modifié, l'ancien NIP est immédiatement invalidé.
+                          </Text>
+
+                          <View className="mb-3">
+                            <Text className="text-xs font-medium mb-2" style={{ color: '#92400e' }}>
+                              New PIN (4-5 digits) / Nouveau NIP (4-5 chiffres)
+                            </Text>
+                            <TextInput
+                              value={newStaffPin}
+                              onChangeText={setNewStaffPin}
+                              placeholder="Enter new PIN"
+                              placeholderTextColor="#d97706"
+                              keyboardType="numeric"
+                              maxLength={5}
+                              secureTextEntry
+                              className="rounded-lg px-4 py-3 text-base"
+                              style={{
+                                backgroundColor: '#fef3c7',
+                                borderWidth: 1,
+                                borderColor: '#fcd34d',
+                                color: '#92400e',
+                              }}
+                            />
+                          </View>
+
+                          <View className="mb-4">
+                            <Text className="text-xs font-medium mb-2" style={{ color: '#92400e' }}>
+                              Confirm PIN / Confirmer le NIP
+                            </Text>
+                            <TextInput
+                              value={confirmStaffPin}
+                              onChangeText={setConfirmStaffPin}
+                              placeholder="Confirm new PIN"
+                              placeholderTextColor="#d97706"
+                              keyboardType="numeric"
+                              maxLength={5}
+                              secureTextEntry
+                              className="rounded-lg px-4 py-3 text-base"
+                              style={{
+                                backgroundColor: '#fef3c7',
+                                borderWidth: 1,
+                                borderColor: '#fcd34d',
+                                color: '#92400e',
+                              }}
+                            />
+                          </View>
+
+                          <Pressable
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleSaveStaffPin();
+                            }}
+                            disabled={isSavingPin}
+                            className="flex-row items-center justify-center py-3 rounded-lg"
+                            style={{ backgroundColor: isSavingPin ? '#d97706' : '#92400e' }}
+                          >
+                            {isSavingPin ? (
+                              <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                              <>
+                                <Save size={18} color="#fff" />
+                                <Text className="text-white font-bold ml-2">Save PIN</Text>
+                                <Text className="text-white/80 text-xs ml-1">/ Enregistrer</Text>
+                              </>
+                            )}
+                          </Pressable>
+                        </View>
+                      </Pressable>
                     )}
                   </View>
 

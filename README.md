@@ -68,8 +68,9 @@ The database supports subscription tiers for future premium features. Currently 
 - **Universal Staff PIN**: Each business can set a single staff PIN that works for all their washroom locations. This simplifies PIN management when cleaning staff work across multiple locations.
 - **PIN-Protected Cleaning Forms**: Each location requires a PIN to submit cleaning logs, preventing unauthorized submissions from people who guess URLs. The system first checks the universal business PIN, then falls back to the individual washroom PIN.
 - **PIN Verification**: PINs are stored hashed in Supabase and verified against the database
-- **PIN Management for Managers**: Managers can view and change the universal staff PIN directly from their dashboard
-- **PIN Display for Managers**: The Manager Dashboard displays the plain PIN so managers can share it with authorized staff
+- **PIN Management in Location Settings**: Managers can view and change the Universal Staff PIN from within the individual Location Settings modal (not on the main overview page)
+- **Immediate PIN Invalidation**: When a manager updates the Universal PIN, the old PIN is immediately invalidated - only the new PIN works for cleaning log submissions
+- **PIN Display for Managers**: The Location Settings modal displays the plain PIN so managers can share it with authorized staff
 - **Editable Alert Email**: Location alert emails can be edited and saved directly from the Location Management modal
 - **Soft Delete (Active Toggle)**: Locations can be deactivated instead of deleted, preserving data while hiding them from the cleaning app
 - **Public Badge**: The washroom public page showing the last two cleanings is accessible without authentication
@@ -284,22 +285,25 @@ Visitors can report facility issues directly from the public washroom page:
 **Issue Types:**
 - Out of Supplies *(auto-resolved by complete cleaning)*
 - Needs Cleaning *(auto-resolved by complete cleaning)*
-- Maintenance Required *(requires manual resolution)*
-- Safety Concern *(requires manual resolution)*
-- Other *(requires manual resolution)*
+- Maintenance Required *(auto-resolved by complete cleaning)*
+- Safety Concern *(auto-resolved by complete cleaning)*
+- Other *(auto-resolved by complete cleaning)*
 
 ### Auto-Resolution of Issues
 
-When a **complete** cleaning log is submitted (all checklist items pass), the system automatically resolves:
-- **"Out of Supplies"** issues - because supplies were restocked during cleaning
-- **"Needs Cleaning"** issues - because the washroom was just cleaned
+When a **complete** cleaning log is submitted (all checklist items pass), the system automatically resolves **ALL open issues** for that location. This resets the public status card back to "Clean" with the new cleaning timestamp.
 
-Issues that are **NOT auto-resolved** (require manager action):
-- **"Maintenance Required"** - e.g., broken toilet, leaky faucet
-- **"Safety Concern"** - e.g., ceiling damage, exposed wiring
-- **"Other"** - unknown issues that need review
+### Public Status Card Sync with Issue Reports
 
-This reduces manual work for managers while ensuring maintenance/safety issues are properly tracked until fixed.
+The public washroom status card now syncs with issue reports:
+- **Issue Reported**: When a visitor reports an issue AND it was reported after the last cleaning, the status card changes from "Clean" to "Issue / Problème"
+- **Clean**: When a staff member submits a complete cleaning log, all open issues are auto-resolved and the status resets to "Clean"
+- **Most Recent Event**: The status always displays the most recent event - whether that's a successful cleaning or a reported issue
+
+This ensures:
+1. Public visitors see when there's a known issue being addressed
+2. Staff cleanings immediately reset the status to "Clean"
+3. No manual intervention required to sync status between issues and cleanings
 
 ## WorkSafeNB Compliance
 

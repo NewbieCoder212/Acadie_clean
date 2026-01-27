@@ -57,6 +57,8 @@ import {
   autoResolveLogsForLocation,
   autoResolveIssuesForLocation,
   trackQrScan,
+  getOpenIssuesForLocation,
+  ReportedIssueRow,
 } from '@/lib/supabase';
 import { sendAttentionRequiredEmail, getUncheckedItems, sendIssueReportEmail, ISSUE_TYPES } from '@/lib/email';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
@@ -147,6 +149,7 @@ export default function WashroomPublicScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [supabaseLogs, setSupabaseLogs] = useState<CleaningLogRow[]>([]);
   const [supabaseWashroom, setSupabaseWashroom] = useState<WashroomRow | null>(null);
+  const [openIssues, setOpenIssues] = useState<ReportedIssueRow[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [savedOffline, setSavedOffline] = useState(false);
@@ -243,6 +246,7 @@ export default function WashroomPublicScreen() {
     if (currentLocationRef.current !== id) {
       setSupabaseLogs([]);
       setSupabaseWashroom(null);
+      setOpenIssues([]);
       setLoadError(null);
       currentLocationRef.current = id ?? null;
     }
@@ -253,10 +257,11 @@ export default function WashroomPublicScreen() {
       setLoadError(null);
 
       try {
-        // Fetch both logs and washroom in parallel
-        const [logsResult, washroomResult] = await Promise.all([
+        // Fetch logs, washroom, and open issues in parallel
+        const [logsResult, washroomResult, issuesResult] = await Promise.all([
           getSupabaseLogs(id),
           getWashroomById(id),
+          getOpenIssuesForLocation(id),
         ]);
 
         if (currentLocationRef.current !== id) return;
@@ -278,6 +283,10 @@ export default function WashroomPublicScreen() {
             });
           }
         }
+
+        if (issuesResult.success && issuesResult.data) {
+          setOpenIssues(issuesResult.data);
+        }
       } catch (error) {
         if (currentLocationRef.current === id) {
           setLoadError('Network error. Please check your connection.');
@@ -297,7 +306,8 @@ export default function WashroomPublicScreen() {
     Promise.all([
       getSupabaseLogs(id ?? ''),
       getWashroomById(id ?? ''),
-    ]).then(([logsResult, washroomResult]) => {
+      getOpenIssuesForLocation(id ?? ''),
+    ]).then(([logsResult, washroomResult, issuesResult]) => {
       if (logsResult.success && logsResult.data) {
         setSupabaseLogs(logsResult.data);
         setLoadError(null);
@@ -306,6 +316,9 @@ export default function WashroomPublicScreen() {
       }
       if (washroomResult.success && washroomResult.data) {
         setSupabaseWashroom(washroomResult.data);
+      }
+      if (issuesResult.success && issuesResult.data) {
+        setOpenIssues(issuesResult.data);
       }
       setIsLoading(false);
     }).catch(() => {
@@ -319,8 +332,21 @@ export default function WashroomPublicScreen() {
   }, [supabaseLogs]);
 
   const lastLog = recentLogs[0];
-  const isClean = lastLog && lastLog.status === 'complete';
-  const needsAttention = lastLog?.status === 'attention_required' && !lastLog.resolved;
+
+  // Determine status based on most recent event (cleaning or issue report)
+  // Priority: Open Issues > Last Cleaning Status
+  const hasOpenIssues = openIssues.length > 0;
+  const mostRecentIssue = openIssues[0]; // Already sorted by created_at desc
+
+  // Check if the most recent issue was reported AFTER the last cleaning
+  const issueReportedAfterCleaning = hasOpenIssues && lastLog &&
+    mostRecentIssue && new Date(mostRecentIssue.created_at).getTime() > lastLog.timestamp;
+
+  // Status logic: if there are open issues (reported after last cleaning or no cleaning exists), show "issue"
+  // Otherwise, show the last cleaning status
+  const showIssueStatus = hasOpenIssues && (!lastLog || issueReportedAfterCleaning);
+  const isClean = !showIssueStatus && lastLog && lastLog.status === 'complete';
+  const needsAttention = !showIssueStatus && lastLog?.status === 'attention_required' && !lastLog.resolved;
 
   // Check if all items are either checked OR marked as N/A
   const allChecked = Object.entries(checklist).every(([key, value]) => {
@@ -419,7 +445,12 @@ export default function WashroomPublicScreen() {
         return;
       }
 
-      // Issue saved successfully - show success to user
+      // Issue saved successfully - show success to user and update local state
+      if (supabaseResult.data) {
+        // Add the new issue to local state so status card updates immediately
+        setOpenIssues(prev => [supabaseResult.data!, ...prev]);
+      }
+
       setIssueSuccess(true);
       setTimeout(() => {
         setIssueSuccess(false);
@@ -567,10 +598,12 @@ export default function WashroomPublicScreen() {
           console.log(`[Submit] Auto-resolved ${resolveResult.resolvedCount} previous attention entries`);
         }
 
-        // Also auto-resolve supply/cleaning issues (not maintenance/safety)
+        // Also auto-resolve all open issues (status resets to Clean)
         const issueResolveResult = await autoResolveIssuesForLocation(id);
         if (issueResolveResult.success && issueResolveResult.resolvedCount && issueResolveResult.resolvedCount > 0) {
-          console.log(`[Submit] Auto-resolved ${issueResolveResult.resolvedCount} supply/cleaning issues`);
+          console.log(`[Submit] Auto-resolved ${issueResolveResult.resolvedCount} open issues`);
+          // Clear local open issues state so UI updates immediately
+          setOpenIssues([]);
         }
       }
 
@@ -788,7 +821,7 @@ export default function WashroomPublicScreen() {
                 style={{
                   backgroundColor: COLORS.glass,
                   borderWidth: 2,
-                  borderColor: isClean ? COLORS.emerald : needsAttention ? COLORS.amber : COLORS.glassBorder,
+                  borderColor: showIssueStatus ? COLORS.red : isClean ? COLORS.emerald : needsAttention ? COLORS.amber : COLORS.glassBorder,
                   shadowColor: COLORS.emerald,
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: 0.1,
@@ -803,14 +836,18 @@ export default function WashroomPublicScreen() {
                     <View
                       className="w-20 h-20 rounded-full items-center justify-center"
                       style={{
-                        backgroundColor: isClean
+                        backgroundColor: showIssueStatus
+                          ? COLORS.redLight
+                          : isClean
                           ? COLORS.mintLight
                           : needsAttention
                           ? COLORS.amberLight
                           : COLORS.mintLight,
                       }}
                     >
-                      {isClean ? (
+                      {showIssueStatus ? (
+                        <AlertOctagon size={40} color={COLORS.red} strokeWidth={1.5} />
+                      ) : isClean ? (
                         <Sparkles size={40} color={COLORS.emerald} strokeWidth={1.5} />
                       ) : needsAttention ? (
                         <AlertTriangle size={40} color={COLORS.amber} strokeWidth={1.5} />
@@ -824,26 +861,30 @@ export default function WashroomPublicScreen() {
                   <Text
                     className="text-4xl font-black text-center"
                     style={{
-                      color: isClean
+                      color: showIssueStatus
+                        ? COLORS.red
+                        : isClean
                         ? COLORS.emerald
                         : needsAttention
                         ? COLORS.amber
                         : COLORS.textMuted,
                     }}
                   >
-                    {isClean ? 'CLEAN' : needsAttention ? 'ATTENTION' : 'PENDING'}
+                    {showIssueStatus ? 'ISSUE' : isClean ? 'CLEAN' : needsAttention ? 'ATTENTION' : 'PENDING'}
                   </Text>
                   <Text
                     className="text-2xl font-bold text-center mb-4"
                     style={{
-                      color: isClean
+                      color: showIssueStatus
+                        ? COLORS.red
+                        : isClean
                         ? COLORS.emeraldDark
                         : needsAttention
                         ? COLORS.amber
                         : COLORS.textDark,
                     }}
                   >
-                    {isClean ? 'PROPRE' : needsAttention ? 'REQUISE' : 'EN ATTENTE'}
+                    {showIssueStatus ? 'PROBLÈME' : isClean ? 'PROPRE' : needsAttention ? 'REQUISE' : 'EN ATTENTE'}
                   </Text>
 
                   {/* Business Name */}
@@ -868,6 +909,32 @@ export default function WashroomPublicScreen() {
                     </Text>
                   </View>
                 </View>
+
+                {/* Issue Info - Show when there are open issues */}
+                {showIssueStatus && mostRecentIssue && (
+                  <View
+                    className="px-6 py-4 border-t"
+                    style={{ borderColor: COLORS.red, backgroundColor: COLORS.redLight }}
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-row items-center">
+                        <AlertOctagon size={16} color={COLORS.red} />
+                        <Text className="text-sm ml-2 font-semibold" style={{ color: COLORS.red }}>
+                          Issue Reported / Problème signalé
+                        </Text>
+                      </View>
+                    </View>
+                    <Text className="text-xs mt-1" style={{ color: COLORS.red }}>
+                      {new Date(mostRecentIssue.created_at).toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true,
+                      })}
+                    </Text>
+                  </View>
+                )}
 
                 {/* Last Cleaned Info */}
                 {lastLog && (
