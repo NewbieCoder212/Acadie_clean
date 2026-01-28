@@ -126,9 +126,10 @@ const initialNaState: NaState = {
 };
 
 export default function WashroomPublicScreen() {
-  const { id, admin } = useLocalSearchParams<{ id: string; admin?: string }>();
+  const { id, admin, scan } = useLocalSearchParams<{ id: string; admin?: string; scan?: string }>();
   const router = useRouter();
   const isAdminView = admin === 'true';
+  const isFromQrScan = scan === 'true';
   const [showSuccess, setShowSuccess] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
@@ -275,9 +276,9 @@ export default function WashroomPublicScreen() {
         if (washroomResult.success && washroomResult.data) {
           setSupabaseWashroom(washroomResult.data);
 
-          // Track QR scan only for public views (not admin)
-          // Fire and forget - don't block page load
-          if (!isAdminView) {
+          // Track QR scan only for actual QR scans (not page refreshes or admin views)
+          // Only counts when ?scan=true is in the URL (from QR code)
+          if (isFromQrScan && !isAdminView) {
             trackQrScanDetailed(id).catch((err: Error) => {
               console.log('[QR Scan] Tracking failed (non-blocking):', err);
             });

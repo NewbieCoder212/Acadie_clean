@@ -10,7 +10,8 @@ export default function ScanRedirectScreen() {
     if (id) {
       console.log('[Scan] Redirecting to location:', id);
       // Replace the current screen with the washroom page
-      router.replace(`/washroom/${id}`);
+      // Add ?scan=true to track actual QR scans (not page refreshes)
+      router.replace(`/washroom/${id}?scan=true`);
     }
   }, [id, router]);
 

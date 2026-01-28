@@ -50,6 +50,7 @@ import {
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { sendNewWashroomNotification } from '@/lib/email';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
+import { generatePDFHTML, addWebToolbar, getCheckIcon, getStatusBadge, truncateText } from '@/lib/pdf-template';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
 
@@ -261,9 +262,10 @@ export default function ManagerDashboard() {
   };
 
   // Generate QR code URL - uses environment variable for production URL
+  // Includes ?scan=true to track actual QR scans (not page refreshes)
   const getLocationUrl = (locationId: string) => {
     const baseUrl = process.env.EXPO_PUBLIC_APP_URL || 'https://app.acadiacleaniq.ca';
-    return `${baseUrl}/washroom/${locationId}`;
+    return `${baseUrl}/washroom/${locationId}?scan=true`;
   };
 
   // Fetch data when authenticated
@@ -660,261 +662,37 @@ export default function ManagerDashboard() {
       }
 
       const businessDisplayName = currentBusiness?.name || 'Acadia Clean';
-      const businessAddr = currentBusiness?.address || '';
 
-      // Helper function to render checkmark or X
-      const checkIcon = (checked: boolean) => checked
-        ? '<span style="color: #059669; font-weight: bold;">✓</span>'
-        : '<span style="color: #dc2626; font-weight: bold;">✗</span>';
-
-      // Helper to truncate text
-      const truncate = (text: string, maxLength: number) => {
-        if (!text) return '-';
-        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
-      };
-
-      const tableRows = locationLogs.map((log) => `
+      // Build table rows with standardized status labels
+      const tableRows = locationLogs.map((log, index) => `
         <tr>
-          <td style="text-align: center;">${formatDateTime(log.timestamp)}</td>
-          <td>${truncate(log.staff_name, 15)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_supplies)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_supplies)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_trash)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_surfaces)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_floor)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
-          <td style="text-align: center;">
-            <span style="padding: 1px 4px; border-radius: 3px; font-weight: 600; font-size: 9px; ${
-              log.status === 'complete' ? 'background-color: #dcfce7; color: #166534;' : 'background-color: #fef3c7; color: #92400e;'
-            }">${log.status === 'complete' ? 'Complete' : 'Partial'}</span>
-          </td>
+          <td>${formatDateTime(log.timestamp)}</td>
+          <td>${truncateText(log.staff_name, 15)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_supplies)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_supplies)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_trash)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_surfaces)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_floor)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">${getStatusBadge(log.status === 'complete' ? 'Complete' : 'Incomplete')}</td>
         </tr>
       `).join('');
 
-      const html = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <title>Cleaning History - ${premiumExportLocationName}</title>
-            <style>
-              @page {
-                size: letter landscape;
-                margin: 8mm;
-              }
-              @media print {
-                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                .footer { page-break-inside: avoid; }
-              }
-              * { box-sizing: border-box; margin: 0; padding: 0; }
-              body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                color: #1e293b;
-                padding: 12px 16px;
-                font-size: 11px;
-                background: white;
-              }
-              table {
-                width: 100%;
-                border-collapse: collapse;
-              }
-              th {
-                background-color: #f1f5f9;
-                padding: 6px 4px;
-                text-align: left;
-                font-size: 9px;
-                font-weight: 600;
-                color: #475569;
-                border-bottom: 2px solid #e2e8f0;
-              }
-              th.center { text-align: center; }
-              td {
-                padding: 5px 4px;
-                border-bottom: 1px solid #e2e8f0;
-                font-size: 10px;
-              }
-              .legend {
-                margin-top: 10px;
-                padding: 8px;
-                background: #f8fafc;
-                border-radius: 4px;
-                font-size: 8px;
-                color: #475569;
-              }
-              .legend-title { font-weight: 600; margin-bottom: 4px; }
-              .legend-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-              .footer {
-                margin-top: 12px;
-                text-align: center;
-              }
-              .footer-logo {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 8px;
-              }
-            </style>
-          </head>
-          <body>
-            <h1 style="font-size: 20px; font-weight: bold; margin: 0 0 2px 0;">${businessDisplayName}</h1>
-            ${businessAddr ? `<p style="font-size: 11px; color: #64748b; margin: 0 0 2px 0;">${businessAddr}</p>` : ''}
-            <h2 style="font-size: 14px; font-weight: 600; margin: 0 0 2px 0; color: #065f46;">${premiumExportLocationName}</h2>
-            <h3 style="font-size: 10px; font-weight: 600; margin: 0 0 10px 0; color: #64748b;">Cleaning History Report / Rapport d'historique</h3>
-
-            <table style="border: 1px solid #e2e8f0;">
-              <thead>
-                <tr>
-                  <th>Date/Time</th>
-                  <th>Staff</th>
-                  <th class="center">HS</th>
-                  <th class="center">TP</th>
-                  <th class="center">BN</th>
-                  <th class="center">SD</th>
-                  <th class="center">FX</th>
-                  <th class="center">WT</th>
-                  <th class="center">FL</th>
-                  <th class="center">VL</th>
-                  <th class="center">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${tableRows}
-              </tbody>
-            </table>
-
-            <div class="legend">
-              <div class="legend-title">Legend / Légende:</div>
-              <div class="legend-grid">
-                <span><strong>HS</strong>=Hand Soap / Savon</span>
-                <span><strong>TP</strong>=Toilet Paper / Papier</span>
-                <span><strong>BN</strong>=Bins / Poubelles</span>
-                <span><strong>SD</strong>=Surfaces Disinfected / Surfaces désinfectées</span>
-                <span><strong>FX</strong>=Fixtures / Accessoires</span>
-                <span><strong>WT</strong>=Water Temp / Température</span>
-                <span><strong>FL</strong>=Floors / Planchers</span>
-                <span><strong>VL</strong>=Ventilation/Lighting / Éclairage</span>
-                <span style="margin-left: 8px;"><span style="color: #059669;">✓</span>=Complete / Complété</span>
-                <span><span style="color: #dc2626;">✗</span>=Incomplete / Incomplet</span>
-              </div>
-            </div>
-
-            <div style="margin-top: 8px; text-align: center; color: #64748b; font-size: 9px;">
-              Date Range: ${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')} — ${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}
-            </div>
-
-            <div class="footer">
-              <div class="footer-logo">
-                <svg width="32" height="32" viewBox="0 0 100 100">
-                  <!-- Corner squares -->
-                  <rect x="5" y="5" width="25" height="25" rx="4" fill="#065f46"/>
-                  <rect x="9" y="9" width="17" height="17" rx="2" fill="#fff"/>
-                  <rect x="13" y="13" width="9" height="9" rx="1" fill="#065f46"/>
-                  <rect x="70" y="5" width="25" height="25" rx="4" fill="#065f46"/>
-                  <rect x="74" y="9" width="17" height="17" rx="2" fill="#fff"/>
-                  <rect x="78" y="13" width="9" height="9" rx="1" fill="#065f46"/>
-                  <rect x="5" y="70" width="25" height="25" rx="4" fill="#065f46"/>
-                  <rect x="9" y="74" width="17" height="17" rx="2" fill="#fff"/>
-                  <rect x="13" y="78" width="9" height="9" rx="1" fill="#065f46"/>
-                  <!-- Data pattern dots - top -->
-                  <rect x="35" y="5" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="45" y="5" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="55" y="5" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="35" y="15" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="55" y="15" width="6" height="6" rx="1" fill="#065f46"/>
-                  <!-- Data pattern dots - left -->
-                  <rect x="5" y="35" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="15" y="35" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="5" y="45" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="5" y="55" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="15" y="55" width="6" height="6" rx="1" fill="#065f46"/>
-                  <!-- Data pattern dots - right -->
-                  <rect x="89" y="35" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="79" y="45" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="89" y="55" width="6" height="6" rx="1" fill="#065f46"/>
-                  <!-- Data pattern dots - bottom -->
-                  <rect x="35" y="89" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="45" y="89" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="55" y="89" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="65" y="89" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="75" y="79" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="35" y="79" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="55" y="79" width="6" height="6" rx="1" fill="#065f46"/>
-                  <!-- Center water drop with checkmark -->
-                  <path d="M50 28 C50 28 35 45 35 58 C35 68 41 75 50 75 C59 75 65 68 65 58 C65 45 50 28 50 28 Z" fill="#059669"/>
-                  <path d="M42 55 L47 62 L58 48" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                </svg>
-                <div style="text-align: left;">
-                  <div style="font-size: 11px; font-weight: 800; color: #065f46; letter-spacing: 0.5px;">Acadia</div>
-                  <div style="font-size: 10px; font-weight: 700; color: #059669;">Clean IQ</div>
-                </div>
-              </div>
-            </div>
-          </body>
-        </html>
-      `;
+      const html = generatePDFHTML({
+        documentTitle: 'Cleaning History Report',
+        documentType: 'history',
+        businessName: businessDisplayName,
+        location: `${premiumExportLocationName} - ${businessDisplayName}`,
+        dateRange: { start: startDate, end: endDate },
+        tableHeaders: ['Date/Time', 'Staff', 'HS', 'TP', 'BN', 'SD', 'FX', 'WT', 'FL', 'VL', 'Status'],
+        tableRows,
+        showLegend: true,
+      });
 
       if (Platform.OS === 'web') {
-        // Add toolbar with close button and print button for web
-        const htmlWithToolbar = html.replace('</head>', `
-          <style>
-            .pdf-toolbar {
-              position: fixed;
-              top: 0;
-              left: 0;
-              right: 0;
-              background: linear-gradient(135deg, #065f46 0%, #059669 100%);
-              padding: 12px 20px;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              z-index: 9999;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            }
-            .pdf-toolbar-title {
-              color: white;
-              font-size: 14px;
-              font-weight: 600;
-            }
-            .pdf-toolbar-buttons {
-              display: flex;
-              gap: 10px;
-            }
-            .pdf-toolbar button {
-              padding: 8px 16px;
-              border: none;
-              border-radius: 6px;
-              font-size: 13px;
-              font-weight: 600;
-              cursor: pointer;
-              transition: opacity 0.2s;
-            }
-            .pdf-toolbar button:hover {
-              opacity: 0.9;
-            }
-            .btn-print {
-              background: white;
-              color: #065f46;
-            }
-            .btn-close {
-              background: #dc2626;
-              color: white;
-            }
-            @media print {
-              .pdf-toolbar { display: none !important; }
-              body { padding-top: 12px !important; }
-            }
-          </style>
-        </head>`).replace('<body>', `<body style="padding-top: 60px;">
-          <div class="pdf-toolbar">
-            <span class="pdf-toolbar-title">Cleaning History Report</span>
-            <div class="pdf-toolbar-buttons">
-              <button class="btn-print" onclick="window.print()">Print / Save PDF</button>
-              <button class="btn-close" onclick="window.close()">Close / Fermer</button>
-            </div>
-          </div>`);
-
+        const htmlWithToolbar = addWebToolbar(html, 'Cleaning History Report');
         const printWindow = window.open('', '_blank');
 
         if (printWindow && printWindow.document) {
@@ -922,7 +700,6 @@ export default function ManagerDashboard() {
           printWindow.document.close();
           printWindow.focus();
         } else {
-          // Fallback: alert user that popups may be blocked
           Alert.alert(
             'Popup Blocked',
             'Please allow popups for this site to view the PDF report, or try using the browser print function.',
@@ -956,7 +733,6 @@ export default function ManagerDashboard() {
       }
 
       const businessDisplayName = currentBusiness?.name || 'Acadia Clean';
-      const businessAddress = currentBusiness?.address || '';
       const logs = result.data;
 
       // Calculate date range (past 30 days)
@@ -964,259 +740,36 @@ export default function ManagerDashboard() {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - 30);
 
-      // Helper function to render checkmark or X
-      const checkIcon = (checked: boolean) => checked
-        ? '<span style="color: #059669; font-weight: bold;">✓</span>'
-        : '<span style="color: #dc2626; font-weight: bold;">✗</span>';
-
-      // Helper to truncate text
-      const truncate = (text: string, maxLength: number) => {
-        if (!text) return '-';
-        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
-      };
-
-      const tableRows = logs.map((log) => `
+      // Build table rows with standardized status labels
+      const tableRows = logs.map((log, index) => `
         <tr>
-          <td style="text-align: center;">${formatDateTime(log.timestamp)}</td>
-          <td>${truncate(log.staff_name, 15)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_supplies)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_supplies)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_trash)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_surfaces)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_floor)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
-          <td style="text-align: center;">
-            <span style="padding: 1px 4px; border-radius: 3px; font-weight: 600; font-size: 9px; ${
-              log.status === 'complete' ? 'background-color: #dcfce7; color: #166534;' : 'background-color: #fef3c7; color: #92400e;'
-            }">${log.status === 'complete' ? 'Complete' : 'Partial'}</span>
-          </td>
+          <td>${formatDateTime(log.timestamp)}</td>
+          <td>${truncateText(log.staff_name, 15)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_supplies)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_supplies)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_trash)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_surfaces)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_floor)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">${getStatusBadge(log.status === 'complete' ? 'Complete' : 'Incomplete')}</td>
         </tr>
       `).join('');
 
-      const html = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <title>1 Month History - ${location.name}</title>
-            <style>
-              @page {
-                size: letter landscape;
-                margin: 8mm;
-              }
-              @media print {
-                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                .footer { page-break-inside: avoid; }
-              }
-              * { box-sizing: border-box; margin: 0; padding: 0; }
-              body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                color: #1e293b;
-                padding: 12px 16px;
-                font-size: 11px;
-                background: white;
-              }
-              table {
-                width: 100%;
-                border-collapse: collapse;
-              }
-              th {
-                background-color: #f1f5f9;
-                padding: 6px 4px;
-                text-align: left;
-                font-size: 9px;
-                font-weight: 600;
-                color: #475569;
-                border-bottom: 2px solid #e2e8f0;
-              }
-              th.center { text-align: center; }
-              td {
-                padding: 5px 4px;
-                border-bottom: 1px solid #e2e8f0;
-                font-size: 10px;
-              }
-              .legend {
-                margin-top: 10px;
-                padding: 8px;
-                background: #f8fafc;
-                border-radius: 4px;
-                font-size: 8px;
-                color: #475569;
-              }
-              .legend-title { font-weight: 600; margin-bottom: 4px; }
-              .legend-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-              .footer {
-                margin-top: 12px;
-                text-align: center;
-              }
-              .footer-logo {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 8px;
-              }
-            </style>
-          </head>
-          <body>
-            <h1 style="font-size: 20px; font-weight: bold; margin: 0 0 2px 0;">${businessDisplayName}</h1>
-            ${businessAddress ? `<p style="font-size: 11px; color: #64748b; margin: 0 0 2px 0;">${businessAddress}</p>` : ''}
-            <h2 style="font-size: 14px; font-weight: 600; margin: 0 0 2px 0; color: #065f46;">${location.name}</h2>
-            <h3 style="font-size: 10px; font-weight: 600; margin: 0 0 10px 0; color: #64748b;">1 Month Cleaning History / Historique de nettoyage</h3>
-
-            <table style="border: 1px solid #e2e8f0;">
-              <thead>
-                <tr>
-                  <th>Date/Time</th>
-                  <th>Staff</th>
-                  <th class="center">HS</th>
-                  <th class="center">TP</th>
-                  <th class="center">BN</th>
-                  <th class="center">SD</th>
-                  <th class="center">FX</th>
-                  <th class="center">WT</th>
-                  <th class="center">FL</th>
-                  <th class="center">VL</th>
-                  <th class="center">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${tableRows}
-              </tbody>
-            </table>
-
-            <div class="legend">
-              <div class="legend-title">Legend / Légende:</div>
-              <div class="legend-grid">
-                <span><strong>HS</strong>=Hand Soap / Savon</span>
-                <span><strong>TP</strong>=Toilet Paper / Papier</span>
-                <span><strong>BN</strong>=Bins / Poubelles</span>
-                <span><strong>SD</strong>=Surfaces Disinfected / Surfaces désinfectées</span>
-                <span><strong>FX</strong>=Fixtures / Accessoires</span>
-                <span><strong>WT</strong>=Water Temp / Température</span>
-                <span><strong>FL</strong>=Floors / Planchers</span>
-                <span><strong>VL</strong>=Ventilation/Lighting / Éclairage</span>
-                <span style="margin-left: 8px;"><span style="color: #059669;">✓</span>=Complete / Complété</span>
-                <span><span style="color: #dc2626;">✗</span>=Incomplete / Incomplet</span>
-              </div>
-            </div>
-
-            <div style="margin-top: 8px; text-align: center; color: #64748b; font-size: 9px;">
-              Date Range: ${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')} — ${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}
-            </div>
-
-            <div class="footer">
-              <div class="footer-logo">
-                <svg width="32" height="32" viewBox="0 0 100 100">
-                  <!-- Corner squares -->
-                  <rect x="5" y="5" width="25" height="25" rx="4" fill="#065f46"/>
-                  <rect x="9" y="9" width="17" height="17" rx="2" fill="#fff"/>
-                  <rect x="13" y="13" width="9" height="9" rx="1" fill="#065f46"/>
-                  <rect x="70" y="5" width="25" height="25" rx="4" fill="#065f46"/>
-                  <rect x="74" y="9" width="17" height="17" rx="2" fill="#fff"/>
-                  <rect x="78" y="13" width="9" height="9" rx="1" fill="#065f46"/>
-                  <rect x="5" y="70" width="25" height="25" rx="4" fill="#065f46"/>
-                  <rect x="9" y="74" width="17" height="17" rx="2" fill="#fff"/>
-                  <rect x="13" y="78" width="9" height="9" rx="1" fill="#065f46"/>
-                  <!-- Data pattern dots - top -->
-                  <rect x="35" y="5" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="45" y="5" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="55" y="5" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="35" y="15" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="55" y="15" width="6" height="6" rx="1" fill="#065f46"/>
-                  <!-- Data pattern dots - left -->
-                  <rect x="5" y="35" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="15" y="35" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="5" y="45" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="5" y="55" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="15" y="55" width="6" height="6" rx="1" fill="#065f46"/>
-                  <!-- Data pattern dots - right -->
-                  <rect x="89" y="35" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="79" y="45" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="89" y="55" width="6" height="6" rx="1" fill="#065f46"/>
-                  <!-- Data pattern dots - bottom -->
-                  <rect x="35" y="89" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="45" y="89" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="55" y="89" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="65" y="89" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="75" y="79" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="35" y="79" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="55" y="79" width="6" height="6" rx="1" fill="#065f46"/>
-                  <!-- Center water drop with checkmark -->
-                  <path d="M50 28 C50 28 35 45 35 58 C35 68 41 75 50 75 C59 75 65 68 65 58 C65 45 50 28 50 28 Z" fill="#059669"/>
-                  <path d="M42 55 L47 62 L58 48" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                </svg>
-                <div style="text-align: left;">
-                  <div style="font-size: 11px; font-weight: 800; color: #065f46; letter-spacing: 0.5px;">Acadia</div>
-                  <div style="font-size: 10px; font-weight: 700; color: #059669;">Clean IQ</div>
-                </div>
-              </div>
-            </div>
-          </body>
-        </html>
-      `;
+      const html = generatePDFHTML({
+        documentTitle: '1 Month Cleaning History',
+        documentType: 'history',
+        businessName: businessDisplayName,
+        location: `${location.name} - ${businessDisplayName}`,
+        dateRange: { start: startDate, end: endDate },
+        tableHeaders: ['Date/Time', 'Staff', 'HS', 'TP', 'BN', 'SD', 'FX', 'WT', 'FL', 'VL', 'Status'],
+        tableRows,
+        showLegend: true,
+      });
 
       if (Platform.OS === 'web') {
-        // Add toolbar with close button and print button for web
-        const htmlWithToolbar = html.replace('</head>', `
-          <style>
-            .pdf-toolbar {
-              position: fixed;
-              top: 0;
-              left: 0;
-              right: 0;
-              background: linear-gradient(135deg, #065f46 0%, #059669 100%);
-              padding: 12px 20px;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              z-index: 9999;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            }
-            .pdf-toolbar-title {
-              color: white;
-              font-size: 14px;
-              font-weight: 600;
-            }
-            .pdf-toolbar-buttons {
-              display: flex;
-              gap: 10px;
-            }
-            .pdf-toolbar button {
-              padding: 8px 16px;
-              border: none;
-              border-radius: 6px;
-              font-size: 13px;
-              font-weight: 600;
-              cursor: pointer;
-              transition: opacity 0.2s;
-            }
-            .pdf-toolbar button:hover {
-              opacity: 0.9;
-            }
-            .btn-print {
-              background: white;
-              color: #065f46;
-            }
-            .btn-close {
-              background: #dc2626;
-              color: white;
-            }
-            @media print {
-              .pdf-toolbar { display: none !important; }
-              body { padding-top: 12px !important; }
-            }
-          </style>
-        </head>`).replace('<body>', `<body style="padding-top: 60px;">
-          <div class="pdf-toolbar">
-            <span class="pdf-toolbar-title">1 Month Cleaning History</span>
-            <div class="pdf-toolbar-buttons">
-              <button class="btn-print" onclick="window.print()">Print / Save PDF</button>
-              <button class="btn-close" onclick="window.close()">Close / Fermer</button>
-            </div>
-          </div>`);
-
+        const htmlWithToolbar = addWebToolbar(html, '1 Month Cleaning History');
         const printWindow = window.open('', '_blank');
 
         if (printWindow && printWindow.document) {
@@ -1224,7 +777,6 @@ export default function ManagerDashboard() {
           printWindow.document.close();
           printWindow.focus();
         } else {
-          // Fallback: alert user that popups may be blocked
           Alert.alert(
             'Popup Blocked',
             'Please allow popups for this site to view the PDF report, or try using the browser print function.',
@@ -1274,261 +826,38 @@ export default function ManagerDashboard() {
       // Ensure all data is loaded before rendering
       const logs = [...result.data];
 
-      // Helper function to render checkmark or X
-      const checkIcon = (checked: boolean) => checked
-        ? '<span style="color: #059669; font-weight: bold;">✓</span>'
-        : '<span style="color: #dc2626; font-weight: bold;">✗</span>';
-
-      // Helper to truncate text to prevent overflow
-      const truncate = (text: string, maxLength: number) => {
-        if (!text) return '-';
-        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
-      };
-
-      const tableRows = logs.map((log) => `
+      // Build table rows with standardized status labels
+      const tableRows = logs.map((log, index) => `
         <tr>
-          <td style="text-align: center;">${formatDateTime(log.timestamp)}</td>
-          <td>${truncate(log.location_name, 20)}</td>
-          <td>${truncate(log.staff_name, 15)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_supplies)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_supplies)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_trash)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_surfaces)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_floor)}</td>
-          <td style="text-align: center;">${checkIcon(log.checklist_fixtures)}</td>
-          <td style="text-align: center;">
-            <span style="padding: 1px 4px; border-radius: 3px; font-weight: 600; font-size: 9px; ${
-              log.status === 'complete' ? 'background-color: #dcfce7; color: #166534;' : 'background-color: #fef3c7; color: #92400e;'
-            }">${log.status === 'complete' ? 'OK' : 'ATT'}</span>
-          </td>
+          <td>${formatDateTime(log.timestamp)}</td>
+          <td>${truncateText(log.location_name, 20)}</td>
+          <td>${truncateText(log.staff_name, 15)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_supplies)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_supplies)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_trash)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_surfaces)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_floor)}</td>
+          <td style="text-align: center;">${getCheckIcon(log.checklist_fixtures)}</td>
+          <td style="text-align: center;">${getStatusBadge(log.status === 'complete' ? 'Complete' : 'Attention Required')}</td>
         </tr>
       `).join('');
 
-      const html = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <title>Cleaning Logs - ${businessName}</title>
-            <style>
-              @page {
-                size: letter landscape;
-                margin: 8mm;
-              }
-              @media print {
-                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                .footer { page-break-inside: avoid; }
-              }
-              * { box-sizing: border-box; margin: 0; padding: 0; }
-              body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                color: #1e293b;
-                padding: 12px 16px;
-                font-size: 11px;
-                background: white;
-              }
-              table {
-                width: 100%;
-                border-collapse: collapse;
-              }
-              th {
-                background-color: #f1f5f9;
-                padding: 6px 4px;
-                text-align: left;
-                font-size: 9px;
-                font-weight: 600;
-                color: #475569;
-                border-bottom: 2px solid #e2e8f0;
-              }
-              th.center { text-align: center; }
-              td {
-                padding: 5px 4px;
-                border-bottom: 1px solid #e2e8f0;
-                font-size: 10px;
-              }
-              .legend {
-                margin-top: 10px;
-                padding: 8px;
-                background: #f8fafc;
-                border-radius: 4px;
-                font-size: 8px;
-                color: #475569;
-              }
-              .legend-title { font-weight: 600; margin-bottom: 4px; }
-              .legend-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-              .footer {
-                margin-top: 12px;
-                text-align: center;
-              }
-              .footer-logo {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 8px;
-              }
-            </style>
-          </head>
-          <body>
-            <h1 style="font-size: 20px; font-weight: bold; margin: 0 0 2px 0;">${businessName}</h1>
-            ${businessAddress ? `<p style="font-size: 11px; color: #64748b; margin: 0 0 2px 0;">${businessAddress}</p>` : ''}
-            <h2 style="font-size: 10px; font-weight: 600; margin: 0 0 10px 0; color: #64748b;">Cleaning Compliance Report / Rapport de conformité</h2>
-
-            <table style="border: 1px solid #e2e8f0;">
-              <thead>
-                <tr>
-                  <th>Date/Time</th>
-                  <th>Location</th>
-                  <th>Staff</th>
-                  <th class="center">HS</th>
-                  <th class="center">TP</th>
-                  <th class="center">BN</th>
-                  <th class="center">SD</th>
-                  <th class="center">FX</th>
-                  <th class="center">WT</th>
-                  <th class="center">FL</th>
-                  <th class="center">VL</th>
-                  <th class="center">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${tableRows}
-              </tbody>
-            </table>
-
-            <div class="legend">
-              <div class="legend-title">Legend / Légende:</div>
-              <div class="legend-grid">
-                <span><strong>HS</strong>=Hand Soap / Savon</span>
-                <span><strong>TP</strong>=Toilet Paper / Papier</span>
-                <span><strong>BN</strong>=Bins / Poubelles</span>
-                <span><strong>SD</strong>=Surfaces Disinfected / Surfaces désinfectées</span>
-                <span><strong>FX</strong>=Fixtures / Accessoires</span>
-                <span><strong>WT</strong>=Water Temp / Température</span>
-                <span><strong>FL</strong>=Floors / Planchers</span>
-                <span><strong>VL</strong>=Ventilation/Lighting / Éclairage</span>
-                <span style="margin-left: 8px;"><span style="color: #059669;">✓</span>=Complete / Complété</span>
-                <span><span style="color: #dc2626;">✗</span>=Incomplete / Incomplet</span>
-              </div>
-            </div>
-
-            <div style="margin-top: 8px; text-align: center; color: #64748b; font-size: 9px;">
-              Date Range: ${auditStartDate.getFullYear()}-${String(auditStartDate.getMonth() + 1).padStart(2, '0')}-${String(auditStartDate.getDate()).padStart(2, '0')} — ${auditEndDate.getFullYear()}-${String(auditEndDate.getMonth() + 1).padStart(2, '0')}-${String(auditEndDate.getDate()).padStart(2, '0')}
-            </div>
-
-            <div class="footer">
-              <div class="footer-logo">
-                <svg width="32" height="32" viewBox="0 0 100 100">
-                  <!-- Corner squares -->
-                  <rect x="5" y="5" width="25" height="25" rx="4" fill="#065f46"/>
-                  <rect x="9" y="9" width="17" height="17" rx="2" fill="#fff"/>
-                  <rect x="13" y="13" width="9" height="9" rx="1" fill="#065f46"/>
-                  <rect x="70" y="5" width="25" height="25" rx="4" fill="#065f46"/>
-                  <rect x="74" y="9" width="17" height="17" rx="2" fill="#fff"/>
-                  <rect x="78" y="13" width="9" height="9" rx="1" fill="#065f46"/>
-                  <rect x="5" y="70" width="25" height="25" rx="4" fill="#065f46"/>
-                  <rect x="9" y="74" width="17" height="17" rx="2" fill="#fff"/>
-                  <rect x="13" y="78" width="9" height="9" rx="1" fill="#065f46"/>
-                  <!-- Data pattern dots - top -->
-                  <rect x="35" y="5" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="45" y="5" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="55" y="5" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="35" y="15" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="55" y="15" width="6" height="6" rx="1" fill="#065f46"/>
-                  <!-- Data pattern dots - left -->
-                  <rect x="5" y="35" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="15" y="35" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="5" y="45" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="5" y="55" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="15" y="55" width="6" height="6" rx="1" fill="#065f46"/>
-                  <!-- Data pattern dots - right -->
-                  <rect x="89" y="35" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="79" y="45" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="89" y="55" width="6" height="6" rx="1" fill="#065f46"/>
-                  <!-- Data pattern dots - bottom -->
-                  <rect x="35" y="89" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="45" y="89" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="55" y="89" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="65" y="89" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="75" y="79" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="35" y="79" width="6" height="6" rx="1" fill="#065f46"/>
-                  <rect x="55" y="79" width="6" height="6" rx="1" fill="#065f46"/>
-                  <!-- Center water drop with checkmark -->
-                  <path d="M50 28 C50 28 35 45 35 58 C35 68 41 75 50 75 C59 75 65 68 65 58 C65 45 50 28 50 28 Z" fill="#059669"/>
-                  <path d="M42 55 L47 62 L58 48" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                </svg>
-                <div style="text-align: left;">
-                  <div style="font-size: 11px; font-weight: 800; color: #065f46; letter-spacing: 0.5px;">Acadia</div>
-                  <div style="font-size: 10px; font-weight: 700; color: #059669;">Clean IQ</div>
-                </div>
-              </div>
-            </div>
-          </body>
-        </html>
-      `;
+      const html = generatePDFHTML({
+        documentTitle: 'Official Compliance Audit',
+        documentType: 'audit',
+        businessName: businessName,
+        location: `${businessName} - All Units`,
+        dateRange: { start: startDate, end: endDate },
+        tableHeaders: ['Date/Time', 'Location', 'Staff', 'HS', 'TP', 'BN', 'SD', 'FX', 'WT', 'FL', 'VL', 'Status'],
+        tableRows,
+        showLegend: true,
+      });
 
       // Handle web platform differently
       if (Platform.OS === 'web') {
-        // Add toolbar with close button and print button for web
-        const htmlWithToolbar = html.replace('</head>', `
-          <style>
-            .pdf-toolbar {
-              position: fixed;
-              top: 0;
-              left: 0;
-              right: 0;
-              background: linear-gradient(135deg, #065f46 0%, #059669 100%);
-              padding: 12px 20px;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              z-index: 9999;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            }
-            .pdf-toolbar-title {
-              color: white;
-              font-size: 14px;
-              font-weight: 600;
-            }
-            .pdf-toolbar-buttons {
-              display: flex;
-              gap: 10px;
-            }
-            .pdf-toolbar button {
-              padding: 8px 16px;
-              border: none;
-              border-radius: 6px;
-              font-size: 13px;
-              font-weight: 600;
-              cursor: pointer;
-              transition: opacity 0.2s;
-            }
-            .pdf-toolbar button:hover {
-              opacity: 0.9;
-            }
-            .btn-print {
-              background: white;
-              color: #065f46;
-            }
-            .btn-close {
-              background: #dc2626;
-              color: white;
-            }
-            @media print {
-              .pdf-toolbar { display: none !important; }
-              body { padding-top: 12px !important; }
-            }
-          </style>
-        </head>`).replace('<body>', `<body style="padding-top: 60px;">
-          <div class="pdf-toolbar">
-            <span class="pdf-toolbar-title">Audit Report / Rapport d'audit</span>
-            <div class="pdf-toolbar-buttons">
-              <button class="btn-print" onclick="window.print()">Print / Save PDF</button>
-              <button class="btn-close" onclick="window.close()">Close / Fermer</button>
-            </div>
-          </div>`);
-
+        const htmlWithToolbar = addWebToolbar(html, 'Official Compliance Audit / Audit de conformité');
         const printWindow = window.open('', '_blank');
 
         if (printWindow && printWindow.document) {
@@ -1536,7 +865,6 @@ export default function ManagerDashboard() {
           printWindow.document.close();
           printWindow.focus();
         } else {
-          // Popup blocked - alert user
           Alert.alert(
             'Popup Blocked',
             'Please allow popups for this site to view the PDF report, or try using the browser print function.',

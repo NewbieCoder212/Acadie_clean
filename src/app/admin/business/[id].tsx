@@ -45,6 +45,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { generatePDFHTML, addWebToolbar } from '@/lib/pdf-template';
 import {
   BusinessRow,
   LocationRow,
@@ -130,8 +131,9 @@ export default function BusinessDetailScreen() {
   const [isUpdatingSubscription, setIsUpdatingSubscription] = useState(false);
 
   // Generate public URL for washroom
+  // Includes ?scan=true to track actual QR scans (not page refreshes)
   const getWashroomUrl = (washroomId: string) => {
-    return `https://app.acadiacleaniq.ca/washroom/${washroomId}`;
+    return `https://app.acadiacleaniq.ca/washroom/${washroomId}?scan=true`;
   };
 
   const handleShowQrCode = (washroom: WashroomRow) => {
@@ -309,207 +311,31 @@ export default function BusinessDetailScreen() {
         });
       };
 
+      // Calculate date range (past 30 days)
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+
       const tableRows = qrScanLogs.map((log) => `
         <tr>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0;">${formatPdfDateTime(log.scanned_at)}</td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0;">${getWashroomName(log.location_id)}</td>
+          <td>${formatPdfDateTime(log.scanned_at)}</td>
+          <td>${getWashroomName(log.location_id)}</td>
         </tr>
       `).join('');
 
-      const html = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <title>QR Scan History - ${business?.name || 'Business'}</title>
-            <style>
-              @page {
-                size: letter portrait;
-                margin: 15mm;
-              }
-              @media print {
-                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              }
-              * { box-sizing: border-box; margin: 0; padding: 0; }
-              body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                color: #1e293b;
-                padding: 20px;
-                font-size: 12px;
-                background: white;
-              }
-              .header {
-                margin-bottom: 24px;
-                padding-bottom: 16px;
-                border-bottom: 2px solid #7c3aed;
-              }
-              .header h1 {
-                font-size: 24px;
-                font-weight: bold;
-                color: #1e1b4b;
-                margin-bottom: 4px;
-              }
-              .header p {
-                font-size: 14px;
-                color: #6b7280;
-              }
-              .stats {
-                display: flex;
-                gap: 16px;
-                margin-bottom: 24px;
-              }
-              .stat-box {
-                flex: 1;
-                background: #f5f3ff;
-                border: 1px solid #ddd6fe;
-                border-radius: 8px;
-                padding: 12px 16px;
-              }
-              .stat-box .label {
-                font-size: 11px;
-                color: #6b7280;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-              }
-              .stat-box .value {
-                font-size: 24px;
-                font-weight: bold;
-                color: #7c3aed;
-              }
-              table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-top: 16px;
-              }
-              th {
-                background-color: #7c3aed;
-                color: white;
-                padding: 12px;
-                text-align: left;
-                font-size: 12px;
-                font-weight: 600;
-              }
-              tr:nth-child(even) {
-                background-color: #f8fafc;
-              }
-              .footer {
-                margin-top: 24px;
-                padding-top: 16px;
-                border-top: 1px solid #e2e8f0;
-                text-align: center;
-                color: #6b7280;
-                font-size: 10px;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <h1>${business?.name || 'Business'}</h1>
-              <p>QR Code Scan History Report</p>
-            </div>
-
-            <div class="stats">
-              <div class="stat-box">
-                <div class="label">Total Scans</div>
-                <div class="value">${qrScanLogs.length}</div>
-              </div>
-              <div class="stat-box">
-                <div class="label">Today's Scans</div>
-                <div class="value">${todayScans}</div>
-              </div>
-              <div class="stat-box">
-                <div class="label">30-Day Total</div>
-                <div class="value">${totalScans}</div>
-              </div>
-            </div>
-
-            <table>
-              <thead>
-                <tr>
-                  <th>Date & Time</th>
-                  <th>Location</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${tableRows}
-              </tbody>
-            </table>
-
-            <div class="footer">
-              <p>Generated on ${new Date().toLocaleString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-              })}</p>
-              <p style="margin-top: 4px;">Powered by CleanIQ</p>
-            </div>
-          </body>
-        </html>
-      `;
+      const html = generatePDFHTML({
+        documentTitle: 'QR Scan History Report',
+        documentType: 'scan-history',
+        businessName: business?.name || 'Business',
+        location: `${business?.name || 'Business'} - All Locations`,
+        dateRange: { start: startDate, end: endDate },
+        tableHeaders: ['Date & Time', 'Location'],
+        tableRows,
+        showLegend: false,
+      });
 
       if (Platform.OS === 'web') {
-        // Add toolbar with close button and print button for web
-        const htmlWithToolbar = html.replace('</head>', `
-          <style>
-            .pdf-toolbar {
-              position: fixed;
-              top: 0;
-              left: 0;
-              right: 0;
-              background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
-              padding: 12px 20px;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              z-index: 9999;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            }
-            .pdf-toolbar-title {
-              color: white;
-              font-size: 14px;
-              font-weight: 600;
-            }
-            .pdf-toolbar-buttons {
-              display: flex;
-              gap: 10px;
-            }
-            .pdf-toolbar button {
-              padding: 8px 16px;
-              border: none;
-              border-radius: 6px;
-              font-size: 13px;
-              font-weight: 600;
-              cursor: pointer;
-              transition: opacity 0.2s;
-            }
-            .pdf-toolbar button:hover {
-              opacity: 0.9;
-            }
-            .btn-print {
-              background: white;
-              color: #7c3aed;
-            }
-            .btn-close {
-              background: #dc2626;
-              color: white;
-            }
-            @media print {
-              .pdf-toolbar { display: none !important; }
-              body { padding-top: 20px !important; }
-            }
-          </style>
-        </head>`).replace('<body>', `<body style="padding-top: 60px;">
-          <div class="pdf-toolbar">
-            <span class="pdf-toolbar-title">QR Scan History Report</span>
-            <div class="pdf-toolbar-buttons">
-              <button class="btn-print" onclick="window.print()">Print / Save PDF</button>
-              <button class="btn-close" onclick="window.close()">Close / Fermer</button>
-            </div>
-          </div>`);
-
+        const htmlWithToolbar = addWebToolbar(html, 'QR Scan History Report');
         const printWindow = window.open('', '_blank');
         if (printWindow) {
           printWindow.document.write(htmlWithToolbar);

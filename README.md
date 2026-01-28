@@ -350,16 +350,22 @@ The Manager Dashboard includes an **Inspector Mode** for generating professional
 4. Tap "Generate Audit Report (PDF)"
 5. The PDF will be generated and can be shared/emailed directly to WorkSafeNB officers
 
-**PDF Report Features:**
-- Professional header with business name and audit period
-- Summary statistics: Total Logs, Complete, Attention Required, Compliance Rate
-- Detailed table with fixed column widths to prevent text cut-off
-- Checklist legend with abbreviations (HS, TP, BN, SD, FX, WT, FL, VL)
-- Color-coded status badges (Green: Complete, Yellow: Attention Required)
-- Page padding and proper formatting for print
-- Data fully loaded before PDF generation to prevent export errors
-- Footer with generation timestamp
-- Formatted for landscape letter size paper
+**PDF Report Features (Unified Template):**
+- **Unified Header**: Acadia CleanIQ logo on top left, Client Logo placeholder on top right
+- **Document Title**: "Official Compliance Audit" or "Cleaning History Report"
+- **Location/Business Info**: Business name and location displayed prominently
+- **Date Range**: Human-readable format (e.g., "January 1, 2026 – January 28, 2026")
+- **Dark Emerald Header Bar**: Column titles (HS, TP, BN, etc.) centered over checkmarks
+- **Emerald Zebra Striping**: Alternating rows use Emerald-50 mint background for readability
+- **Standardized Status Labels**:
+  - "Complete" (Green) - All checklist items passed
+  - "Incomplete" (Red) - One or more items unchecked
+  - "Attention Required" (Yellow) - Needs manager review
+- **Montserrat Font**: Clean sans-serif font throughout
+- **Footer**: Legend and "Generated on [date]" moved to a clean footer section
+- **Checklist Legend**: HS, TP, BN, SD, FX, WT, FL, VL abbreviations with bilingual descriptions
+- **Web Toolbar**: Close/Print buttons for viewing PDF in browser
+- **Mobile Share**: Native sharing on iOS/Android
 
 ## Testing Email Alerts
 
