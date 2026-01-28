@@ -691,3 +691,220 @@ export async function sendNewWashroomNotification(params: NewWashroomParams): Pr
   }
 }
 
+// ============ TRIAL EXPIRY REMINDER EMAIL ============
+
+interface TrialReminderParams {
+  businessName: string;
+  businessEmail: string;
+  daysRemaining: number;
+  trialEndsAt: Date;
+}
+
+/**
+ * Generate HTML email template for trial expiry reminder
+ */
+function generateTrialReminderHTML(params: TrialReminderParams): string {
+  const { businessName, daysRemaining, trialEndsAt } = params;
+
+  const formattedEndDate = trialEndsAt.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trial Ending Soon - Acadia CleanIQ</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f1f5f9;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f1f5f9; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+
+          <!-- Header -->
+          <tr>
+            <td style="background-color: #059669; padding: 32px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold;">ACADIA CleanIQ</h1>
+              <div style="width: 60px; height: 4px; background-color: #d4af37; margin: 16px auto 0;"></div>
+            </td>
+          </tr>
+
+          <!-- Reminder Banner -->
+          <tr>
+            <td style="background-color: #fef3c7; padding: 20px 32px; border-bottom: 2px solid #f59e0b;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align: middle;">
+                    <span style="font-size: 24px; margin-right: 12px;">⏰</span>
+                  </td>
+                  <td style="vertical-align: middle; width: 100%;">
+                    <h2 style="color: #92400e; margin: 0; font-size: 20px; font-weight: bold;">Your Free Trial Ends Soon</h2>
+                    <p style="color: #a16207; margin: 4px 0 0; font-size: 14px;">${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remaining</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Content -->
+          <tr>
+            <td style="padding: 32px;">
+
+              <!-- Business Info -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+                <tr>
+                  <td style="background-color: #f8fafc; border-radius: 12px; padding: 20px;">
+                    <p style="color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 8px;">Business Account</p>
+                    <h3 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: bold;">${businessName}</h3>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Trial End Date -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+                <tr>
+                  <td style="background-color: #fef3c7; border: 1px solid #fde68a; border-radius: 12px; padding: 20px; text-align: center;">
+                    <p style="color: #92400e; font-size: 14px; font-weight: 600; margin: 0 0 8px;">Trial Expires On</p>
+                    <p style="color: #78350f; font-size: 24px; font-weight: bold; margin: 0;">${formattedEndDate}</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Message -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+                <tr>
+                  <td>
+                    <p style="color: #334155; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+                      Hi there,
+                    </p>
+                    <p style="color: #334155; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+                      We hope you've been enjoying Acadia CleanIQ! Your 30-day free trial for <strong>${businessName}</strong> will end in <strong>${daysRemaining} day${daysRemaining === 1 ? '' : 's'}</strong>.
+                    </p>
+                    <p style="color: #334155; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+                      To continue using our washroom compliance tracking system without interruption, please contact us to activate your subscription.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Benefits Reminder -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+                <tr>
+                  <td style="background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 12px; padding: 20px;">
+                    <p style="color: #065f46; font-size: 14px; font-weight: 600; margin: 0 0 12px;">With your subscription, you'll continue to get:</p>
+                    <ul style="margin: 0; padding-left: 20px; color: #047857;">
+                      <li style="margin-bottom: 8px;">Unlimited washroom locations</li>
+                      <li style="margin-bottom: 8px;">Real-time cleaning compliance tracking</li>
+                      <li style="margin-bottom: 8px;">Instant alert notifications</li>
+                      <li style="margin-bottom: 8px;">PDF audit reports for inspectors</li>
+                      <li style="margin-bottom: 0;">QR code scanning system</li>
+                    </ul>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Contact Info -->
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center">
+                    <a href="mailto:jay@acadiacleaniq.ca?subject=Subscription%20Activation%20-%20${encodeURIComponent(businessName)}" style="display: inline-block; background-color: #059669; color: #ffffff; font-size: 16px; font-weight: bold; text-decoration: none; padding: 16px 32px; border-radius: 12px;">
+                      Contact Us to Subscribe
+                    </a>
+                    <p style="color: #64748b; font-size: 14px; margin: 16px 0 0;">
+                      Or email us directly at: <a href="mailto:jay@acadiacleaniq.ca" style="color: #059669;">jay@acadiacleaniq.ca</a>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f8fafc; padding: 24px 32px; text-align: center; border-top: 1px solid #e2e8f0;">
+              <p style="color: #64748b; font-size: 12px; margin: 0;">Questions? Reply to this email or contact jay@acadiacleaniq.ca</p>
+              <p style="color: #94a3b8; font-size: 11px; margin: 8px 0 0;">Acadia CleanIQ - NB Department of Health Compliance System</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+}
+
+/**
+ * Send trial expiry reminder email to admin (jay@acadiacleaniq.ca)
+ * This is sent when a business has 7 days or less remaining in their trial
+ */
+export async function sendTrialExpiryReminderToAdmin(params: TrialReminderParams): Promise<{ success: boolean; error?: string }> {
+  try {
+    const htmlContent = generateTrialReminderHTML(params);
+
+    // Send to admin
+    const result = await sendEmailViaAPI({
+      to: ADMIN_EMAIL,
+      subject: `[Trial Ending] ${params.businessName} - ${params.daysRemaining} days remaining`,
+      html: htmlContent,
+      text: `Trial Expiry Reminder\n\nBusiness: ${params.businessName}\nEmail: ${params.businessEmail}\nDays Remaining: ${params.daysRemaining}\nTrial Ends: ${params.trialEndsAt.toLocaleDateString()}\n\nPlease contact this business about their subscription.`,
+    });
+
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.error || 'Failed to send reminder'
+      };
+    }
+
+    return { success: true };
+
+  } catch (error) {
+    return {
+      success: false,
+      error: 'Failed to send trial expiry reminder.'
+    };
+  }
+}
+
+/**
+ * Send trial expiry reminder email to the business owner
+ */
+export async function sendTrialExpiryReminderToBusiness(params: TrialReminderParams): Promise<{ success: boolean; error?: string }> {
+  try {
+    const htmlContent = generateTrialReminderHTML(params);
+
+    // Send to business email
+    const result = await sendEmailViaAPI({
+      to: params.businessEmail,
+      subject: `Your Acadia CleanIQ Trial Ends in ${params.daysRemaining} Day${params.daysRemaining === 1 ? '' : 's'}`,
+      html: htmlContent,
+      text: `Your Acadia CleanIQ trial for ${params.businessName} ends in ${params.daysRemaining} days on ${params.trialEndsAt.toLocaleDateString()}.\n\nTo continue using our service, please contact us at jay@acadiacleaniq.ca to activate your subscription.`,
+    });
+
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.error || 'Failed to send reminder'
+      };
+    }
+
+    return { success: true };
+
+  } catch (error) {
+    return {
+      success: false,
+      error: 'Failed to send trial expiry reminder.'
+    };
+  }
+}
+

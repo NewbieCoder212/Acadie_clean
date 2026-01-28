@@ -36,6 +36,8 @@ import {
   ChevronUp,
   Download,
   FileText,
+  Calendar,
+  CreditCard,
 } from 'lucide-react-native';
 import * as Linking from 'expo-linking';
 import * as Clipboard from 'expo-clipboard';
@@ -66,6 +68,10 @@ import {
   QrScanStatRow,
   getQrScanLogsForLocations,
   QrScanLogRow,
+  activateSubscription,
+  extendSubscription,
+  updateSubscriptionStatus,
+  SubscriptionStatus,
 } from '@/lib/supabase';
 
 const COLORS = {
@@ -119,6 +125,9 @@ export default function BusinessDetailScreen() {
   const [selectedWashroom, setSelectedWashroom] = useState<WashroomRow | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isExportingScanHistory, setIsExportingScanHistory] = useState(false);
+
+  // Subscription management
+  const [isUpdatingSubscription, setIsUpdatingSubscription] = useState(false);
 
   // Generate public URL for washroom
   const getWashroomUrl = (washroomId: string) => {
@@ -469,6 +478,127 @@ export default function BusinessDetailScreen() {
     } finally {
       setIsExportingScanHistory(false);
     }
+  };
+
+  // Subscription helper functions
+  const getSubscriptionDaysRemaining = () => {
+    if (!business) return null;
+
+    let expiryDate: Date | null = null;
+    if (business.subscription_status === 'trial' && business.trial_ends_at) {
+      expiryDate = new Date(business.trial_ends_at);
+    } else if (business.subscription_status === 'active' && business.subscription_expires_at) {
+      expiryDate = new Date(business.subscription_expires_at);
+    }
+
+    if (!expiryDate) return null;
+
+    const now = new Date();
+    const diffTime = expiryDate.getTime() - now.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  const getSubscriptionStatusColor = () => {
+    if (!business) return { bg: '#f1f5f9', text: '#64748b', border: '#e2e8f0' };
+
+    const daysRemaining = getSubscriptionDaysRemaining();
+
+    switch (business.subscription_status) {
+      case 'active':
+        return { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0' };
+      case 'trial':
+        if (daysRemaining !== null && daysRemaining <= 7) {
+          return { bg: '#fef3c7', text: '#d97706', border: '#fde68a' }; // Warning - expiring soon
+        }
+        return { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' };
+      case 'expired':
+        return { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' };
+      case 'cancelled':
+        return { bg: '#f1f5f9', text: '#64748b', border: '#e2e8f0' };
+      default:
+        return { bg: '#f1f5f9', text: '#64748b', border: '#e2e8f0' };
+    }
+  };
+
+  const getSubscriptionStatusLabel = () => {
+    if (!business) return 'Unknown';
+
+    const daysRemaining = getSubscriptionDaysRemaining();
+
+    switch (business.subscription_status) {
+      case 'active':
+        return daysRemaining !== null ? `Active (${daysRemaining} days left)` : 'Active';
+      case 'trial':
+        return daysRemaining !== null ? `Trial (${daysRemaining} days left)` : 'Trial';
+      case 'expired':
+        return 'Expired';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return 'Unknown';
+    }
+  };
+
+  const handleActivateSubscription = async (months: number) => {
+    if (!business) return;
+
+    Alert.alert(
+      'Activate Subscription',
+      `Activate ${months}-month subscription for "${business.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Activate',
+          onPress: async () => {
+            setIsUpdatingSubscription(true);
+            try {
+              const result = await activateSubscription(business.id, months);
+              if (result.success) {
+                Alert.alert('Success', `Subscription activated for ${months} months!`);
+                loadData();
+              } else {
+                Alert.alert('Error', result.error || 'Failed to activate subscription');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Network error. Please try again.');
+            } finally {
+              setIsUpdatingSubscription(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleExtendSubscription = async (months: number) => {
+    if (!business) return;
+
+    Alert.alert(
+      'Extend Subscription',
+      `Extend subscription by ${months} months for "${business.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Extend',
+          onPress: async () => {
+            setIsUpdatingSubscription(true);
+            try {
+              const result = await extendSubscription(business.id, months);
+              if (result.success) {
+                Alert.alert('Success', `Subscription extended by ${months} months!`);
+                loadData();
+              } else {
+                Alert.alert('Error', result.error || 'Failed to extend subscription');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Network error. Please try again.');
+            } finally {
+              setIsUpdatingSubscription(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleViewPublicPage = (locationId: string) => {
@@ -982,6 +1112,84 @@ export default function BusinessDetailScreen() {
                 <Text className="text-sm" style={{ color: COLORS.textDark }}>
                   {business.email}
                 </Text>
+              </View>
+
+              {/* Subscription Status */}
+              <View className="mb-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
+                <Text className="text-xs font-medium mb-2" style={{ color: COLORS.textMuted }}>Subscription Status</Text>
+                <View
+                  className="flex-row items-center px-3 py-2 rounded-lg"
+                  style={{
+                    backgroundColor: getSubscriptionStatusColor().bg,
+                    borderWidth: 1,
+                    borderColor: getSubscriptionStatusColor().border,
+                  }}
+                >
+                  <CreditCard size={16} color={getSubscriptionStatusColor().text} />
+                  <Text className="text-sm font-semibold ml-2" style={{ color: getSubscriptionStatusColor().text }}>
+                    {getSubscriptionStatusLabel()}
+                  </Text>
+                </View>
+
+                {/* Trial/Subscription dates */}
+                {business.subscription_status === 'trial' && business.trial_ends_at && (
+                  <View className="flex-row items-center mt-2">
+                    <Calendar size={12} color={COLORS.textMuted} />
+                    <Text className="text-xs ml-1" style={{ color: COLORS.textMuted }}>
+                      Trial ends: {new Date(business.trial_ends_at).toLocaleDateString()}
+                    </Text>
+                  </View>
+                )}
+                {business.subscription_status === 'active' && business.subscription_expires_at && (
+                  <View className="flex-row items-center mt-2">
+                    <Calendar size={12} color={COLORS.textMuted} />
+                    <Text className="text-xs ml-1" style={{ color: COLORS.textMuted }}>
+                      Expires: {new Date(business.subscription_expires_at).toLocaleDateString()}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Subscription Actions */}
+                <View className="flex-row gap-2 mt-3">
+                  {(business.subscription_status === 'trial' || business.subscription_status === 'expired') && (
+                    <Pressable
+                      onPress={() => handleActivateSubscription(12)}
+                      disabled={isUpdatingSubscription}
+                      className="flex-1 flex-row items-center justify-center py-2 rounded-lg active:opacity-80"
+                      style={{ backgroundColor: '#059669' }}
+                    >
+                      {isUpdatingSubscription ? (
+                        <ActivityIndicator size="small" color="#ffffff" />
+                      ) : (
+                        <>
+                          <Check size={14} color="#ffffff" />
+                          <Text className="text-xs font-semibold ml-1" style={{ color: '#ffffff' }}>
+                            Activate (12 mo)
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                  )}
+                  {business.subscription_status === 'active' && (
+                    <Pressable
+                      onPress={() => handleExtendSubscription(12)}
+                      disabled={isUpdatingSubscription}
+                      className="flex-1 flex-row items-center justify-center py-2 rounded-lg active:opacity-80"
+                      style={{ backgroundColor: '#2563eb' }}
+                    >
+                      {isUpdatingSubscription ? (
+                        <ActivityIndicator size="small" color="#ffffff" />
+                      ) : (
+                        <>
+                          <Plus size={14} color="#ffffff" />
+                          <Text className="text-xs font-semibold ml-1" style={{ color: '#ffffff' }}>
+                            Extend (12 mo)
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                  )}
+                </View>
               </View>
 
               {/* Manager Password - Editable */}

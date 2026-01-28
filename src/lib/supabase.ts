@@ -735,6 +735,7 @@ export async function getLogsForDateRange(
 
 // Business table types
 export type SubscriptionTier = 'standard' | 'premium';
+export type SubscriptionStatus = 'trial' | 'active' | 'expired' | 'cancelled';
 
 export interface BusinessRow {
   id: string;
@@ -745,6 +746,11 @@ export interface BusinessRow {
   is_admin: boolean;
   is_active: boolean;
   subscription_tier: SubscriptionTier;
+  subscription_status: SubscriptionStatus;
+  trial_start_date: string | null;
+  trial_ends_at: string | null;
+  subscription_expires_at: string | null;
+  last_trial_reminder_sent_at: string | null;
   staff_pin_hash: string | null;
   staff_pin_display: string | null;
   created_at: string;
@@ -759,6 +765,10 @@ export interface SafeBusinessRow {
   is_admin: boolean;
   is_active: boolean;
   subscription_tier: SubscriptionTier;
+  subscription_status: SubscriptionStatus;
+  trial_start_date: string | null;
+  trial_ends_at: string | null;
+  subscription_expires_at: string | null;
   staff_pin_display: string | null;
   created_at: string;
 }
@@ -855,6 +865,10 @@ export async function loginBusiness(email: string, password: string): Promise<{ 
       is_admin: data.is_admin,
       is_active: data.is_active,
       subscription_tier: data.subscription_tier ?? 'standard',
+      subscription_status: data.subscription_status ?? 'trial',
+      trial_start_date: data.trial_start_date ?? null,
+      trial_ends_at: data.trial_ends_at ?? null,
+      subscription_expires_at: data.subscription_expires_at ?? null,
       staff_pin_display: data.staff_pin_display ?? null,
       created_at: data.created_at,
     };
@@ -1810,6 +1824,190 @@ export async function getQrScanHourlyBreakdown(
     }));
 
     return { success: true, data: breakdown };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// ============ SUBSCRIPTION MANAGEMENT ============
+
+// Get businesses that need trial reminder (7 days or less remaining)
+export interface TrialReminderBusiness {
+  id: string;
+  name: string;
+  email: string;
+  trial_ends_at: string;
+  days_remaining: number;
+}
+
+export async function getBusinessesNeedingTrialReminder(): Promise<{ success: boolean; data?: TrialReminderBusiness[]; error?: string }> {
+  try {
+    const { data, error } = await supabase
+      .from('businesses_needing_trial_reminder')
+      .select('*');
+
+    if (error) {
+      // View might not exist yet
+      if (error.code === '42P01') {
+        return { success: true, data: [] };
+      }
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data ?? [] };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Mark trial reminder as sent
+export async function markTrialReminderSent(businessId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('businesses')
+      .update({ last_trial_reminder_sent_at: new Date().toISOString() })
+      .eq('id', businessId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Activate subscription for a business
+export async function activateSubscription(businessId: string, months: number = 12): Promise<{ success: boolean; error?: string }> {
+  try {
+    const expiresAt = new Date();
+    expiresAt.setMonth(expiresAt.getMonth() + months);
+
+    const { error } = await supabase
+      .from('businesses')
+      .update({
+        subscription_status: 'active',
+        subscription_expires_at: expiresAt.toISOString(),
+      })
+      .eq('id', businessId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Extend subscription for a business
+export async function extendSubscription(businessId: string, months: number = 12): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Get current expiry
+    const { data: business, error: fetchError } = await supabase
+      .from('businesses')
+      .select('subscription_expires_at')
+      .eq('id', businessId)
+      .single();
+
+    if (fetchError) {
+      return { success: false, error: fetchError.message };
+    }
+
+    // Calculate new expiry date
+    const baseDate = business?.subscription_expires_at && new Date(business.subscription_expires_at) > new Date()
+      ? new Date(business.subscription_expires_at)
+      : new Date();
+
+    baseDate.setMonth(baseDate.getMonth() + months);
+
+    const { error } = await supabase
+      .from('businesses')
+      .update({
+        subscription_status: 'active',
+        subscription_expires_at: baseDate.toISOString(),
+      })
+      .eq('id', businessId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Update subscription status
+export async function updateSubscriptionStatus(businessId: string, status: SubscriptionStatus): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('businesses')
+      .update({ subscription_status: status })
+      .eq('id', businessId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Get subscription status details for a business
+export async function getSubscriptionDetails(businessId: string): Promise<{
+  success: boolean;
+  data?: {
+    status: SubscriptionStatus;
+    trialEndsAt: Date | null;
+    subscriptionExpiresAt: Date | null;
+    daysRemaining: number | null;
+    isExpired: boolean;
+  };
+  error?: string;
+}> {
+  try {
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('subscription_status, trial_ends_at, subscription_expires_at')
+      .eq('id', businessId)
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const now = new Date();
+    let expiryDate: Date | null = null;
+    let daysRemaining: number | null = null;
+
+    if (data.subscription_status === 'trial' && data.trial_ends_at) {
+      expiryDate = new Date(data.trial_ends_at);
+    } else if (data.subscription_status === 'active' && data.subscription_expires_at) {
+      expiryDate = new Date(data.subscription_expires_at);
+    }
+
+    if (expiryDate) {
+      daysRemaining = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    const isExpired = expiryDate ? expiryDate < now : false;
+
+    return {
+      success: true,
+      data: {
+        status: data.subscription_status,
+        trialEndsAt: data.trial_ends_at ? new Date(data.trial_ends_at) : null,
+        subscriptionExpiresAt: data.subscription_expires_at ? new Date(data.subscription_expires_at) : null,
+        daysRemaining,
+        isExpired,
+      },
+    };
   } catch (error) {
     return { success: false, error: String(error) };
   }

@@ -55,8 +55,11 @@ import {
   ReportedIssueRow,
   QrScanStatRow,
   SubscriptionTier,
+  getBusinessesNeedingTrialReminder,
+  markTrialReminderSent,
 } from '@/lib/supabase';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
+import { sendTrialExpiryReminderToAdmin } from '@/lib/email';
 
 const COLORS = {
   primary: '#7c3aed',
@@ -173,10 +176,47 @@ export default function AdminDashboardScreen() {
       if (issuesResult.success) {
         setIssues(issuesResult.data ?? []);
       }
+
+      // Check for businesses with expiring trials and send email reminders
+      checkAndSendTrialReminders();
     } catch (error) {
       console.error('[Admin] Load data error:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Check for businesses needing trial reminders and send emails
+  const checkAndSendTrialReminders = async () => {
+    try {
+      const result = await getBusinessesNeedingTrialReminder();
+      if (!result.success || !result.data || result.data.length === 0) {
+        return; // No businesses need reminders
+      }
+
+      console.log(`[Admin] Found ${result.data.length} businesses needing trial reminders`);
+
+      // Send email for each business
+      for (const business of result.data) {
+        try {
+          const emailResult = await sendTrialExpiryReminderToAdmin({
+            businessName: business.name,
+            businessEmail: business.email,
+            daysRemaining: Math.floor(business.days_remaining),
+            trialEndsAt: new Date(business.trial_ends_at),
+          });
+
+          if (emailResult.success) {
+            // Mark reminder as sent so we don't send again for 7 days
+            await markTrialReminderSent(business.id);
+            console.log(`[Admin] Trial reminder sent for: ${business.name}`);
+          }
+        } catch (emailError) {
+          console.error(`[Admin] Failed to send reminder for ${business.name}:`, emailError);
+        }
+      }
+    } catch (error) {
+      console.error('[Admin] Error checking trial reminders:', error);
     }
   };
 
