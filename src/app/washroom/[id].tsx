@@ -56,7 +56,7 @@ import {
   WashroomRow,
   autoResolveLogsForLocation,
   autoResolveIssuesForLocation,
-  trackQrScan,
+  trackQrScanDetailed,
   getOpenIssuesForLocation,
   ReportedIssueRow,
 } from '@/lib/supabase';
@@ -278,7 +278,7 @@ export default function WashroomPublicScreen() {
           // Track QR scan only for public views (not admin)
           // Fire and forget - don't block page load
           if (!isAdminView) {
-            trackQrScan(id).catch(err => {
+            trackQrScanDetailed(id).catch((err: Error) => {
               console.log('[QR Scan] Tracking failed (non-blocking):', err);
             });
           }

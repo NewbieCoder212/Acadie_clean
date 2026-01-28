@@ -31,6 +31,9 @@ import {
   Copy,
   Link,
   Eye,
+  Clock,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react-native';
 import * as Linking from 'expo-linking';
 import * as Clipboard from 'expo-clipboard';
@@ -56,6 +59,8 @@ import {
   updateBusinessPassword,
   getQrScanStatsForLocations,
   QrScanStatRow,
+  getQrScanLogsForLocations,
+  QrScanLogRow,
 } from '@/lib/supabase';
 
 const COLORS = {
@@ -82,9 +87,11 @@ export default function BusinessDetailScreen() {
   const [allLogs, setAllLogs] = useState<CleaningLogRow[]>([]);
   const [allIssues, setAllIssues] = useState<ReportedIssueRow[]>([]);
   const [qrScanStats, setQrScanStats] = useState<QrScanStatRow[]>([]);
+  const [qrScanLogs, setQrScanLogs] = useState<QrScanLogRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [showScanHistory, setShowScanHistory] = useState(false);
 
   // New location form
   const [newLocationName, setNewLocationName] = useState('');
@@ -151,11 +158,12 @@ export default function BusinessDetailScreen() {
             // Get logs using washroom IDs (not the legacy getLogsForBusiness which uses locations table)
             const washroomIds = washroomsResult.data.map(w => w.id);
             if (washroomIds.length > 0) {
-              // Fetch logs, issues, and QR scan stats in parallel
-              const [logsResult, issuesResult, qrStatsResult] = await Promise.all([
+              // Fetch logs, issues, QR scan stats, and detailed scan logs in parallel
+              const [logsResult, issuesResult, qrStatsResult, qrLogsResult] = await Promise.all([
                 getLogsForBusinessByName(foundBusiness.name),
                 getIssuesForBusinessByName(foundBusiness.name),
                 getQrScanStatsForLocations(washroomIds),
+                getQrScanLogsForLocations(washroomIds, { limit: 50 }),
               ]);
 
               if (logsResult.success && logsResult.data) {
@@ -166,6 +174,9 @@ export default function BusinessDetailScreen() {
               }
               if (qrStatsResult.success && qrStatsResult.data) {
                 setQrScanStats(qrStatsResult.data);
+              }
+              if (qrLogsResult.success && qrLogsResult.data) {
+                setQrScanLogs(qrLogsResult.data);
               }
             }
           }
@@ -245,6 +256,24 @@ export default function BusinessDetailScreen() {
 
   const getOpenIssuesForLocation = (locationId: string) => {
     return allIssues.filter(issue => issue.location_id === locationId && issue.status === 'open').length;
+  };
+
+  // Get washroom name by ID
+  const getWashroomName = (locationId: string) => {
+    const washroom = washrooms.find(w => w.id === locationId);
+    return washroom?.room_name || 'Unknown';
+  };
+
+  // Format scan time for display
+  const formatScanTime = (timestamp: string) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
   };
 
   const handleViewPublicPage = (locationId: string) => {
@@ -489,6 +518,84 @@ export default function BusinessDetailScreen() {
               </Text>
             </View>
           </Animated.View>
+
+          {/* Scan History Section */}
+          {qrScanLogs.length > 0 && (
+            <Animated.View
+              entering={FadeInDown.delay(75).duration(400)}
+              className="mb-6"
+            >
+              <Pressable
+                onPress={() => setShowScanHistory(!showScanHistory)}
+                className="flex-row items-center justify-between p-4 rounded-2xl active:opacity-80"
+                style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe' }}
+              >
+                <View className="flex-row items-center">
+                  <Clock size={20} color="#2563eb" />
+                  <Text className="font-semibold ml-2" style={{ color: '#1d4ed8' }}>
+                    Recent Scan History
+                  </Text>
+                  <View className="ml-2 px-2 py-0.5 rounded-full" style={{ backgroundColor: '#2563eb' }}>
+                    <Text className="text-xs font-bold" style={{ color: '#ffffff' }}>
+                      {qrScanLogs.length}
+                    </Text>
+                  </View>
+                </View>
+                {showScanHistory ? (
+                  <ChevronUp size={20} color="#2563eb" />
+                ) : (
+                  <ChevronDown size={20} color="#2563eb" />
+                )}
+              </Pressable>
+
+              {showScanHistory && (
+                <View
+                  className="mt-2 rounded-2xl overflow-hidden"
+                  style={{ backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.glassBorder }}
+                >
+                  {qrScanLogs.slice(0, 20).map((log, index) => (
+                    <View
+                      key={log.id}
+                      className="flex-row items-center justify-between px-4 py-3"
+                      style={{
+                        borderBottomWidth: index < Math.min(qrScanLogs.length, 20) - 1 ? 1 : 0,
+                        borderBottomColor: COLORS.glassBorder,
+                      }}
+                    >
+                      <View className="flex-row items-center flex-1">
+                        <View
+                          className="w-8 h-8 rounded-full items-center justify-center"
+                          style={{ backgroundColor: '#eff6ff' }}
+                        >
+                          <QrCode size={14} color="#2563eb" />
+                        </View>
+                        <View className="ml-3 flex-1">
+                          <Text className="text-sm font-medium" style={{ color: COLORS.textDark }}>
+                            {getWashroomName(log.location_id)}
+                          </Text>
+                          <Text className="text-xs" style={{ color: COLORS.textMuted }}>
+                            QR Code Scanned
+                          </Text>
+                        </View>
+                      </View>
+                      <View className="items-end">
+                        <Text className="text-sm font-medium" style={{ color: '#2563eb' }}>
+                          {formatScanTime(log.scanned_at)}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                  {qrScanLogs.length > 20 && (
+                    <View className="px-4 py-3" style={{ backgroundColor: '#f8fafc' }}>
+                      <Text className="text-xs text-center" style={{ color: COLORS.textMuted }}>
+                        Showing 20 of {qrScanLogs.length} scans
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </Animated.View>
+          )}
 
           {/* Add Location Button */}
           <Animated.View

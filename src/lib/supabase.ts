@@ -1648,3 +1648,169 @@ export async function getQrScanStatsForBusiness(businessName: string): Promise<{
     return { success: false, error: String(error) };
   }
 }
+
+// ============ QR SCAN DETAILED LOGS (with timestamps) ============
+
+export interface QrScanLogRow {
+  id: string;
+  location_id: string;
+  scanned_at: string;
+  created_at: string;
+}
+
+// Track a QR scan with detailed timestamp logging
+// This logs to both the counter table (for fast stats) and detailed logs table (for time-based reports)
+export async function trackQrScanDetailed(locationId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+
+    // Insert detailed log entry
+    const { error: logError } = await supabase
+      .from('qr_scan_logs')
+      .insert([{
+        id: generateId(),
+        location_id: locationId,
+        scanned_at: now.toISOString(),
+        created_at: now.toISOString(),
+      }]);
+
+    if (logError) {
+      // If table doesn't exist, just log and continue with counter
+      console.log('[QR Scan] Detailed log insert failed:', logError.message);
+    }
+
+    // Also update the counter table for fast aggregate stats
+    const { error: counterError } = await supabase.rpc('increment_qr_scan', {
+      p_location_id: locationId,
+      p_scan_date: today,
+    });
+
+    if (counterError) {
+      // Fall back to manual counter update if RPC doesn't exist
+      if (counterError.code === '42883' || counterError.message.includes('does not exist')) {
+        await trackQrScanFallback(locationId, today);
+      }
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Get detailed scan logs for a location (with full timestamps)
+export async function getQrScanLogsForLocation(
+  locationId: string,
+  options?: { limit?: number; startDate?: Date; endDate?: Date }
+): Promise<{ success: boolean; data?: QrScanLogRow[]; error?: string }> {
+  try {
+    let query = supabase
+      .from('qr_scan_logs')
+      .select('*')
+      .eq('location_id', locationId)
+      .order('scanned_at', { ascending: false });
+
+    if (options?.startDate) {
+      query = query.gte('scanned_at', options.startDate.toISOString());
+    }
+    if (options?.endDate) {
+      query = query.lte('scanned_at', options.endDate.toISOString());
+    }
+    if (options?.limit) {
+      query = query.limit(options.limit);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data ?? [] };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Get detailed scan logs for multiple locations
+export async function getQrScanLogsForLocations(
+  locationIds: string[],
+  options?: { limit?: number; startDate?: Date; endDate?: Date }
+): Promise<{ success: boolean; data?: QrScanLogRow[]; error?: string }> {
+  try {
+    if (locationIds.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    let query = supabase
+      .from('qr_scan_logs')
+      .select('*')
+      .in('location_id', locationIds)
+      .order('scanned_at', { ascending: false });
+
+    if (options?.startDate) {
+      query = query.gte('scanned_at', options.startDate.toISOString());
+    }
+    if (options?.endDate) {
+      query = query.lte('scanned_at', options.endDate.toISOString());
+    }
+    if (options?.limit) {
+      query = query.limit(options.limit);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data ?? [] };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Get hourly breakdown of scans for a location (for charts)
+export async function getQrScanHourlyBreakdown(
+  locationId: string,
+  date: Date
+): Promise<{ success: boolean; data?: { hour: number; count: number }[]; error?: string }> {
+  try {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const { data, error } = await supabase
+      .from('qr_scan_logs')
+      .select('scanned_at')
+      .eq('location_id', locationId)
+      .gte('scanned_at', startOfDay.toISOString())
+      .lte('scanned_at', endOfDay.toISOString());
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    // Group by hour
+    const hourlyCount: { [hour: number]: number } = {};
+    for (let i = 0; i < 24; i++) {
+      hourlyCount[i] = 0;
+    }
+
+    (data ?? []).forEach(log => {
+      const hour = new Date(log.scanned_at).getHours();
+      hourlyCount[hour]++;
+    });
+
+    const breakdown = Object.entries(hourlyCount).map(([hour, count]) => ({
+      hour: parseInt(hour),
+      count,
+    }));
+
+    return { success: true, data: breakdown };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
