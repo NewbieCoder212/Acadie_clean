@@ -451,12 +451,75 @@ export default function BusinessDetailScreen() {
       `;
 
       if (Platform.OS === 'web') {
-        // Web: Open in new window for printing/saving
+        // Add toolbar with close button and print button for web
+        const htmlWithToolbar = html.replace('</head>', `
+          <style>
+            .pdf-toolbar {
+              position: fixed;
+              top: 0;
+              left: 0;
+              right: 0;
+              background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+              padding: 12px 20px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              z-index: 9999;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            }
+            .pdf-toolbar-title {
+              color: white;
+              font-size: 14px;
+              font-weight: 600;
+            }
+            .pdf-toolbar-buttons {
+              display: flex;
+              gap: 10px;
+            }
+            .pdf-toolbar button {
+              padding: 8px 16px;
+              border: none;
+              border-radius: 6px;
+              font-size: 13px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: opacity 0.2s;
+            }
+            .pdf-toolbar button:hover {
+              opacity: 0.9;
+            }
+            .btn-print {
+              background: white;
+              color: #7c3aed;
+            }
+            .btn-close {
+              background: #dc2626;
+              color: white;
+            }
+            @media print {
+              .pdf-toolbar { display: none !important; }
+              body { padding-top: 20px !important; }
+            }
+          </style>
+        </head>`).replace('<body>', `<body style="padding-top: 60px;">
+          <div class="pdf-toolbar">
+            <span class="pdf-toolbar-title">QR Scan History Report</span>
+            <div class="pdf-toolbar-buttons">
+              <button class="btn-print" onclick="window.print()">Print / Save PDF</button>
+              <button class="btn-close" onclick="window.close()">Close / Fermer</button>
+            </div>
+          </div>`);
+
         const printWindow = window.open('', '_blank');
         if (printWindow) {
-          printWindow.document.write(html);
+          printWindow.document.write(htmlWithToolbar);
           printWindow.document.close();
-          printWindow.print();
+          printWindow.focus();
+        } else {
+          Alert.alert(
+            'Popup Blocked',
+            'Please allow popups for this site to view the PDF report.',
+          );
         }
       } else {
         // Native: Generate PDF file and share

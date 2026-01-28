@@ -856,49 +856,77 @@ export default function ManagerDashboard() {
       `;
 
       if (Platform.OS === 'web') {
+        // Add toolbar with close button and print button for web
+        const htmlWithToolbar = html.replace('</head>', `
+          <style>
+            .pdf-toolbar {
+              position: fixed;
+              top: 0;
+              left: 0;
+              right: 0;
+              background: linear-gradient(135deg, #065f46 0%, #059669 100%);
+              padding: 12px 20px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              z-index: 9999;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            }
+            .pdf-toolbar-title {
+              color: white;
+              font-size: 14px;
+              font-weight: 600;
+            }
+            .pdf-toolbar-buttons {
+              display: flex;
+              gap: 10px;
+            }
+            .pdf-toolbar button {
+              padding: 8px 16px;
+              border: none;
+              border-radius: 6px;
+              font-size: 13px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: opacity 0.2s;
+            }
+            .pdf-toolbar button:hover {
+              opacity: 0.9;
+            }
+            .btn-print {
+              background: white;
+              color: #065f46;
+            }
+            .btn-close {
+              background: #dc2626;
+              color: white;
+            }
+            @media print {
+              .pdf-toolbar { display: none !important; }
+              body { padding-top: 12px !important; }
+            }
+          </style>
+        </head>`).replace('<body>', `<body style="padding-top: 60px;">
+          <div class="pdf-toolbar">
+            <span class="pdf-toolbar-title">Cleaning History Report</span>
+            <div class="pdf-toolbar-buttons">
+              <button class="btn-print" onclick="window.print()">Print / Save PDF</button>
+              <button class="btn-close" onclick="window.close()">Close / Fermer</button>
+            </div>
+          </div>`);
+
         const printWindow = window.open('', '_blank');
 
         if (printWindow && printWindow.document) {
-          printWindow.document.write(html);
+          printWindow.document.write(htmlWithToolbar);
           printWindow.document.close();
           printWindow.focus();
-
-          const triggerPrint = () => {
-            printWindow.print();
-          };
-
-          if (printWindow.document.readyState === 'complete') {
-            setTimeout(triggerPrint, 500);
-          } else {
-            printWindow.onload = () => {
-              setTimeout(triggerPrint, 300);
-            };
-            setTimeout(triggerPrint, 800);
-          }
         } else {
-          // Fallback for PWA mode
-          const iframe = document.createElement('iframe');
-          iframe.style.position = 'fixed';
-          iframe.style.right = '0';
-          iframe.style.bottom = '0';
-          iframe.style.width = '0';
-          iframe.style.height = '0';
-          iframe.style.border = 'none';
-          document.body.appendChild(iframe);
-
-          const iframeDoc = iframe.contentWindow?.document;
-          if (iframeDoc) {
-            iframeDoc.open();
-            iframeDoc.write(html);
-            iframeDoc.close();
-
-            setTimeout(() => {
-              iframe.contentWindow?.print();
-              setTimeout(() => {
-                document.body.removeChild(iframe);
-              }, 1000);
-            }, 500);
-          }
+          // Fallback: alert user that popups may be blocked
+          Alert.alert(
+            'Popup Blocked',
+            'Please allow popups for this site to view the PDF report, or try using the browser print function.',
+          );
         }
       } else {
         // Mobile: use expo-print
@@ -1130,49 +1158,77 @@ export default function ManagerDashboard() {
       `;
 
       if (Platform.OS === 'web') {
+        // Add toolbar with close button and print button for web
+        const htmlWithToolbar = html.replace('</head>', `
+          <style>
+            .pdf-toolbar {
+              position: fixed;
+              top: 0;
+              left: 0;
+              right: 0;
+              background: linear-gradient(135deg, #065f46 0%, #059669 100%);
+              padding: 12px 20px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              z-index: 9999;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            }
+            .pdf-toolbar-title {
+              color: white;
+              font-size: 14px;
+              font-weight: 600;
+            }
+            .pdf-toolbar-buttons {
+              display: flex;
+              gap: 10px;
+            }
+            .pdf-toolbar button {
+              padding: 8px 16px;
+              border: none;
+              border-radius: 6px;
+              font-size: 13px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: opacity 0.2s;
+            }
+            .pdf-toolbar button:hover {
+              opacity: 0.9;
+            }
+            .btn-print {
+              background: white;
+              color: #065f46;
+            }
+            .btn-close {
+              background: #dc2626;
+              color: white;
+            }
+            @media print {
+              .pdf-toolbar { display: none !important; }
+              body { padding-top: 12px !important; }
+            }
+          </style>
+        </head>`).replace('<body>', `<body style="padding-top: 60px;">
+          <div class="pdf-toolbar">
+            <span class="pdf-toolbar-title">1 Month Cleaning History</span>
+            <div class="pdf-toolbar-buttons">
+              <button class="btn-print" onclick="window.print()">Print / Save PDF</button>
+              <button class="btn-close" onclick="window.close()">Close / Fermer</button>
+            </div>
+          </div>`);
+
         const printWindow = window.open('', '_blank');
 
         if (printWindow && printWindow.document) {
-          printWindow.document.write(html);
+          printWindow.document.write(htmlWithToolbar);
           printWindow.document.close();
           printWindow.focus();
-
-          const triggerPrint = () => {
-            printWindow.print();
-          };
-
-          if (printWindow.document.readyState === 'complete') {
-            setTimeout(triggerPrint, 500);
-          } else {
-            printWindow.onload = () => {
-              setTimeout(triggerPrint, 300);
-            };
-            setTimeout(triggerPrint, 800);
-          }
         } else {
-          // Fallback for PWA mode
-          const iframe = document.createElement('iframe');
-          iframe.style.position = 'fixed';
-          iframe.style.right = '0';
-          iframe.style.bottom = '0';
-          iframe.style.width = '0';
-          iframe.style.height = '0';
-          iframe.style.border = 'none';
-          document.body.appendChild(iframe);
-
-          const iframeDoc = iframe.contentWindow?.document;
-          if (iframeDoc) {
-            iframeDoc.open();
-            iframeDoc.write(html);
-            iframeDoc.close();
-
-            setTimeout(() => {
-              iframe.contentWindow?.print();
-              setTimeout(() => {
-                document.body.removeChild(iframe);
-              }, 1000);
-            }, 500);
-          }
+          // Fallback: alert user that popups may be blocked
+          Alert.alert(
+            'Popup Blocked',
+            'Please allow popups for this site to view the PDF report, or try using the browser print function.',
+          );
         }
       } else {
         // Mobile: use expo-print
@@ -1414,67 +1470,77 @@ export default function ManagerDashboard() {
 
       // Handle web platform differently
       if (Platform.OS === 'web') {
-        // Try to use window.open first (works in regular browser)
-        // If blocked (PWA standalone mode), fall back to iframe print
+        // Add toolbar with close button and print button for web
+        const htmlWithToolbar = html.replace('</head>', `
+          <style>
+            .pdf-toolbar {
+              position: fixed;
+              top: 0;
+              left: 0;
+              right: 0;
+              background: linear-gradient(135deg, #065f46 0%, #059669 100%);
+              padding: 12px 20px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              z-index: 9999;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            }
+            .pdf-toolbar-title {
+              color: white;
+              font-size: 14px;
+              font-weight: 600;
+            }
+            .pdf-toolbar-buttons {
+              display: flex;
+              gap: 10px;
+            }
+            .pdf-toolbar button {
+              padding: 8px 16px;
+              border: none;
+              border-radius: 6px;
+              font-size: 13px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: opacity 0.2s;
+            }
+            .pdf-toolbar button:hover {
+              opacity: 0.9;
+            }
+            .btn-print {
+              background: white;
+              color: #065f46;
+            }
+            .btn-close {
+              background: #dc2626;
+              color: white;
+            }
+            @media print {
+              .pdf-toolbar { display: none !important; }
+              body { padding-top: 12px !important; }
+            }
+          </style>
+        </head>`).replace('<body>', `<body style="padding-top: 60px;">
+          <div class="pdf-toolbar">
+            <span class="pdf-toolbar-title">Audit Report / Rapport d'audit</span>
+            <div class="pdf-toolbar-buttons">
+              <button class="btn-print" onclick="window.print()">Print / Save PDF</button>
+              <button class="btn-close" onclick="window.close()">Close / Fermer</button>
+            </div>
+          </div>`);
+
         const printWindow = window.open('', '_blank');
 
         if (printWindow && printWindow.document) {
-          // window.open worked - use it
-          printWindow.document.write(html);
+          printWindow.document.write(htmlWithToolbar);
           printWindow.document.close();
           printWindow.focus();
-
-          // Wait for content to fully load before printing
-          const triggerPrint = () => {
-            printWindow.print();
-          };
-
-          if (printWindow.document.readyState === 'complete') {
-            setTimeout(triggerPrint, 500);
-          } else {
-            printWindow.onload = () => {
-              setTimeout(triggerPrint, 300);
-            };
-            setTimeout(triggerPrint, 800);
-          }
         } else {
-          // window.open was blocked (PWA standalone mode)
-          // Fall back to iframe-based printing
-          console.log('[PDF] window.open blocked, using iframe fallback');
-
-          // Create a hidden iframe for printing
-          const iframe = document.createElement('iframe');
-          iframe.style.position = 'fixed';
-          iframe.style.right = '0';
-          iframe.style.bottom = '0';
-          iframe.style.width = '0';
-          iframe.style.height = '0';
-          iframe.style.border = 'none';
-          document.body.appendChild(iframe);
-
-          const iframeDoc = iframe.contentWindow?.document;
-          if (iframeDoc) {
-            iframeDoc.open();
-            iframeDoc.write(html);
-            iframeDoc.close();
-
-            // Wait for content to load, then print
-            setTimeout(() => {
-              iframe.contentWindow?.focus();
-              iframe.contentWindow?.print();
-
-              // Clean up iframe after printing
-              setTimeout(() => {
-                document.body.removeChild(iframe);
-              }, 1000);
-            }, 500);
-          } else {
-            // Last resort: open in same window (will navigate away)
-            console.log('[PDF] iframe failed, opening in current window');
-            const blob = new Blob([html], { type: 'text/html' });
-            const url = URL.createObjectURL(blob);
-            window.location.href = url;
-          }
+          // Popup blocked - alert user
+          Alert.alert(
+            'Popup Blocked',
+            'Please allow popups for this site to view the PDF report, or try using the browser print function.',
+          );
         }
       } else {
         // Native platforms use expo-print
