@@ -34,9 +34,14 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
+  Download,
+  FileText,
 } from 'lucide-react-native';
 import * as Linking from 'expo-linking';
 import * as Clipboard from 'expo-clipboard';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import { Platform } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import {
   BusinessRow,
@@ -113,6 +118,7 @@ export default function BusinessDetailScreen() {
   const [showQrModal, setShowQrModal] = useState(false);
   const [selectedWashroom, setSelectedWashroom] = useState<WashroomRow | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [isExportingScanHistory, setIsExportingScanHistory] = useState(false);
 
   // Generate public URL for washroom
   const getWashroomUrl = (washroomId: string) => {
@@ -274,6 +280,195 @@ export default function BusinessDetailScreen() {
       minute: '2-digit',
       hour12: true,
     });
+  };
+
+  // Export scan history to PDF
+  const exportScanHistoryPDF = async () => {
+    if (isExportingScanHistory || qrScanLogs.length === 0) return;
+    setIsExportingScanHistory(true);
+
+    try {
+      const formatPdfDateTime = (timestamp: string) => {
+        const date = new Date(timestamp);
+        return date.toLocaleString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        });
+      };
+
+      const tableRows = qrScanLogs.map((log) => `
+        <tr>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0;">${formatPdfDateTime(log.scanned_at)}</td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0;">${getWashroomName(log.location_id)}</td>
+        </tr>
+      `).join('');
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>QR Scan History - ${business?.name || 'Business'}</title>
+            <style>
+              @page {
+                size: letter portrait;
+                margin: 15mm;
+              }
+              @media print {
+                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              }
+              * { box-sizing: border-box; margin: 0; padding: 0; }
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                color: #1e293b;
+                padding: 20px;
+                font-size: 12px;
+                background: white;
+              }
+              .header {
+                margin-bottom: 24px;
+                padding-bottom: 16px;
+                border-bottom: 2px solid #7c3aed;
+              }
+              .header h1 {
+                font-size: 24px;
+                font-weight: bold;
+                color: #1e1b4b;
+                margin-bottom: 4px;
+              }
+              .header p {
+                font-size: 14px;
+                color: #6b7280;
+              }
+              .stats {
+                display: flex;
+                gap: 16px;
+                margin-bottom: 24px;
+              }
+              .stat-box {
+                flex: 1;
+                background: #f5f3ff;
+                border: 1px solid #ddd6fe;
+                border-radius: 8px;
+                padding: 12px 16px;
+              }
+              .stat-box .label {
+                font-size: 11px;
+                color: #6b7280;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+              }
+              .stat-box .value {
+                font-size: 24px;
+                font-weight: bold;
+                color: #7c3aed;
+              }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 16px;
+              }
+              th {
+                background-color: #7c3aed;
+                color: white;
+                padding: 12px;
+                text-align: left;
+                font-size: 12px;
+                font-weight: 600;
+              }
+              tr:nth-child(even) {
+                background-color: #f8fafc;
+              }
+              .footer {
+                margin-top: 24px;
+                padding-top: 16px;
+                border-top: 1px solid #e2e8f0;
+                text-align: center;
+                color: #6b7280;
+                font-size: 10px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>${business?.name || 'Business'}</h1>
+              <p>QR Code Scan History Report</p>
+            </div>
+
+            <div class="stats">
+              <div class="stat-box">
+                <div class="label">Total Scans</div>
+                <div class="value">${qrScanLogs.length}</div>
+              </div>
+              <div class="stat-box">
+                <div class="label">Today's Scans</div>
+                <div class="value">${todayScans}</div>
+              </div>
+              <div class="stat-box">
+                <div class="label">30-Day Total</div>
+                <div class="value">${totalScans}</div>
+              </div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Date & Time</th>
+                  <th>Location</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows}
+              </tbody>
+            </table>
+
+            <div class="footer">
+              <p>Generated on ${new Date().toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+              })}</p>
+              <p style="margin-top: 4px;">Powered by CleanIQ</p>
+            </div>
+          </body>
+        </html>
+      `;
+
+      if (Platform.OS === 'web') {
+        // Web: Open in new window for printing/saving
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(html);
+          printWindow.document.close();
+          printWindow.print();
+        }
+      } else {
+        // Native: Generate PDF file and share
+        const { uri } = await Print.printToFileAsync({ html });
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'QR Scan History PDF',
+            UTI: 'com.adobe.pdf',
+          });
+        } else {
+          Alert.alert('Success', 'PDF generated successfully!');
+        }
+      }
+    } catch (error) {
+      console.error('[Admin] PDF export error:', error);
+      Alert.alert('Error', 'Failed to generate PDF. Please try again.');
+    } finally {
+      setIsExportingScanHistory(false);
+    }
   };
 
   const handleViewPublicPage = (locationId: string) => {
@@ -592,6 +787,25 @@ export default function BusinessDetailScreen() {
                       </Text>
                     </View>
                   )}
+
+                  {/* Export to PDF Button */}
+                  <Pressable
+                    onPress={exportScanHistoryPDF}
+                    disabled={isExportingScanHistory}
+                    className="flex-row items-center justify-center py-3 mx-3 my-3 rounded-xl active:opacity-80"
+                    style={{ backgroundColor: '#2563eb' }}
+                  >
+                    {isExportingScanHistory ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <>
+                        <FileText size={18} color="#ffffff" />
+                        <Text className="font-semibold ml-2" style={{ color: '#ffffff' }}>
+                          Export to PDF
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
                 </View>
               )}
             </Animated.View>
@@ -688,8 +902,8 @@ export default function BusinessDetailScreen() {
                     <View className="flex-row items-center mt-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
                       <View className="flex-1 flex-row items-center">
                         <Key size={14} color={COLORS.textMuted} />
-                        <Text className="text-sm font-mono ml-2" style={{ color: washroom.pin_display ? COLORS.textDark : COLORS.textMuted }}>
-                          PIN: {washroom.pin_display || (business?.staff_pin_display ? 'Universal' : 'Not set')}
+                        <Text className="text-sm font-mono ml-2" style={{ color: business?.staff_pin_display ? '#d97706' : (washroom.pin_display ? COLORS.textDark : COLORS.textMuted) }}>
+                          PIN: {business?.staff_pin_display ? 'Universal' : (washroom.pin_display || 'Not set')}
                         </Text>
                       </View>
                       {washroom.alert_email && (
@@ -856,7 +1070,7 @@ export default function BusinessDetailScreen() {
               )}
 
               {/* Washroom PINs Summary */}
-              {washrooms.length > 0 && (
+              {washrooms.length > 0 && !business.staff_pin_display && (
                 <View className="mb-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
                   <Text className="text-xs font-medium mb-2" style={{ color: COLORS.textMuted }}>Individual Location PINs</Text>
                   {washrooms.map((w) => (
@@ -865,7 +1079,7 @@ export default function BusinessDetailScreen() {
                       <View className="flex-row items-center">
                         <Key size={12} color={COLORS.primary} />
                         <Text className="text-sm font-mono ml-1" style={{ color: w.pin_display ? COLORS.primary : COLORS.textMuted }}>
-                          {w.pin_display || 'Use Universal PIN'}
+                          {w.pin_display || 'Not set'}
                         </Text>
                       </View>
                     </View>
