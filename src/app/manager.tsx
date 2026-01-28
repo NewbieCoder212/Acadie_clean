@@ -50,7 +50,7 @@ import {
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { sendNewWashroomNotification } from '@/lib/email';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
-import { generatePDFHTML, addWebToolbar, getCheckIcon, getStatusBadge, truncateText } from '@/lib/pdf-template';
+import { generatePDFHTML, getCheckIcon, getStatusBadge, truncateText, openPDFInNewWindow } from '@/lib/pdf-template';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
 
@@ -692,27 +692,34 @@ export default function ManagerDashboard() {
       });
 
       if (Platform.OS === 'web') {
-        const htmlWithToolbar = addWebToolbar(html, 'Cleaning History Report');
-        const printWindow = window.open('', '_blank');
-
-        if (printWindow && printWindow.document) {
-          printWindow.document.write(htmlWithToolbar);
-          printWindow.document.close();
-          printWindow.focus();
-        } else {
+        const success = openPDFInNewWindow(html);
+        if (!success) {
           Alert.alert(
-            'Popup Blocked',
-            'Please allow popups for this site to view the PDF report, or try using the browser print function.',
+            'Error',
+            'Failed to open PDF. Please try again.',
           );
         }
       } else {
-        // Mobile: use expo-print
-        const { printAsync } = await import('expo-print');
-        await printAsync({ html });
+        // Mobile: use expo-print with sharing
+        try {
+          const { uri } = await Print.printToFileAsync({ html });
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(uri, {
+              mimeType: 'application/pdf',
+              dialogTitle: 'Cleaning History Report',
+              UTI: 'com.adobe.pdf',
+            });
+          }
+        } catch (printError) {
+          console.error('[Manager] Print error:', printError);
+          Alert.alert('Error', 'Failed to generate PDF. Please try again.');
+          return;
+        }
       }
 
       setShowPremiumExportModal(false);
     } catch (error) {
+      console.error('[Manager] PDF export error:', error);
       Alert.alert('Error', 'Failed to generate PDF');
     } finally {
       setIsPremiumExporting(false);
@@ -769,25 +776,32 @@ export default function ManagerDashboard() {
       });
 
       if (Platform.OS === 'web') {
-        const htmlWithToolbar = addWebToolbar(html, '1 Month Cleaning History');
-        const printWindow = window.open('', '_blank');
-
-        if (printWindow && printWindow.document) {
-          printWindow.document.write(htmlWithToolbar);
-          printWindow.document.close();
-          printWindow.focus();
-        } else {
+        const success = openPDFInNewWindow(html);
+        if (!success) {
           Alert.alert(
-            'Popup Blocked',
-            'Please allow popups for this site to view the PDF report, or try using the browser print function.',
+            'Error',
+            'Failed to open PDF. Please try again.',
           );
         }
       } else {
-        // Mobile: use expo-print
-        const { printAsync } = await import('expo-print');
-        await printAsync({ html });
+        // Mobile: use expo-print with sharing
+        try {
+          const { uri } = await Print.printToFileAsync({ html });
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(uri, {
+              mimeType: 'application/pdf',
+              dialogTitle: '1 Month Cleaning History',
+              UTI: 'com.adobe.pdf',
+            });
+          }
+        } catch (printError) {
+          console.error('[Manager] Print error:', printError);
+          Alert.alert('Error', 'Failed to generate PDF. Please try again.');
+          return;
+        }
       }
     } catch (error) {
+      console.error('[Manager] PDF export error:', error);
       Alert.alert('Error', 'Failed to generate PDF');
     } finally {
       setExportingId(null);
@@ -857,30 +871,29 @@ export default function ManagerDashboard() {
 
       // Handle web platform differently
       if (Platform.OS === 'web') {
-        const htmlWithToolbar = addWebToolbar(html, 'Official Compliance Audit / Audit de conformité');
-        const printWindow = window.open('', '_blank');
-
-        if (printWindow && printWindow.document) {
-          printWindow.document.write(htmlWithToolbar);
-          printWindow.document.close();
-          printWindow.focus();
-        } else {
+        const success = openPDFInNewWindow(html);
+        if (!success) {
           Alert.alert(
-            'Popup Blocked',
-            'Please allow popups for this site to view the PDF report, or try using the browser print function.',
+            'Error',
+            'Failed to open PDF. Please try again.',
           );
         }
       } else {
-        // Native platforms use expo-print
-        const { uri } = await Print.printToFileAsync({ html });
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(uri, { mimeType: 'application/pdf' });
-          Alert.alert(
-            'Success',
-            'PDF exported successfully!\nPDF exporté avec succès!',
-            [{ text: 'OK' }]
-          );
+        // Native platforms use expo-print with sharing
+        try {
+          const { uri } = await Print.printToFileAsync({ html });
+          const canShare = await Sharing.isAvailableAsync();
+          if (canShare) {
+            await Sharing.shareAsync(uri, {
+              mimeType: 'application/pdf',
+              dialogTitle: 'Official Compliance Audit',
+              UTI: 'com.adobe.pdf',
+            });
+          }
+        } catch (printError) {
+          console.error('[Manager] Print error:', printError);
+          Alert.alert('Error', 'Failed to generate PDF. Please try again.');
+          return;
         }
       }
     } catch (error) {

@@ -45,7 +45,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { generatePDFHTML, addWebToolbar } from '@/lib/pdf-template';
+import { generatePDFHTML, openPDFInNewWindow } from '@/lib/pdf-template';
 import {
   BusinessRow,
   LocationRow,
@@ -335,30 +335,29 @@ export default function BusinessDetailScreen() {
       });
 
       if (Platform.OS === 'web') {
-        const htmlWithToolbar = addWebToolbar(html, 'QR Scan History Report');
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write(htmlWithToolbar);
-          printWindow.document.close();
-          printWindow.focus();
-        } else {
+        const success = openPDFInNewWindow(html);
+        if (!success) {
           Alert.alert(
-            'Popup Blocked',
-            'Please allow popups for this site to view the PDF report.',
+            'Error',
+            'Failed to open PDF. Please try again.',
           );
         }
       } else {
         // Native: Generate PDF file and share
-        const { uri } = await Print.printToFileAsync({ html });
+        try {
+          const { uri } = await Print.printToFileAsync({ html });
 
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(uri, {
-            mimeType: 'application/pdf',
-            dialogTitle: 'QR Scan History PDF',
-            UTI: 'com.adobe.pdf',
-          });
-        } else {
-          Alert.alert('Success', 'PDF generated successfully!');
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(uri, {
+              mimeType: 'application/pdf',
+              dialogTitle: 'QR Scan History PDF',
+              UTI: 'com.adobe.pdf',
+            });
+          }
+        } catch (printError) {
+          console.error('[Admin] Print error:', printError);
+          Alert.alert('Error', 'Failed to generate PDF. Please try again.');
+          return;
         }
       }
     } catch (error) {

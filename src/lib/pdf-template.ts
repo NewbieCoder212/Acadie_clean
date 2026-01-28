@@ -364,6 +364,102 @@ export const generatePDFHTML = (config: PDFTemplateConfig): string => {
   `;
 };
 
+/**
+ * Opens HTML content for PDF viewing/printing on web platforms
+ * Uses an iframe approach to avoid popup blockers
+ */
+export const openPDFInNewWindow = (html: string): boolean => {
+  try {
+    // Check if we're in a web environment
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return false;
+    }
+
+    // Remove any existing print iframe
+    const existingFrame = document.getElementById('pdf-print-frame');
+    if (existingFrame) {
+      existingFrame.remove();
+    }
+
+    // Create a hidden iframe for printing
+    const iframe = document.createElement('iframe');
+    iframe.id = 'pdf-print-frame';
+    iframe.style.position = 'fixed';
+    iframe.style.top = '0';
+    iframe.style.left = '0';
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    iframe.style.border = 'none';
+    iframe.style.zIndex = '99999';
+    iframe.style.backgroundColor = 'white';
+
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!iframeDoc) {
+      iframe.remove();
+      return false;
+    }
+
+    // Add close button and print button to the HTML
+    const htmlWithControls = html.replace('</body>', `
+      <div id="pdf-controls" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, #065f46 0%, #059669 100%);
+        padding: 12px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        z-index: 99999;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      ">
+        <span style="color: white; font-size: 14px; font-weight: 600;">PDF Report</span>
+        <div style="display: flex; gap: 10px;">
+          <button onclick="window.print()" style="
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            background: white;
+            color: #065f46;
+          ">Print / Save PDF</button>
+          <button onclick="parent.document.getElementById('pdf-print-frame').remove()" style="
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            background: #dc2626;
+            color: white;
+          ">Close</button>
+        </div>
+      </div>
+      <style>
+        @media print {
+          #pdf-controls { display: none !important; }
+          body { padding-top: 0 !important; }
+        }
+      </style>
+    </body>`).replace('<body', '<body style="padding-top: 60px;"');
+
+    iframeDoc.open();
+    iframeDoc.write(htmlWithControls);
+    iframeDoc.close();
+
+    return true;
+  } catch (error) {
+    console.error('[PDF] Error creating print frame:', error);
+    return false;
+  }
+};
+
 // Web toolbar for viewing PDFs in browser
 export const addWebToolbar = (html: string, title: string): string => {
   return html.replace('</head>', `
