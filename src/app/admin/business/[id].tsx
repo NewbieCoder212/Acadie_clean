@@ -30,6 +30,7 @@ import {
   QrCode,
   Copy,
   Link,
+  Eye,
 } from 'lucide-react-native';
 import * as Linking from 'expo-linking';
 import * as Clipboard from 'expo-clipboard';
@@ -42,7 +43,9 @@ import {
   getAllBusinesses,
   getLocationsForBusiness,
   getLogsForBusiness,
+  getLogsForBusinessByName,
   getIssuesForBusiness,
+  getIssuesForBusinessByName,
   insertLocation,
   insertWashroom,
   getWashroomsForBusiness,
@@ -51,6 +54,8 @@ import {
   deleteLogsForLocation,
   updateBusinessAddress,
   updateBusinessPassword,
+  getQrScanStatsForLocations,
+  QrScanStatRow,
 } from '@/lib/supabase';
 
 const COLORS = {
@@ -76,6 +81,7 @@ export default function BusinessDetailScreen() {
   const [washrooms, setWashrooms] = useState<WashroomRow[]>([]);
   const [allLogs, setAllLogs] = useState<CleaningLogRow[]>([]);
   const [allIssues, setAllIssues] = useState<ReportedIssueRow[]>([]);
+  const [qrScanStats, setQrScanStats] = useState<QrScanStatRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -141,20 +147,29 @@ export default function BusinessDetailScreen() {
           const washroomsResult = await getWashroomsForBusiness(foundBusiness.name);
           if (washroomsResult.success && washroomsResult.data) {
             setWashrooms(washroomsResult.data);
+
+            // Get logs using washroom IDs (not the legacy getLogsForBusiness which uses locations table)
+            const washroomIds = washroomsResult.data.map(w => w.id);
+            if (washroomIds.length > 0) {
+              // Fetch logs, issues, and QR scan stats in parallel
+              const [logsResult, issuesResult, qrStatsResult] = await Promise.all([
+                getLogsForBusinessByName(foundBusiness.name),
+                getIssuesForBusinessByName(foundBusiness.name),
+                getQrScanStatsForLocations(washroomIds),
+              ]);
+
+              if (logsResult.success && logsResult.data) {
+                setAllLogs(logsResult.data);
+              }
+              if (issuesResult.success && issuesResult.data) {
+                setAllIssues(issuesResult.data);
+              }
+              if (qrStatsResult.success && qrStatsResult.data) {
+                setQrScanStats(qrStatsResult.data);
+              }
+            }
           }
         }
-      }
-
-      // Get logs for this business (all locations)
-      const logsResult = await getLogsForBusiness(id!);
-      if (logsResult.success && logsResult.data) {
-        setAllLogs(logsResult.data);
-      }
-
-      // Get issues for this business
-      const issuesResult = await getIssuesForBusiness(id!);
-      if (issuesResult.success && issuesResult.data) {
-        setAllIssues(issuesResult.data);
       }
     } catch (error) {
       console.error('[BusinessDetail] Load data error:', error);
@@ -208,6 +223,25 @@ export default function BusinessDetailScreen() {
   const getLogsForLocation = (locationId: string) => {
     return allLogs.filter(log => log.location_id === locationId).length;
   };
+
+  // Get scan count for a location (last 30 days)
+  const getScansForLocation = (locationId: string) => {
+    const locationStats = qrScanStats.filter(s => s.location_id === locationId);
+    return locationStats.reduce((sum, s) => sum + s.total_scans, 0);
+  };
+
+  // Get today's scans for a location
+  const getTodayScansForLocation = (locationId: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    const todayStats = qrScanStats.filter(s => s.location_id === locationId && s.scan_date === today);
+    return todayStats.reduce((sum, s) => sum + s.total_scans, 0);
+  };
+
+  // Get total scans for all washrooms
+  const totalScans = qrScanStats.reduce((sum, s) => sum + s.total_scans, 0);
+  const todayScans = qrScanStats
+    .filter(s => s.scan_date === new Date().toISOString().split('T')[0])
+    .reduce((sum, s) => sum + s.total_scans, 0);
 
   const getOpenIssuesForLocation = (locationId: string) => {
     return allIssues.filter(issue => issue.location_id === locationId && issue.status === 'open').length;
@@ -382,7 +416,7 @@ export default function BusinessDetailScreen() {
           {/* Stats Overview */}
           <Animated.View
             entering={FadeInDown.duration(400)}
-            className="flex-row gap-3 mb-6"
+            className="flex-row gap-3 mb-3"
           >
             <View
               className="flex-1 p-4 rounded-2xl"
@@ -420,6 +454,38 @@ export default function BusinessDetailScreen() {
               </Text>
               <Text className="text-sm" style={{ color: COLORS.textMuted }}>
                 Open Issues
+              </Text>
+            </View>
+          </Animated.View>
+
+          {/* QR Scan Stats */}
+          <Animated.View
+            entering={FadeInDown.delay(50).duration(400)}
+            className="flex-row gap-3 mb-6"
+          >
+            <View
+              className="flex-1 p-4 rounded-2xl"
+              style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0' }}
+            >
+              <Eye size={24} color="#16a34a" />
+              <Text className="text-3xl font-bold mt-2" style={{ color: '#16a34a' }}>
+                {todayScans}
+              </Text>
+              <Text className="text-sm" style={{ color: '#15803d' }}>
+                Scans Today
+              </Text>
+            </View>
+
+            <View
+              className="flex-1 p-4 rounded-2xl"
+              style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe' }}
+            >
+              <QrCode size={24} color="#2563eb" />
+              <Text className="text-3xl font-bold mt-2" style={{ color: '#2563eb' }}>
+                {totalScans}
+              </Text>
+              <Text className="text-sm" style={{ color: '#1d4ed8' }}>
+                Scans (30 days)
               </Text>
             </View>
           </Animated.View>
@@ -489,10 +555,16 @@ export default function BusinessDetailScreen() {
                         <Text className="text-base font-semibold" style={{ color: COLORS.textDark }}>
                           {washroom.room_name}
                         </Text>
-                        <View className="flex-row items-center mt-1">
+                        <View className="flex-row items-center mt-1 flex-wrap gap-y-1">
                           <Text className="text-xs" style={{ color: COLORS.success }}>
                             {getLogsForLocation(washroom.id)} logs
                           </Text>
+                          <View className="flex-row items-center ml-3">
+                            <Eye size={12} color="#2563eb" />
+                            <Text className="text-xs ml-1" style={{ color: '#2563eb' }}>
+                              {getScansForLocation(washroom.id)} scans
+                            </Text>
+                          </View>
                           {getOpenIssuesForLocation(washroom.id) > 0 && (
                             <View className="flex-row items-center ml-3">
                               <AlertTriangle size={12} color={COLORS.warning} />
@@ -509,8 +581,8 @@ export default function BusinessDetailScreen() {
                     <View className="flex-row items-center mt-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
                       <View className="flex-1 flex-row items-center">
                         <Key size={14} color={COLORS.textMuted} />
-                        <Text className="text-sm font-mono ml-2" style={{ color: COLORS.textDark }}>
-                          PIN: {washroom.pin_display || washroom.pin_code}
+                        <Text className="text-sm font-mono ml-2" style={{ color: washroom.pin_display ? COLORS.textDark : COLORS.textMuted }}>
+                          PIN: {washroom.pin_display || (business?.staff_pin_display ? 'Universal' : 'Not set')}
                         </Text>
                       </View>
                       {washroom.alert_email && (
@@ -660,17 +732,33 @@ export default function BusinessDetailScreen() {
                 </Text>
               </View>
 
+              {/* Universal Business PIN */}
+              {business.staff_pin_display && (
+                <View className="mb-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
+                  <Text className="text-xs font-medium mb-2" style={{ color: COLORS.textMuted }}>Universal Staff PIN (All Locations)</Text>
+                  <View className="flex-row items-center px-3 py-2 rounded-lg" style={{ backgroundColor: '#fef3c7' }}>
+                    <Key size={16} color="#d97706" />
+                    <Text className="text-lg font-mono font-bold ml-2" style={{ color: '#d97706' }}>
+                      {business.staff_pin_display}
+                    </Text>
+                  </View>
+                  <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                    This PIN works at all locations for this business
+                  </Text>
+                </View>
+              )}
+
               {/* Washroom PINs Summary */}
               {washrooms.length > 0 && (
                 <View className="mb-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
-                  <Text className="text-xs font-medium mb-2" style={{ color: COLORS.textMuted }}>Washroom Staff PINs</Text>
+                  <Text className="text-xs font-medium mb-2" style={{ color: COLORS.textMuted }}>Individual Location PINs</Text>
                   {washrooms.map((w) => (
                     <View key={w.id} className="flex-row items-center justify-between py-1">
                       <Text className="text-sm" style={{ color: COLORS.textDark }}>{w.room_name}</Text>
                       <View className="flex-row items-center">
                         <Key size={12} color={COLORS.primary} />
-                        <Text className="text-sm font-mono ml-1" style={{ color: COLORS.primary }}>
-                          {w.pin_display || w.pin_code}
+                        <Text className="text-sm font-mono ml-1" style={{ color: w.pin_display ? COLORS.primary : COLORS.textMuted }}>
+                          {w.pin_display || 'Use Universal PIN'}
                         </Text>
                       </View>
                     </View>
@@ -858,7 +946,7 @@ export default function BusinessDetailScreen() {
                       <View className="flex-row items-center">
                         <Key size={14} color="#92400e" />
                         <Text className="text-lg font-bold font-mono ml-2" style={{ color: '#92400e' }}>
-                          {selectedWashroom.pin_display || selectedWashroom.pin_code}
+                          {selectedWashroom.pin_display || business?.staff_pin_display || 'Not set'}
                         </Text>
                       </View>
                     </View>

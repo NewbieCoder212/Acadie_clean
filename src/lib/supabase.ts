@@ -1422,6 +1422,30 @@ export async function toggleWashroomActive(washroomId: string, isActive: boolean
   }
 }
 
+// Update washroom PIN (stores hashed PIN for verification and plain PIN for display)
+export async function updateWashroomPin(washroomId: string, newPin: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Hash the PIN before storing
+    const hashedPin = await hashPin(newPin);
+
+    const { error } = await supabase
+      .from('washrooms')
+      .update({
+        pin_code: hashedPin,
+        pin_display: newPin, // Store plain PIN for manager display
+      })
+      .eq('id', washroomId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
 // ============ QR SCAN TRACKING (efficient counter-based) ============
 
 export interface QrScanStatRow {

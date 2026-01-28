@@ -195,6 +195,32 @@ QR codes use standard HTTPS URLs for maximum phone camera compatibility:
 - When scanned, the `/scan/[id]` route automatically redirects to the washroom cleaning form
 - The in-app QR scanner also supports the legacy `vibecode://washroom/[id]` format for backwards compatibility
 
+## QR Scan Tracking & Analytics
+
+The app tracks every QR code scan to provide analytics for business owners:
+
+### How It Works
+- When a public user visits a washroom status page (via QR scan), the `trackQrScan()` function is called
+- Scans are stored in the `qr_scan_stats` table with a counter-based system (one row per location per day)
+- Admin views do NOT count as scans (prevents inflated statistics)
+
+### Admin Dashboard Analytics
+The admin dashboard displays:
+- **Scans Today**: Total QR scans across all businesses for the current day
+- **Last 7 Days**: Rolling 7-day scan total
+- **Per-Business Breakdown**: Each business card shows today/7-day/30-day scan counts
+
+### Business Detail Page Analytics
+When viewing a specific business:
+- **Scans Today**: QR scans for this business today
+- **Scans (30 days)**: Total scans for the past 30 days
+- **Per-Location Scans**: Each washroom location shows its individual scan count
+
+### PIN Display
+- **Universal Business PIN**: If set, displayed prominently in a yellow box for managers to share with staff
+- **Individual Location PINs**: Shown per-washroom, or "Use Universal PIN" if not set
+- PINs are stored hashed for security, with a separate `pin_display` column for showing to authorized managers
+
 ## Data Storage
 
 Data is persisted using **Supabase** cloud database. The app uses two tables:
