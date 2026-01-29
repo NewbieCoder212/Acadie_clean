@@ -25,6 +25,16 @@ const formatDate = (d: Date): string => {
  */
 export const downloadPDFReport = async (data: PDFReportData): Promise<boolean> => {
   try {
+    // Validate input data
+    if (!data || !data.columns || data.columns.length === 0) {
+      console.error('[PDF Download] Invalid data: missing columns');
+      return false;
+    }
+
+    if (!data.rows) {
+      data.rows = [];
+    }
+
     // Create a new PDF document - landscape letter size
     const pdfDoc = await PDFDocument.create();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -49,21 +59,30 @@ export const downloadPDFReport = async (data: PDFReportData): Promise<boolean> =
     // Calculate column widths
     const numCols = data.columns.length;
     // First two columns (Date, Staff/Location) get more space
-    const firstColWidth = 90;
-    const secondColWidth = 80;
-    const remainingWidth = contentWidth - firstColWidth - secondColWidth;
-    const otherColWidth = remainingWidth / (numCols - 2);
+    const firstColWidth = 100;
+    const secondColWidth = 90;
 
+    // Handle cases with 2 or fewer columns
     const getColX = (colIndex: number): number => {
+      if (numCols <= 2) {
+        // For 2 columns, split evenly
+        return margin + (colIndex * (contentWidth / numCols));
+      }
       if (colIndex === 0) return margin;
       if (colIndex === 1) return margin + firstColWidth;
+      const remainingWidth = contentWidth - firstColWidth - secondColWidth;
+      const otherColWidth = remainingWidth / (numCols - 2);
       return margin + firstColWidth + secondColWidth + (otherColWidth * (colIndex - 2));
     };
 
     const getColWidth = (colIndex: number): number => {
+      if (numCols <= 2) {
+        return contentWidth / numCols;
+      }
       if (colIndex === 0) return firstColWidth;
       if (colIndex === 1) return secondColWidth;
-      return otherColWidth;
+      const remainingWidth = contentWidth - firstColWidth - secondColWidth;
+      return remainingWidth / (numCols - 2);
     };
 
     // Rows per page calculation
@@ -76,7 +95,7 @@ export const downloadPDFReport = async (data: PDFReportData): Promise<boolean> =
 
     // Split data into pages
     const totalRows = data.rows.length;
-    const totalPages = Math.ceil(totalRows / rowsPerPage);
+    const totalPages = Math.max(1, Math.ceil(totalRows / rowsPerPage));
 
     for (let pageNum = 0; pageNum < totalPages; pageNum++) {
       const page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -194,31 +213,33 @@ export const downloadPDFReport = async (data: PDFReportData): Promise<boolean> =
           const colW = getColWidth(i);
 
           if (cell.isCheck) {
-            // Green checkmark
+            // Green checkmark - use simple Y for compatibility
             const checkX = colX + (colW / 2) - 4;
-            page.drawText('✓', {
+            page.drawText('Y', {
               x: checkX,
               y: y - rowHeight + 6,
-              size: 14,
-              font: font,
+              size: 12,
+              font: fontBold,
               color: green,
             });
           } else if (cell.isX) {
-            // Red X
+            // Red X - use simple N for compatibility
             const xPos = colX + (colW / 2) - 4;
-            page.drawText('✗', {
+            page.drawText('N', {
               x: xPos,
               y: y - rowHeight + 6,
-              size: 14,
-              font: font,
+              size: 12,
+              font: fontBold,
               color: red,
             });
           } else {
-            // Regular text
-            const text = cell.text.length > 15 ? cell.text.substring(0, 14) + '…' : cell.text;
-            const textX = i < 2 ? colX + 4 : colX + (colW - font.widthOfTextAtSize(text, 9)) / 2;
+            // Regular text - handle undefined/null
+            const rawText = cell.text || '-';
+            const text = rawText.length > 15 ? rawText.substring(0, 14) + '...' : rawText;
+            const textWidth = font.widthOfTextAtSize(text, 9);
+            const textX = i < 2 ? colX + 4 : colX + (colW - textWidth) / 2;
             page.drawText(text, {
-              x: textX,
+              x: Math.max(margin, textX),
               y: y - rowHeight + 7,
               size: 9,
               font: font,
@@ -261,14 +282,14 @@ export const downloadPDFReport = async (data: PDFReportData): Promise<boolean> =
         });
 
         // Checkmark legend
-        page.drawText('✓ = Complete', {
+        page.drawText('Y = Complete', {
           x: margin,
           y: footerY - 22,
           size: 7,
           font: font,
           color: green,
         });
-        page.drawText('✗ = Incomplete', {
+        page.drawText('N = Incomplete', {
           x: margin + 70,
           y: footerY - 22,
           size: 7,

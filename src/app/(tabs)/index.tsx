@@ -1,9 +1,11 @@
-import { View, Text } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { QrCode, Sparkles } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
+import { useRouter } from 'expo-router';
+import { useState, useRef } from 'react';
 
 // Professional color palette
 const COLORS = {
@@ -21,6 +23,27 @@ const COLORS = {
 };
 
 export default function PublicLandingScreen() {
+  const router = useRouter();
+  const [tapCount, setTapCount] = useState(0);
+  const lastTapTime = useRef<number>(0);
+
+  // Secret 5-tap to access manager dashboard
+  const handleLogoTap = () => {
+    const now = Date.now();
+    // Reset if more than 2 seconds since last tap
+    if (now - lastTapTime.current > 2000) {
+      setTapCount(1);
+    } else {
+      setTapCount(prev => prev + 1);
+    }
+    lastTapTime.current = now;
+
+    if (tapCount + 1 >= 5) {
+      setTapCount(0);
+      router.push('/manage-acadia9511');
+    }
+  };
+
   return (
     <LinearGradient
       colors={[COLORS.background, COLORS.backgroundGradient, COLORS.background]}
@@ -28,12 +51,14 @@ export default function PublicLandingScreen() {
     >
       <SafeAreaView style={{ flex: 1 }}>
         <View className="flex-1 justify-center px-8">
-          {/* Logo / Branding */}
+          {/* Logo / Branding - Tap 5 times for secret access */}
           <Animated.View
             entering={FadeInDown.duration(600).springify()}
             className="items-center mb-10"
           >
-            <AcadiaLogo size={140} />
+            <Pressable onPress={handleLogoTap}>
+              <AcadiaLogo size={140} />
+            </Pressable>
             <View className="flex-row items-center mt-3">
               <Sparkles size={16} color={COLORS.primary} />
               <Text

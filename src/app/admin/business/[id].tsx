@@ -46,7 +46,6 @@ import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { generatePDFHTML, openPDFInNewWindow } from '@/lib/pdf-template';
-import { downloadPDFReport, PDFReportData } from '@/lib/pdf-download';
 import {
   BusinessRow,
   LocationRow,
@@ -336,24 +335,9 @@ export default function BusinessDetailScreen() {
       });
 
       if (Platform.OS === 'web') {
-        // Web: Use direct PDF download (more reliable than printing)
-        const pdfData: PDFReportData = {
-          title: 'QR Scan History Report',
-          businessName: business?.name || 'Business',
-          location: `${business?.name || 'Business'} - All Locations`,
-          dateRange: { start: startDate, end: endDate },
-          columns: ['Date & Time', 'Location'],
-          rows: qrScanLogs.map(log => ({
-            cells: [
-              { text: formatPdfDateTime(log.scanned_at) },
-              { text: getWashroomName(log.location_id) },
-            ],
-          })),
-        };
-
-        const success = await downloadPDFReport(pdfData);
+        const success = openPDFInNewWindow(html);
         if (!success) {
-          Alert.alert('Error', 'Failed to download PDF. Please try again.');
+          Alert.alert('Error', 'Failed to open PDF. Please try again.');
         }
       } else {
         // Native: Generate PDF file and share
