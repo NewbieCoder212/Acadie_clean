@@ -300,24 +300,35 @@ export const downloadPDFReport = async (data: PDFReportData): Promise<boolean> =
     // Serialize to bytes
     const pdfBytes = await pdfDoc.save();
 
-    // Create download - convert Uint8Array to ArrayBuffer for Blob compatibility
-    const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-
     // Create filename
     const dateStr = formatDate(new Date()).replace(/,/g, '').replace(/ /g, '-');
     const filename = `${data.title.replace(/\s+/g, '-')}_${dateStr}.pdf`;
 
-    // Trigger download
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Create blob from PDF bytes - convert to regular array for compatibility
+    const blob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
 
-    // Cleanup
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    // Check if we're on iOS Safari (doesn't support download attribute well)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+    if (isIOS) {
+      // iOS: Open in new tab - user can then use Share to save
+      window.open(url, '_blank');
+      // Don't revoke immediately on iOS
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } else {
+      // Desktop/Android: Use download link
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      // Cleanup after short delay
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
 
     return true;
   } catch (error) {
