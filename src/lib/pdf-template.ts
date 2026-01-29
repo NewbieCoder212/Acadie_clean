@@ -3,7 +3,7 @@
  * Provides consistent styling across Audit Reports and History Reports
  */
 
-// Acadia CleanIQ Logo SVG (inline for PDF)
+// Acadia CleanIQ Logo as SVG (embedded directly for PDF compatibility)
 const ACADIA_LOGO_SVG = `
 <svg width="120" height="40" viewBox="0 0 120 40" xmlns="http://www.w3.org/2000/svg">
   <!-- QR-style icon -->
@@ -375,31 +375,90 @@ export const openPDFInNewWindow = (html: string): boolean => {
       return false;
     }
 
-    // Remove any existing print iframe
+    // Remove any existing print iframe, overlay, and print styles
     const existingFrame = document.getElementById('pdf-print-frame');
     if (existingFrame) {
       existingFrame.remove();
     }
+    const existingOverlay = document.getElementById('pdf-overlay');
+    if (existingOverlay) {
+      existingOverlay.remove();
+    }
+    const existingStyle = document.getElementById('pdf-print-style');
+    if (existingStyle) {
+      existingStyle.remove();
+    }
 
-    // Create a hidden iframe for printing
+    // Create overlay to hide main content
+    const overlay = document.createElement('div');
+    overlay.id = 'pdf-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: white;
+      z-index: 99998;
+    `;
+    document.body.appendChild(overlay);
+
+    // Add print styles to hide everything except iframe when printing
+    const printStyle = document.createElement('style');
+    printStyle.id = 'pdf-print-style';
+    printStyle.textContent = `
+      @media print {
+        body > *:not(#pdf-print-frame):not(#pdf-overlay):not(#pdf-print-style) {
+          display: none !important;
+          visibility: hidden !important;
+        }
+        #pdf-overlay {
+          display: none !important;
+        }
+        #pdf-print-frame {
+          position: static !important;
+          width: 100% !important;
+          height: auto !important;
+        }
+      }
+    `;
+    document.head.appendChild(printStyle);
+
+    // Create iframe for PDF content
     const iframe = document.createElement('iframe');
     iframe.id = 'pdf-print-frame';
-    iframe.style.position = 'fixed';
-    iframe.style.top = '0';
-    iframe.style.left = '0';
-    iframe.style.width = '100%';
-    iframe.style.height = '100%';
-    iframe.style.border = 'none';
-    iframe.style.zIndex = '99999';
-    iframe.style.backgroundColor = 'white';
+    iframe.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+      z-index: 99999;
+      background: white;
+    `;
 
     document.body.appendChild(iframe);
 
     const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
     if (!iframeDoc) {
       iframe.remove();
+      overlay.remove();
       return false;
     }
+
+    // Function to close the PDF viewer
+    const closePdfViewer = () => {
+      const frame = document.getElementById('pdf-print-frame');
+      const over = document.getElementById('pdf-overlay');
+      const style = document.getElementById('pdf-print-style');
+      if (frame) frame.remove();
+      if (over) over.remove();
+      if (style) style.remove();
+    };
+
+    // Expose close function globally for the iframe button
+    (window as any).__closePdfViewer = closePdfViewer;
 
     // Add close button and print button to the HTML
     const htmlWithControls = html.replace('</body>', `
@@ -429,7 +488,7 @@ export const openPDFInNewWindow = (html: string): boolean => {
             background: white;
             color: #065f46;
           ">Print / Save PDF</button>
-          <button onclick="parent.document.getElementById('pdf-print-frame').remove()" style="
+          <button onclick="parent.__closePdfViewer()" style="
             padding: 8px 16px;
             border: none;
             border-radius: 6px;
