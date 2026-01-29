@@ -107,6 +107,7 @@
     "lucide-react-native": "^0.468.0",
     "nativewind": "~4.1.23",
     "patch-package": "^8.0.0",
+    "pdf-lib": "^1.17.1",
     "pretty-format": "^29.7.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",

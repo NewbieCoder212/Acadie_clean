@@ -51,6 +51,7 @@ import { hashPassword, verifyPassword } from '@/lib/password';
 import { sendNewWashroomNotification } from '@/lib/email';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
 import { generatePDFHTML, getCheckIcon, getStatusBadge, truncateText, openPDFInNewWindow } from '@/lib/pdf-template';
+import { downloadPDFReport, PDFReportData } from '@/lib/pdf-download';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
 
@@ -692,12 +693,43 @@ export default function ManagerDashboard() {
       });
 
       if (Platform.OS === 'web') {
-        const success = openPDFInNewWindow(html);
+        // Web: Use direct PDF download (more reliable than printing)
+        const pdfData: PDFReportData = {
+          title: 'Cleaning History Report',
+          businessName: businessDisplayName,
+          location: `${premiumExportLocationName} - ${businessDisplayName}`,
+          dateRange: { start: startDate, end: endDate },
+          columns: ['Date/Time', 'Staff', 'HS', 'TP', 'BN', 'SD', 'FX', 'WT', 'FL', 'VL', 'Status'],
+          rows: locationLogs.map(log => ({
+            cells: [
+              { text: formatDateTime(log.timestamp) },
+              { text: log.staff_name || '-' },
+              { text: '', isCheck: log.checklist_supplies, isX: !log.checklist_supplies },
+              { text: '', isCheck: log.checklist_supplies, isX: !log.checklist_supplies },
+              { text: '', isCheck: log.checklist_trash, isX: !log.checklist_trash },
+              { text: '', isCheck: log.checklist_surfaces, isX: !log.checklist_surfaces },
+              { text: '', isCheck: log.checklist_fixtures, isX: !log.checklist_fixtures },
+              { text: '', isCheck: log.checklist_fixtures, isX: !log.checklist_fixtures },
+              { text: '', isCheck: log.checklist_floor, isX: !log.checklist_floor },
+              { text: '', isCheck: log.checklist_fixtures, isX: !log.checklist_fixtures },
+              { text: log.status === 'complete' ? 'Complete' : 'Incomplete' },
+            ],
+          })),
+          legendItems: [
+            { code: 'HS', description: 'Hand Soap' },
+            { code: 'TP', description: 'Toilet Paper' },
+            { code: 'BN', description: 'Bins' },
+            { code: 'SD', description: 'Surfaces' },
+            { code: 'FX', description: 'Fixtures' },
+            { code: 'WT', description: 'Water Temp' },
+            { code: 'FL', description: 'Floors' },
+            { code: 'VL', description: 'Ventilation' },
+          ],
+        };
+
+        const success = await downloadPDFReport(pdfData);
         if (!success) {
-          Alert.alert(
-            'Error',
-            'Failed to open PDF. Please try again.',
-          );
+          Alert.alert('Error', 'Failed to download PDF. Please try again.');
         }
       } else {
         // Mobile: use expo-print with sharing
@@ -776,12 +808,43 @@ export default function ManagerDashboard() {
       });
 
       if (Platform.OS === 'web') {
-        const success = openPDFInNewWindow(html);
+        // Web: Use direct PDF download (more reliable than printing)
+        const pdfData: PDFReportData = {
+          title: '1 Month Cleaning History',
+          businessName: businessDisplayName,
+          location: `${location.name} - ${businessDisplayName}`,
+          dateRange: { start: startDate, end: endDate },
+          columns: ['Date/Time', 'Staff', 'HS', 'TP', 'BN', 'SD', 'FX', 'WT', 'FL', 'VL', 'Status'],
+          rows: logs.map(log => ({
+            cells: [
+              { text: formatDateTime(log.timestamp) },
+              { text: log.staff_name || '-' },
+              { text: '', isCheck: log.checklist_supplies, isX: !log.checklist_supplies },
+              { text: '', isCheck: log.checklist_supplies, isX: !log.checklist_supplies },
+              { text: '', isCheck: log.checklist_trash, isX: !log.checklist_trash },
+              { text: '', isCheck: log.checklist_surfaces, isX: !log.checklist_surfaces },
+              { text: '', isCheck: log.checklist_fixtures, isX: !log.checklist_fixtures },
+              { text: '', isCheck: log.checklist_fixtures, isX: !log.checklist_fixtures },
+              { text: '', isCheck: log.checklist_floor, isX: !log.checklist_floor },
+              { text: '', isCheck: log.checklist_fixtures, isX: !log.checklist_fixtures },
+              { text: log.status === 'complete' ? 'Complete' : 'Incomplete' },
+            ],
+          })),
+          legendItems: [
+            { code: 'HS', description: 'Hand Soap' },
+            { code: 'TP', description: 'Toilet Paper' },
+            { code: 'BN', description: 'Bins' },
+            { code: 'SD', description: 'Surfaces' },
+            { code: 'FX', description: 'Fixtures' },
+            { code: 'WT', description: 'Water Temp' },
+            { code: 'FL', description: 'Floors' },
+            { code: 'VL', description: 'Ventilation' },
+          ],
+        };
+
+        const success = await downloadPDFReport(pdfData);
         if (!success) {
-          Alert.alert(
-            'Error',
-            'Failed to open PDF. Please try again.',
-          );
+          Alert.alert('Error', 'Failed to download PDF. Please try again.');
         }
       } else {
         // Mobile: use expo-print with sharing
@@ -871,12 +934,44 @@ export default function ManagerDashboard() {
 
       // Handle web platform differently
       if (Platform.OS === 'web') {
-        const success = openPDFInNewWindow(html);
+        // Web: Use direct PDF download (more reliable than printing)
+        const pdfData: PDFReportData = {
+          title: 'Official Compliance Audit',
+          businessName: businessName,
+          location: `${businessName} - All Units`,
+          dateRange: { start: startDate, end: endDate },
+          columns: ['Date/Time', 'Location', 'Staff', 'HS', 'TP', 'BN', 'SD', 'FX', 'WT', 'FL', 'VL', 'Status'],
+          rows: logs.map(log => ({
+            cells: [
+              { text: formatDateTime(log.timestamp) },
+              { text: log.location_name || '-' },
+              { text: log.staff_name || '-' },
+              { text: '', isCheck: log.checklist_supplies, isX: !log.checklist_supplies },
+              { text: '', isCheck: log.checklist_supplies, isX: !log.checklist_supplies },
+              { text: '', isCheck: log.checklist_trash, isX: !log.checklist_trash },
+              { text: '', isCheck: log.checklist_surfaces, isX: !log.checklist_surfaces },
+              { text: '', isCheck: log.checklist_fixtures, isX: !log.checklist_fixtures },
+              { text: '', isCheck: log.checklist_fixtures, isX: !log.checklist_fixtures },
+              { text: '', isCheck: log.checklist_floor, isX: !log.checklist_floor },
+              { text: '', isCheck: log.checklist_fixtures, isX: !log.checklist_fixtures },
+              { text: log.status === 'complete' ? 'Complete' : 'Attention Required' },
+            ],
+          })),
+          legendItems: [
+            { code: 'HS', description: 'Hand Soap' },
+            { code: 'TP', description: 'Toilet Paper' },
+            { code: 'BN', description: 'Bins' },
+            { code: 'SD', description: 'Surfaces' },
+            { code: 'FX', description: 'Fixtures' },
+            { code: 'WT', description: 'Water Temp' },
+            { code: 'FL', description: 'Floors' },
+            { code: 'VL', description: 'Ventilation' },
+          ],
+        };
+
+        const success = await downloadPDFReport(pdfData);
         if (!success) {
-          Alert.alert(
-            'Error',
-            'Failed to open PDF. Please try again.',
-          );
+          Alert.alert('Error', 'Failed to download PDF. Please try again.');
         }
       } else {
         // Native platforms use expo-print with sharing
