@@ -171,7 +171,9 @@ export const generatePDFHTML = (config: PDFTemplateConfig): string => {
           }
           @media print {
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .page-footer { position: fixed; bottom: 0; left: 0; right: 0; }
+            table { page-break-inside: auto; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+            thead { display: table-header-group; }
           }
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body {
@@ -366,7 +368,7 @@ export const generatePDFHTML = (config: PDFTemplateConfig): string => {
 
 /**
  * Opens HTML content for PDF viewing/printing on web platforms
- * Uses an iframe approach to avoid popup blockers
+ * Creates a completely standalone page that prints correctly on iOS Safari
  */
 export const openPDFInNewWindow = (html: string): boolean => {
   try {
@@ -375,146 +377,185 @@ export const openPDFInNewWindow = (html: string): boolean => {
       return false;
     }
 
-    // Remove any existing print iframe, overlay, and print styles
-    const existingFrame = document.getElementById('pdf-print-frame');
-    if (existingFrame) {
-      existingFrame.remove();
-    }
-    const existingOverlay = document.getElementById('pdf-overlay');
-    if (existingOverlay) {
-      existingOverlay.remove();
-    }
-    const existingStyle = document.getElementById('pdf-print-style');
-    if (existingStyle) {
-      existingStyle.remove();
-    }
+    // Extract styles and body content from the original HTML
+    const styleMatches = html.match(/<style[^>]*>([\s\S]*?)<\/style>/gi) || [];
+    const extractedStyles = styleMatches.join('\n');
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    const bodyContent = bodyMatch ? bodyMatch[1] : '';
 
-    // Create overlay to hide main content
-    const overlay = document.createElement('div');
-    overlay.id = 'pdf-overlay';
-    overlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
+    // Create a completely standalone HTML document optimized for iOS printing
+    const standaloneHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>PDF Report</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* Base reset */
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
       width: 100%;
-      height: 100%;
       background: white;
-      z-index: 99998;
-    `;
-    document.body.appendChild(overlay);
+      font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
 
-    // Add print styles to hide everything except iframe when printing
-    const printStyle = document.createElement('style');
-    printStyle.id = 'pdf-print-style';
-    printStyle.textContent = `
-      @media print {
-        body > *:not(#pdf-print-frame):not(#pdf-overlay):not(#pdf-print-style) {
-          display: none !important;
-          visibility: hidden !important;
-        }
-        #pdf-overlay {
-          display: none !important;
-        }
-        #pdf-print-frame {
-          position: static !important;
-          width: 100% !important;
-          height: auto !important;
-        }
-      }
-    `;
-    document.head.appendChild(printStyle);
-
-    // Create iframe for PDF content
-    const iframe = document.createElement('iframe');
-    iframe.id = 'pdf-print-frame';
-    iframe.style.cssText = `
-      position: fixed;
+    /* Toolbar styles */
+    .print-toolbar {
+      position: sticky;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
-      border: none;
+      right: 0;
+      background: linear-gradient(135deg, #065f46 0%, #059669 100%);
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       z-index: 99999;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .print-toolbar-title {
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .print-toolbar-buttons {
+      display: flex;
+      gap: 12px;
+    }
+    .print-toolbar button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-print-action {
       background: white;
-    `;
-
-    document.body.appendChild(iframe);
-
-    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!iframeDoc) {
-      iframe.remove();
-      overlay.remove();
-      return false;
+      color: #065f46;
+    }
+    .btn-close-action {
+      background: rgba(255,255,255,0.15);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.3) !important;
     }
 
-    // Function to close the PDF viewer
-    const closePdfViewer = () => {
-      const frame = document.getElementById('pdf-print-frame');
-      const over = document.getElementById('pdf-overlay');
-      const style = document.getElementById('pdf-print-style');
-      if (frame) frame.remove();
-      if (over) over.remove();
-      if (style) style.remove();
-    };
+    /* PDF content wrapper */
+    .pdf-print-content {
+      background: white;
+      min-height: 100vh;
+    }
 
-    // Expose close function globally for the iframe button
-    (window as any).__closePdfViewer = closePdfViewer;
+    /* Force colors to print */
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
 
-    // Add close button and print button to the HTML
-    const htmlWithControls = html.replace('</body>', `
-      <div id="pdf-controls" style="
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        background: linear-gradient(135deg, #065f46 0%, #059669 100%);
-        padding: 12px 20px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        z-index: 99999;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      ">
-        <span style="color: white; font-size: 14px; font-weight: 600;">PDF Report</span>
-        <div style="display: flex; gap: 10px;">
-          <button onclick="window.print()" style="
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            background: white;
-            color: #065f46;
-          ">Print / Save PDF</button>
-          <button onclick="parent.__closePdfViewer()" style="
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            background: #dc2626;
-            color: white;
-          ">Close</button>
-        </div>
-      </div>
-      <style>
-        @media print {
-          #pdf-controls { display: none !important; }
-          body { padding-top: 0 !important; }
-        }
-      </style>
-    </body>`).replace('<body', '<body style="padding-top: 60px;"');
+    /* CRITICAL: Print-specific styles */
+    @media print {
+      /* Hide toolbar completely */
+      .print-toolbar {
+        display: none !important;
+        visibility: hidden !important;
+        position: absolute !important;
+        left: -9999px !important;
+        height: 0 !important;
+        width: 0 !important;
+        overflow: hidden !important;
+      }
 
-    iframeDoc.open();
-    iframeDoc.write(htmlWithControls);
-    iframeDoc.close();
+      /* Reset page */
+      html, body {
+        width: 100% !important;
+        height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        background: white !important;
+      }
 
-    return true;
+      .pdf-print-content {
+        position: static !important;
+        width: 100% !important;
+        min-height: auto !important;
+        padding: 10mm !important;
+        margin: 0 !important;
+      }
+
+      /* Table pagination */
+      table { page-break-inside: auto; }
+      tr { page-break-inside: avoid; page-break-after: auto; }
+      thead { display: table-header-group; }
+      tfoot { display: table-footer-group; }
+    }
+
+    @page {
+      size: letter landscape;
+      margin: 10mm;
+    }
+  </style>
+  ${extractedStyles}
+</head>
+<body>
+  <div class="print-toolbar">
+    <span class="print-toolbar-title">PDF Report - Tap Print to Save</span>
+    <div class="print-toolbar-buttons">
+      <button class="btn-print-action" onclick="window.print()">Print / Save PDF</button>
+      <button class="btn-close-action" onclick="closePDF()">Close</button>
+    </div>
+  </div>
+  <div class="pdf-print-content">
+    ${bodyContent}
+  </div>
+  <script>
+    function closePDF() {
+      if (window.opener) {
+        window.close();
+      } else {
+        history.back();
+      }
+    }
+  </script>
+</body>
+</html>`;
+
+    // Create blob URL for the standalone document
+    const blob = new Blob([standaloneHtml], { type: 'text/html;charset=utf-8' });
+    const blobUrl = URL.createObjectURL(blob);
+
+    // Try opening in new window/tab first
+    const pdfWindow = window.open(blobUrl, '_blank', 'noopener');
+
+    if (pdfWindow) {
+      // Successfully opened - clean up blob after a delay
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 120000);
+      return true;
+    }
+
+    // Popup was blocked - navigate in same window with user confirmation
+    const confirmed = window.confirm(
+      'Popup was blocked by your browser.\n\nClick OK to open the PDF in this tab.\nUse the back button or Close button to return.'
+    );
+
+    if (confirmed) {
+      window.location.href = blobUrl;
+      return true;
+    }
+
+    // User cancelled
+    URL.revokeObjectURL(blobUrl);
+    return false;
   } catch (error) {
-    console.error('[PDF] Error creating print frame:', error);
+    console.error('[PDF] Error creating print view:', error);
     return false;
   }
 };
