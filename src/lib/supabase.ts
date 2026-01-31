@@ -844,21 +844,19 @@ export async function insertBusiness(business: InsertBusiness): Promise<{ succes
   }
 }
 
-// Login business using Supabase Auth
+// Login business using Supabase Auth (with legacy fallback for existing users)
 export async function loginBusiness(email: string, password: string): Promise<{ success: boolean; data?: SafeBusinessRow; error?: string }> {
   try {
-    // Step 1: Sign in with Supabase Auth
+    // Step 1: Try Supabase Auth first
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email: email.toLowerCase(),
       password: password,
     });
 
-    if (authError) {
-      return { success: false, error: 'Invalid email or password / Courriel ou mot de passe invalide' };
-    }
-
-    if (!authData.user) {
-      return { success: false, error: 'Invalid email or password / Courriel ou mot de passe invalide' };
+    // If Supabase Auth fails, try legacy password verification
+    if (authError || !authData.user) {
+      console.log('[loginBusiness] Auth failed, trying legacy login...');
+      return await loginBusinessLegacy(email, password);
     }
 
     // Step 2: Get business data linked to this auth user
