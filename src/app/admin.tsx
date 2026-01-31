@@ -57,6 +57,7 @@ import {
   SubscriptionTier,
   getBusinessesNeedingTrialReminder,
   markTrialReminderSent,
+  logoutBusiness,
 } from '@/lib/supabase';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
 import { sendTrialExpiryReminderToAdmin } from '@/lib/email';
@@ -221,6 +222,7 @@ export default function AdminDashboardScreen() {
   };
 
   const handleLogout = async () => {
+    await logoutBusiness();
     await AsyncStorage.removeItem('currentBusiness');
     router.replace('/login');
   };

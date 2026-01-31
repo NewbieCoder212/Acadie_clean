@@ -739,6 +739,7 @@ export type SubscriptionStatus = 'trial' | 'active' | 'expired' | 'cancelled';
 
 export interface BusinessRow {
   id: string;
+  auth_user_id: string | null; // Supabase Auth user ID
   name: string;
   email: string;
   password_hash: string;
@@ -782,18 +783,43 @@ export interface InsertBusiness {
   subscription_tier?: SubscriptionTier;
 }
 
-// Insert a new business with properly hashed password
+// Insert a new business with Supabase Auth
 export async function insertBusiness(business: InsertBusiness): Promise<{ success: boolean; data?: BusinessRow; error?: string }> {
   try {
-    const hashedPassword = await hashPassword(business.password);
+    // Step 1: Create user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: business.email.toLowerCase(),
+      password: business.password,
+      options: {
+        data: {
+          business_name: business.name,
+          is_admin: business.is_admin ?? false,
+        },
+      },
+    });
 
+    if (authError) {
+      // Handle specific auth errors
+      if (authError.message.includes('already registered')) {
+        return { success: false, error: 'This email is already registered' };
+      }
+      return { success: false, error: authError.message };
+    }
+
+    if (!authData.user) {
+      return { success: false, error: 'Failed to create auth user' };
+    }
+
+    // Step 2: Insert business record linked to auth user
+    const businessId = generateId();
     const { data, error } = await supabase
       .from('businesses')
       .insert([{
-        id: generateId(),
+        id: businessId,
+        auth_user_id: authData.user.id, // Link to Supabase Auth user
         name: business.name,
         email: business.email.toLowerCase(),
-        password_hash: hashedPassword,
+        password_hash: '', // No longer needed - Auth handles passwords
         is_admin: business.is_admin ?? false,
         is_active: business.is_active ?? true,
         subscription_tier: business.subscription_tier ?? 'standard',
@@ -803,8 +829,14 @@ export async function insertBusiness(business: InsertBusiness): Promise<{ succes
       .single();
 
     if (error) {
+      // If business insert fails, we should ideally clean up the auth user
+      // but for now just return the error
+      console.error('[insertBusiness] Failed to insert business record:', error);
       return { success: false, error: error.message };
     }
+
+    // Sign out the newly created user (admin is creating the account, not the business)
+    await supabase.auth.signOut();
 
     return { success: true, data };
   } catch (error) {
@@ -812,8 +844,110 @@ export async function insertBusiness(business: InsertBusiness): Promise<{ succes
   }
 }
 
-// Login business by email and password with secure password verification
+// Login business using Supabase Auth
 export async function loginBusiness(email: string, password: string): Promise<{ success: boolean; data?: SafeBusinessRow; error?: string }> {
+  try {
+    // Step 1: Sign in with Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: email.toLowerCase(),
+      password: password,
+    });
+
+    if (authError) {
+      return { success: false, error: 'Invalid email or password / Courriel ou mot de passe invalide' };
+    }
+
+    if (!authData.user) {
+      return { success: false, error: 'Invalid email or password / Courriel ou mot de passe invalide' };
+    }
+
+    // Step 2: Get business data linked to this auth user
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('auth_user_id', authData.user.id)
+      .single();
+
+    // If no business found by auth_user_id, try legacy email lookup
+    if (error || !data) {
+      const { data: legacyData, error: legacyError } = await supabase
+        .from('businesses')
+        .select('*')
+        .eq('email', email.toLowerCase())
+        .single();
+
+      if (legacyError || !legacyData) {
+        // Sign out since we couldn't find a business record
+        await supabase.auth.signOut();
+        return { success: false, error: 'Invalid email or password / Courriel ou mot de passe invalide' };
+      }
+
+      // Link this auth user to the legacy business if not already linked
+      if (!legacyData.auth_user_id) {
+        await supabase
+          .from('businesses')
+          .update({ auth_user_id: authData.user.id })
+          .eq('id', legacyData.id);
+      }
+
+      // Check account status
+      if (legacyData.is_active === false) {
+        await supabase.auth.signOut();
+        return { success: false, error: 'Your account has been deactivated. Please contact support. / Votre compte a été désactivé. Veuillez contacter le support.' };
+      }
+
+      // Return safe business data
+      const safeData: SafeBusinessRow = {
+        id: legacyData.id,
+        name: legacyData.name,
+        email: legacyData.email,
+        address: legacyData.address ?? null,
+        is_admin: legacyData.is_admin,
+        is_active: legacyData.is_active,
+        subscription_tier: legacyData.subscription_tier ?? 'standard',
+        subscription_status: legacyData.subscription_status ?? 'trial',
+        trial_start_date: legacyData.trial_start_date ?? null,
+        trial_ends_at: legacyData.trial_ends_at ?? null,
+        subscription_expires_at: legacyData.subscription_expires_at ?? null,
+        staff_pin_display: legacyData.staff_pin_display ?? null,
+        created_at: legacyData.created_at,
+      };
+
+      return { success: true, data: safeData };
+    }
+
+    // Check account status
+    if (data.is_active === false) {
+      await supabase.auth.signOut();
+      return { success: false, error: 'Your account has been deactivated. Please contact support. / Votre compte a été désactivé. Veuillez contacter le support.' };
+    }
+
+    // Return safe business data (without password_hash)
+    const safeData: SafeBusinessRow = {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      address: data.address ?? null,
+      is_admin: data.is_admin,
+      is_active: data.is_active,
+      subscription_tier: data.subscription_tier ?? 'standard',
+      subscription_status: data.subscription_status ?? 'trial',
+      trial_start_date: data.trial_start_date ?? null,
+      trial_ends_at: data.trial_ends_at ?? null,
+      subscription_expires_at: data.subscription_expires_at ?? null,
+      staff_pin_display: data.staff_pin_display ?? null,
+      created_at: data.created_at,
+    };
+
+    return { success: true, data: safeData };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Legacy login function - for migrating existing users
+// This is used as a fallback when Supabase Auth user doesn't exist yet
+export async function loginBusinessLegacy(email: string, password: string): Promise<{ success: boolean; data?: SafeBusinessRow; error?: string }> {
   try {
     const { data, error } = await supabase
       .from('businesses')
@@ -841,22 +975,72 @@ export async function loginBusiness(email: string, password: string): Promise<{ 
     if (isBcryptHash(data.password_hash)) {
       passwordValid = await verifyPassword(password, data.password_hash);
     } else {
-      // Legacy plain text password - verify and upgrade to hash
+      // Legacy plain text password
       passwordValid = data.password_hash === password;
-      if (passwordValid) {
-        const hashedPassword = await hashPassword(password);
-        await supabase
-          .from('businesses')
-          .update({ password_hash: hashedPassword })
-          .eq('id', data.id);
-      }
     }
 
     if (!passwordValid) {
       return { success: false, error: 'Invalid email or password / Courriel ou mot de passe invalide' };
     }
 
-    // Return safe business data (without password_hash)
+    // Return safe business data
+    const safeData: SafeBusinessRow = {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      address: data.address ?? null,
+      is_admin: data.is_admin,
+      is_active: data.is_active,
+      subscription_tier: data.subscription_tier ?? 'standard',
+      subscription_status: data.subscription_status ?? 'trial',
+      trial_start_date: data.trial_start_date ?? null,
+      trial_ends_at: data.trial_ends_at ?? null,
+      subscription_expires_at: data.subscription_expires_at ?? null,
+      staff_pin_display: data.staff_pin_display ?? null,
+      created_at: data.created_at,
+    };
+
+    return { success: true, data: safeData };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Logout business - clears Supabase Auth session
+export async function logoutBusiness(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Get current authenticated session
+export async function getCurrentSession(): Promise<{ success: boolean; data?: SafeBusinessRow; error?: string }> {
+  try {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError || !sessionData.session) {
+      return { success: false, error: 'No active session' };
+    }
+
+    const userId = sessionData.session.user.id;
+
+    // Get business data linked to this auth user
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('auth_user_id', userId)
+      .single();
+
+    if (error || !data) {
+      return { success: false, error: 'Business not found' };
+    }
+
     const safeData: SafeBusinessRow = {
       id: data.id,
       name: data.name,

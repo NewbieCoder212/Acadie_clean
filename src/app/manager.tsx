@@ -46,6 +46,7 @@ import {
   getIssuesForBusinessByName,
   resolveReportedIssue,
   SubscriptionTier,
+  logoutBusiness,
 } from '@/lib/supabase';
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { sendNewWashroomNotification } from '@/lib/email';
@@ -347,6 +348,7 @@ export default function ManagerDashboard() {
   };
 
   const handleLogout = async () => {
+    await logoutBusiness();
     await AsyncStorage.removeItem('currentBusiness');
     setCurrentBusiness(null);
     logoutManager();
