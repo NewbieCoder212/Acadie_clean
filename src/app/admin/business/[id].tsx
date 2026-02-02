@@ -8,6 +8,7 @@ import {
   Modal,
   TextInput,
   Alert,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -38,6 +39,8 @@ import {
   FileText,
   Calendar,
   CreditCard,
+  Bell,
+  Settings,
 } from 'lucide-react-native';
 import * as Linking from 'expo-linking';
 import * as Clipboard from 'expo-clipboard';
@@ -61,6 +64,7 @@ import {
   insertWashroom,
   getWashroomsForBusiness,
   WashroomRow,
+  WashroomAlertSettings,
   hardDeleteWashroom,
   deleteLogsForLocation,
   updateBusinessAddress,
@@ -73,6 +77,8 @@ import {
   extendSubscription,
   updateSubscriptionStatus,
   SubscriptionStatus,
+  updateWashroomAlertSettings,
+  updateWashroomAlertEmail,
 } from '@/lib/supabase';
 
 const COLORS = {
@@ -130,6 +136,40 @@ export default function BusinessDetailScreen() {
   // Subscription management
   const [isUpdatingSubscription, setIsUpdatingSubscription] = useState(false);
 
+  // Alert settings modal
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertWashroom, setAlertWashroom] = useState<WashroomRow | null>(null);
+  const [alertSettings, setAlertSettings] = useState<WashroomAlertSettings>({
+    alert_enabled: true,
+    alert_threshold_hours: 8,
+    business_hours_start: '08:00',
+    business_hours_end: '18:00',
+    alert_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+    timezone: 'America/Halifax',
+  });
+  const [alertEmail, setAlertEmail] = useState('');
+  const [isSavingAlertSettings, setIsSavingAlertSettings] = useState(false);
+
+  // Day options for alert settings
+  const ALL_DAYS = [
+    { key: 'monday', label: 'Mon' },
+    { key: 'tuesday', label: 'Tue' },
+    { key: 'wednesday', label: 'Wed' },
+    { key: 'thursday', label: 'Thu' },
+    { key: 'friday', label: 'Fri' },
+    { key: 'saturday', label: 'Sat' },
+    { key: 'sunday', label: 'Sun' },
+  ];
+
+  // Timezone options
+  const TIMEZONES = [
+    { value: 'America/Halifax', label: 'Atlantic (Halifax)' },
+    { value: 'America/Toronto', label: 'Eastern (Toronto)' },
+    { value: 'America/Winnipeg', label: 'Central (Winnipeg)' },
+    { value: 'America/Edmonton', label: 'Mountain (Edmonton)' },
+    { value: 'America/Vancouver', label: 'Pacific (Vancouver)' },
+  ];
+
   // Generate public URL for washroom
   // Includes ?scan=true to track actual QR scans (not page refreshes)
   const getWashroomUrl = (washroomId: string) => {
@@ -148,6 +188,65 @@ export default function BusinessDetailScreen() {
     await Clipboard.setStringAsync(url);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  // Open alert settings modal for a washroom
+  const handleOpenAlertSettings = (washroom: WashroomRow) => {
+    setAlertWashroom(washroom);
+    setAlertSettings({
+      alert_enabled: washroom.alert_enabled ?? true,
+      alert_threshold_hours: washroom.alert_threshold_hours ?? 8,
+      business_hours_start: washroom.business_hours_start ?? '08:00',
+      business_hours_end: washroom.business_hours_end ?? '18:00',
+      alert_days: washroom.alert_days ?? ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+      timezone: washroom.timezone ?? 'America/Halifax',
+    });
+    setAlertEmail(washroom.alert_email ?? '');
+    setShowAlertModal(true);
+  };
+
+  // Save alert settings
+  const handleSaveAlertSettings = async () => {
+    if (!alertWashroom) return;
+
+    setIsSavingAlertSettings(true);
+    try {
+      // Update alert settings
+      const settingsResult = await updateWashroomAlertSettings(alertWashroom.id, alertSettings);
+      if (!settingsResult.success) {
+        Alert.alert('Error', settingsResult.error || 'Failed to save alert settings');
+        setIsSavingAlertSettings(false);
+        return;
+      }
+
+      // Update alert email if changed
+      if (alertEmail !== (alertWashroom.alert_email ?? '')) {
+        const emailResult = await updateWashroomAlertEmail(alertWashroom.id, alertEmail);
+        if (!emailResult.success) {
+          Alert.alert('Error', emailResult.error || 'Failed to save alert email');
+          setIsSavingAlertSettings(false);
+          return;
+        }
+      }
+
+      Alert.alert('Success', 'Alert settings saved successfully!');
+      setShowAlertModal(false);
+      loadData(); // Refresh data
+    } catch (error) {
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setIsSavingAlertSettings(false);
+    }
+  };
+
+  // Toggle a day in alert_days
+  const toggleAlertDay = (day: string) => {
+    setAlertSettings(prev => {
+      const days = prev.alert_days.includes(day)
+        ? prev.alert_days.filter(d => d !== day)
+        : [...prev.alert_days, day];
+      return { ...prev, alert_days: days };
+    });
   };
 
   useEffect(() => {
@@ -932,7 +1031,17 @@ export default function BusinessDetailScreen() {
                     </View>
 
                     {/* Bottom row: Actions */}
-                    <View className="flex-row items-center justify-end mt-3 gap-2">
+                    <View className="flex-row items-center justify-end mt-3 gap-2 flex-wrap">
+                      <Pressable
+                        onPress={() => handleOpenAlertSettings(washroom)}
+                        className="flex-row items-center px-3 py-2 rounded-lg active:opacity-70"
+                        style={{ backgroundColor: washroom.alert_enabled ? '#fef3c7' : '#f1f5f9' }}
+                      >
+                        <Bell size={16} color={washroom.alert_enabled ? '#d97706' : '#64748b'} />
+                        <Text className="text-xs font-medium ml-1" style={{ color: washroom.alert_enabled ? '#d97706' : '#64748b' }}>
+                          {washroom.alert_enabled ? 'Alerts On' : 'Alerts Off'}
+                        </Text>
+                      </Pressable>
                       <Pressable
                         onPress={() => handleShowQrCode(washroom)}
                         className="flex-row items-center px-3 py-2 rounded-lg active:opacity-70"
@@ -1397,6 +1506,229 @@ export default function BusinessDetailScreen() {
                 </>
               )}
             </View>
+          </View>
+        </Modal>
+
+        {/* Alert Settings Modal */}
+        <Modal
+          visible={showAlertModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowAlertModal(false)}
+        >
+          <View className="flex-1 bg-black/60 items-center justify-center px-4">
+            <ScrollView
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 16 }}
+              showsVerticalScrollIndicator={false}
+            >
+              <View
+                className="w-full max-w-sm rounded-3xl p-5"
+                style={{ backgroundColor: COLORS.white }}
+              >
+                <View className="flex-row items-center justify-between mb-4">
+                  <View className="flex-row items-center">
+                    <Bell size={24} color="#d97706" />
+                    <Text className="text-lg font-bold ml-2" style={{ color: COLORS.textDark }}>
+                      Alert Settings
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => setShowAlertModal(false)} className="p-1">
+                    <X size={24} color={COLORS.textMuted} />
+                  </Pressable>
+                </View>
+
+                {alertWashroom && (
+                  <>
+                    {/* Washroom Name */}
+                    <View className="mb-4 p-3 rounded-xl" style={{ backgroundColor: COLORS.primaryLight }}>
+                      <Text className="text-xs" style={{ color: COLORS.textMuted }}>Washroom</Text>
+                      <Text className="text-base font-semibold" style={{ color: COLORS.textDark }}>
+                        {alertWashroom.room_name}
+                      </Text>
+                    </View>
+
+                    {/* Enable/Disable Toggle */}
+                    <View className="flex-row items-center justify-between mb-4 p-3 rounded-xl" style={{ backgroundColor: alertSettings.alert_enabled ? '#fef3c7' : '#f1f5f9' }}>
+                      <View className="flex-row items-center">
+                        <Bell size={20} color={alertSettings.alert_enabled ? '#d97706' : '#64748b'} />
+                        <Text className="font-semibold ml-2" style={{ color: alertSettings.alert_enabled ? '#92400e' : '#64748b' }}>
+                          Overdue Alerts
+                        </Text>
+                      </View>
+                      <Switch
+                        value={alertSettings.alert_enabled}
+                        onValueChange={(value: boolean) => setAlertSettings(prev => ({ ...prev, alert_enabled: value }))}
+                        trackColor={{ false: '#e2e8f0', true: '#fcd34d' }}
+                        thumbColor={alertSettings.alert_enabled ? '#d97706' : '#94a3b8'}
+                      />
+                    </View>
+
+                    {alertSettings.alert_enabled && (
+                      <>
+                        {/* Alert Email */}
+                        <View className="mb-4">
+                          <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
+                            Alert Email
+                          </Text>
+                          <TextInput
+                            value={alertEmail}
+                            onChangeText={setAlertEmail}
+                            placeholder="supervisor@example.com"
+                            placeholderTextColor={COLORS.textMuted}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            className="rounded-xl px-4 py-3"
+                            style={{
+                              backgroundColor: '#f1f5f9',
+                              fontSize: 14,
+                              color: COLORS.textDark,
+                            }}
+                          />
+                        </View>
+
+                        {/* Threshold Hours */}
+                        <View className="mb-4">
+                          <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
+                            Alert after (hours without cleaning)
+                          </Text>
+                          <View className="flex-row gap-2 flex-wrap">
+                            {[4, 6, 8, 12, 24].map((hours) => (
+                              <Pressable
+                                key={hours}
+                                onPress={() => setAlertSettings(prev => ({ ...prev, alert_threshold_hours: hours }))}
+                                className="px-4 py-2 rounded-lg"
+                                style={{
+                                  backgroundColor: alertSettings.alert_threshold_hours === hours ? '#d97706' : '#f1f5f9',
+                                }}
+                              >
+                                <Text
+                                  className="font-semibold"
+                                  style={{ color: alertSettings.alert_threshold_hours === hours ? '#ffffff' : '#64748b' }}
+                                >
+                                  {hours}h
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </View>
+
+                        {/* Business Hours */}
+                        <View className="mb-4">
+                          <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
+                            Business Hours (alerts only during these hours)
+                          </Text>
+                          <View className="flex-row items-center gap-2">
+                            <TextInput
+                              value={alertSettings.business_hours_start}
+                              onChangeText={(text) => setAlertSettings(prev => ({ ...prev, business_hours_start: text }))}
+                              placeholder="08:00"
+                              placeholderTextColor={COLORS.textMuted}
+                              className="flex-1 rounded-lg px-3 py-2 text-center"
+                              style={{
+                                backgroundColor: '#f1f5f9',
+                                fontSize: 14,
+                                color: COLORS.textDark,
+                              }}
+                            />
+                            <Text style={{ color: COLORS.textMuted }}>to</Text>
+                            <TextInput
+                              value={alertSettings.business_hours_end}
+                              onChangeText={(text) => setAlertSettings(prev => ({ ...prev, business_hours_end: text }))}
+                              placeholder="18:00"
+                              placeholderTextColor={COLORS.textMuted}
+                              className="flex-1 rounded-lg px-3 py-2 text-center"
+                              style={{
+                                backgroundColor: '#f1f5f9',
+                                fontSize: 14,
+                                color: COLORS.textDark,
+                              }}
+                            />
+                          </View>
+                          <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                            Use 24-hour format (e.g., 08:00, 18:00)
+                          </Text>
+                        </View>
+
+                        {/* Alert Days */}
+                        <View className="mb-4">
+                          <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
+                            Alert Days
+                          </Text>
+                          <View className="flex-row gap-1 flex-wrap">
+                            {ALL_DAYS.map((day) => (
+                              <Pressable
+                                key={day.key}
+                                onPress={() => toggleAlertDay(day.key)}
+                                className="px-3 py-2 rounded-lg"
+                                style={{
+                                  backgroundColor: alertSettings.alert_days.includes(day.key) ? '#d97706' : '#f1f5f9',
+                                }}
+                              >
+                                <Text
+                                  className="text-xs font-semibold"
+                                  style={{ color: alertSettings.alert_days.includes(day.key) ? '#ffffff' : '#64748b' }}
+                                >
+                                  {day.label}
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </View>
+
+                        {/* Timezone */}
+                        <View className="mb-4">
+                          <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
+                            Timezone
+                          </Text>
+                          <View className="gap-1">
+                            {TIMEZONES.map((tz) => (
+                              <Pressable
+                                key={tz.value}
+                                onPress={() => setAlertSettings(prev => ({ ...prev, timezone: tz.value }))}
+                                className="flex-row items-center px-3 py-2 rounded-lg"
+                                style={{
+                                  backgroundColor: alertSettings.timezone === tz.value ? '#d97706' : '#f1f5f9',
+                                }}
+                              >
+                                <Text
+                                  className="text-sm"
+                                  style={{ color: alertSettings.timezone === tz.value ? '#ffffff' : '#64748b' }}
+                                >
+                                  {tz.label}
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </View>
+                      </>
+                    )}
+
+                    {/* Save Button */}
+                    <Pressable
+                      onPress={handleSaveAlertSettings}
+                      disabled={isSavingAlertSettings}
+                      className="rounded-xl py-4 items-center active:opacity-80 mt-2"
+                      style={{ backgroundColor: '#d97706' }}
+                    >
+                      {isSavingAlertSettings ? (
+                        <ActivityIndicator color={COLORS.white} />
+                      ) : (
+                        <View className="flex-row items-center">
+                          <Save size={20} color={COLORS.white} />
+                          <Text className="text-base font-bold ml-2" style={{ color: COLORS.white }}>
+                            Save Alert Settings
+                          </Text>
+                        </View>
+                      )}
+                    </Pressable>
+
+                    <Text className="text-xs text-center mt-3" style={{ color: COLORS.textMuted }}>
+                      Alerts are sent when cleaning is overdue during business hours
+                    </Text>
+                  </>
+                )}
+              </View>
+            </ScrollView>
           </View>
         </Modal>
       </SafeAreaView>

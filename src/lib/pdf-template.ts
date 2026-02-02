@@ -68,16 +68,13 @@ const getDocumentTitleLabel = (type: PDFTemplateConfig['documentType']): string 
   }
 };
 
-// Default legend items for cleaning reports
+// Default legend items for cleaning reports (matches database structure)
 const DEFAULT_LEGEND_ITEMS = [
-  { code: 'HS', description: 'Hand Soap / Savon' },
-  { code: 'TP', description: 'Toilet Paper / Papier' },
+  { code: 'SP', description: 'Supplies (Soap, Paper) / Fournitures (savon, papier)' },
   { code: 'BN', description: 'Bins / Poubelles' },
   { code: 'SD', description: 'Surfaces Disinfected / Surfaces désinfectées' },
-  { code: 'FX', description: 'Fixtures / Accessoires' },
-  { code: 'WT', description: 'Water Temp / Température' },
+  { code: 'FX', description: 'Fixtures & Systems / Accessoires et systèmes' },
   { code: 'FL', description: 'Floors / Planchers' },
-  { code: 'VL', description: 'Ventilation/Lighting / Éclairage' },
 ];
 
 // Status badge helper

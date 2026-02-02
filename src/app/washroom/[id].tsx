@@ -50,6 +50,7 @@ import {
   rowToCleaningLog,
   CleaningLogRow,
   verifyWashroomPin,
+  isPinSessionInvalid,
   insertReportedIssue,
   getWashroomById,
   updateWashroomLastCleaned,
@@ -154,6 +155,7 @@ export default function WashroomPublicScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [savedOffline, setSavedOffline] = useState(false);
+  const [pinSessionStartTime, setPinSessionStartTime] = useState<string | null>(null); // Track when PIN was verified
 
   const currentLocationRef = useRef<string | null>(null);
 
@@ -392,6 +394,8 @@ export default function WashroomPublicScreen() {
       const result = await verifyWashroomPin(id, staffPin);
 
       if (result.success && result.valid) {
+        // Store session start time for PIN validation on submit
+        setPinSessionStartTime(new Date().toISOString());
         setShowPinModal(false);
         setStaffPin('');
         setShowChecklist(true);
@@ -511,6 +515,29 @@ export default function WashroomPublicScreen() {
     setSavedOffline(false);
     setIsSubmitting(true);
 
+    // Check if PIN session is still valid (PIN hasn't changed since verification)
+    // Skip this check for admin view or if no session start time (legacy)
+    if (!isAdminView && pinSessionStartTime && isOnline) {
+      try {
+        const sessionCheck = await isPinSessionInvalid(id, pinSessionStartTime);
+        if (sessionCheck.success && sessionCheck.invalid) {
+          // PIN was changed after verification - force re-verification
+          setIsSubmitting(false);
+          setShowChecklist(false);
+          setPinSessionStartTime(null);
+          Alert.alert(
+            'PIN Changed / NIP modifié',
+            'The PIN has been changed. Please enter the new PIN to continue.\n\nLe NIP a été modifié. Veuillez entrer le nouveau NIP pour continuer.',
+            [{ text: 'OK', onPress: () => setShowPinModal(true) }]
+          );
+          return;
+        }
+      } catch (error) {
+        console.log('[Submit] PIN session check failed (non-blocking):', error);
+        // Continue with submit - this is a security enhancement, not a blocker
+      }
+    }
+
     const status: CleaningStatus = allChecked ? 'complete' : 'attention_required';
 
     const logData = {
@@ -539,6 +566,7 @@ export default function WashroomPublicScreen() {
       setStaffName('');
       setStaffPin('');
       setPinError(null);
+      setPinSessionStartTime(null);
       setMaintenanceNotes('');
       setShowChecklist(false);
       setSavedOffline(true);
@@ -567,6 +595,7 @@ export default function WashroomPublicScreen() {
           setStaffName('');
           setStaffPin('');
           setPinError(null);
+          setPinSessionStartTime(null);
           setMaintenanceNotes('');
           setShowChecklist(false);
           setSavedOffline(true);
@@ -636,6 +665,7 @@ export default function WashroomPublicScreen() {
       setStaffName('');
       setStaffPin('');
       setPinError(null);
+      setPinSessionStartTime(null);
       setMaintenanceNotes('');
       setShowChecklist(false);
       setShowSuccess(true);
@@ -654,6 +684,7 @@ export default function WashroomPublicScreen() {
       setStaffName('');
       setStaffPin('');
       setPinError(null);
+      setPinSessionStartTime(null);
       setMaintenanceNotes('');
       setShowChecklist(false);
       setSavedOffline(true);
@@ -672,6 +703,7 @@ export default function WashroomPublicScreen() {
     setStaffName('');
     setStaffPin('');
     setPinError(null);
+    setPinSessionStartTime(null);
     setMaintenanceNotes('');
   };
 

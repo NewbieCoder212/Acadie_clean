@@ -350,9 +350,27 @@ export interface WashroomRow {
   last_cleaned: string | null;
   pin_code: string;
   pin_display: string | null; // Plain PIN for manager display
+  pin_changed_at: string | null; // Timestamp when PIN was last changed
   alert_email: string | null;
   is_active: boolean;
   created_at: string;
+  // Alert settings (for overdue cleaning notifications)
+  alert_enabled: boolean;
+  alert_threshold_hours: number;
+  business_hours_start: string; // TIME format "HH:MM"
+  business_hours_end: string; // TIME format "HH:MM"
+  alert_days: string[]; // Array of lowercase day names
+  timezone: string;
+  last_alert_sent_at: string | null;
+}
+
+export interface WashroomAlertSettings {
+  alert_enabled: boolean;
+  alert_threshold_hours: number;
+  business_hours_start: string;
+  business_hours_end: string;
+  alert_days: string[];
+  timezone: string;
 }
 
 export interface InsertWashroom {
@@ -479,12 +497,18 @@ export async function getWashroomById(washroomId: string): Promise<{ success: bo
 }
 
 // Verify PIN for a washroom (checks universal business PIN first, then washroom-specific PIN)
-export async function verifyWashroomPin(washroomId: string, pin: string): Promise<{ success: boolean; valid?: boolean; error?: string }> {
+// Returns pin_changed_at timestamp to track session validity
+export async function verifyWashroomPin(washroomId: string, pin: string): Promise<{
+  success: boolean;
+  valid?: boolean;
+  pinChangedAt?: string | null; // Timestamp when PIN was last changed
+  error?: string
+}> {
   try {
     // First, get the washroom to find its business
     const { data: washroom, error: washroomError } = await supabase
       .from('washrooms')
-      .select('id, pin_code, business_name')
+      .select('id, pin_code, pin_changed_at, business_name')
       .eq('id', washroomId)
       .eq('is_active', true)
       .single();
@@ -500,7 +524,7 @@ export async function verifyWashroomPin(washroomId: string, pin: string): Promis
     if (washroom?.business_name) {
       const { data: business, error: businessError } = await supabase
         .from('businesses')
-        .select('id, staff_pin_hash')
+        .select('id, staff_pin_hash, staff_pin_changed_at')
         .eq('name', washroom.business_name)
         .eq('is_active', true)
         .single();
@@ -523,7 +547,14 @@ export async function verifyWashroomPin(washroomId: string, pin: string): Promis
         }
 
         if (businessPinValid) {
-          return { success: true, valid: true };
+          // Return the business PIN changed timestamp (most recent of business or washroom)
+          const businessPinChangedAt = business.staff_pin_changed_at;
+          const washroomPinChangedAt = washroom.pin_changed_at;
+          // Use the most recent change timestamp
+          const pinChangedAt = businessPinChangedAt && washroomPinChangedAt
+            ? (new Date(businessPinChangedAt) > new Date(washroomPinChangedAt) ? businessPinChangedAt : washroomPinChangedAt)
+            : businessPinChangedAt || washroomPinChangedAt;
+          return { success: true, valid: true, pinChangedAt };
         }
       }
     }
@@ -544,7 +575,63 @@ export async function verifyWashroomPin(washroomId: string, pin: string): Promis
       }
     }
 
-    return { success: true, valid };
+    return { success: true, valid, pinChangedAt: washroom?.pin_changed_at ?? null };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Check if PIN has changed since a session started
+// Returns true if PIN was changed AFTER sessionStartTime, meaning session is invalid
+export async function isPinSessionInvalid(washroomId: string, sessionStartTime: string): Promise<{
+  success: boolean;
+  invalid?: boolean;
+  error?: string
+}> {
+  try {
+    // Get washroom to find its business
+    const { data: washroom, error: washroomError } = await supabase
+      .from('washrooms')
+      .select('pin_changed_at, business_name')
+      .eq('id', washroomId)
+      .eq('is_active', true)
+      .single();
+
+    if (washroomError) {
+      if (washroomError.code === 'PGRST116') {
+        return { success: true, invalid: true }; // Washroom not found = invalid
+      }
+      return { success: false, error: washroomError.message };
+    }
+
+    const sessionStart = new Date(sessionStartTime);
+
+    // Check washroom-specific PIN change
+    if (washroom?.pin_changed_at) {
+      const washroomPinChanged = new Date(washroom.pin_changed_at);
+      if (washroomPinChanged > sessionStart) {
+        return { success: true, invalid: true };
+      }
+    }
+
+    // Check business universal PIN change
+    if (washroom?.business_name) {
+      const { data: business, error: businessError } = await supabase
+        .from('businesses')
+        .select('staff_pin_changed_at')
+        .eq('name', washroom.business_name)
+        .eq('is_active', true)
+        .single();
+
+      if (!businessError && business?.staff_pin_changed_at) {
+        const businessPinChanged = new Date(business.staff_pin_changed_at);
+        if (businessPinChanged > sessionStart) {
+          return { success: true, invalid: true };
+        }
+      }
+    }
+
+    return { success: true, invalid: false };
   } catch (error) {
     return { success: false, error: String(error) };
   }
@@ -674,6 +761,34 @@ export async function insertWashroom(washroom: InsertWashroom): Promise<{ succes
   }
 }
 
+// Update alert settings for a washroom
+export async function updateWashroomAlertSettings(
+  washroomId: string,
+  settings: WashroomAlertSettings
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('washrooms')
+      .update({
+        alert_enabled: settings.alert_enabled,
+        alert_threshold_hours: settings.alert_threshold_hours,
+        business_hours_start: settings.business_hours_start,
+        business_hours_end: settings.business_hours_end,
+        alert_days: settings.alert_days,
+        timezone: settings.timezone,
+      })
+      .eq('id', washroomId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
 // Delete a location from Supabase
 export async function deleteLocation(locationId: string): Promise<{ success: boolean; error?: string }> {
   try {
@@ -754,6 +869,7 @@ export interface BusinessRow {
   last_trial_reminder_sent_at: string | null;
   staff_pin_hash: string | null;
   staff_pin_display: string | null;
+  staff_pin_changed_at: string | null; // Timestamp when PIN was last changed
   created_at: string;
 }
 
@@ -1126,6 +1242,7 @@ export async function updateBusinessStaffPin(businessId: string, newPin: string)
       .update({
         staff_pin_hash: hashedPin,
         staff_pin_display: newPin, // Store plain PIN for manager display
+        staff_pin_changed_at: new Date().toISOString(), // Track when PIN was changed
       })
       .eq('id', businessId);
 
@@ -1629,6 +1746,7 @@ export async function updateWashroomPin(washroomId: string, newPin: string): Pro
       .update({
         pin_code: hashedPin,
         pin_display: newPin, // Store plain PIN for manager display
+        pin_changed_at: new Date().toISOString(), // Track when PIN was changed
       })
       .eq('id', washroomId);
 

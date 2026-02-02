@@ -666,18 +666,16 @@ export default function ManagerDashboard() {
       const businessDisplayName = currentBusiness?.name || 'Acadia Clean';
 
       // Build table rows with standardized status labels
+      // Columns match actual database structure: supplies, trash, surfaces, fixtures, floor
       const tableRows = locationLogs.map((log, index) => `
         <tr>
           <td>${formatDateTime(log.timestamp)}</td>
           <td>${truncateText(log.staff_name, 15)}</td>
           <td style="text-align: center;">${getCheckIcon(log.checklist_supplies)}</td>
-          <td style="text-align: center;">${getCheckIcon(log.checklist_supplies)}</td>
           <td style="text-align: center;">${getCheckIcon(log.checklist_trash)}</td>
           <td style="text-align: center;">${getCheckIcon(log.checklist_surfaces)}</td>
           <td style="text-align: center;">${getCheckIcon(log.checklist_fixtures)}</td>
-          <td style="text-align: center;">${getCheckIcon(log.checklist_fixtures)}</td>
           <td style="text-align: center;">${getCheckIcon(log.checklist_floor)}</td>
-          <td style="text-align: center;">${getCheckIcon(log.checklist_fixtures)}</td>
           <td style="text-align: center;">${getStatusBadge(log.status === 'complete' ? 'Complete' : 'Incomplete')}</td>
         </tr>
       `).join('');
@@ -688,7 +686,7 @@ export default function ManagerDashboard() {
         businessName: businessDisplayName,
         location: `${premiumExportLocationName} - ${businessDisplayName}`,
         dateRange: { start: startDate, end: endDate },
-        tableHeaders: ['Date/Time', 'Staff', 'HS', 'TP', 'BN', 'SD', 'FX', 'WT', 'FL', 'VL', 'Status'],
+        tableHeaders: ['Date/Time', 'Staff', 'SP', 'BN', 'SD', 'FX', 'FL', 'Status'],
         tableRows,
         showLegend: true,
       });
@@ -747,18 +745,16 @@ export default function ManagerDashboard() {
       startDate.setDate(startDate.getDate() - 30);
 
       // Build table rows with standardized status labels
+      // Columns match actual database structure: supplies, trash, surfaces, fixtures, floor
       const tableRows = logs.map((log, index) => `
         <tr>
           <td>${formatDateTime(log.timestamp)}</td>
           <td>${truncateText(log.staff_name, 15)}</td>
           <td style="text-align: center;">${getCheckIcon(log.checklist_supplies)}</td>
-          <td style="text-align: center;">${getCheckIcon(log.checklist_supplies)}</td>
           <td style="text-align: center;">${getCheckIcon(log.checklist_trash)}</td>
           <td style="text-align: center;">${getCheckIcon(log.checklist_surfaces)}</td>
           <td style="text-align: center;">${getCheckIcon(log.checklist_fixtures)}</td>
-          <td style="text-align: center;">${getCheckIcon(log.checklist_fixtures)}</td>
           <td style="text-align: center;">${getCheckIcon(log.checklist_floor)}</td>
-          <td style="text-align: center;">${getCheckIcon(log.checklist_fixtures)}</td>
           <td style="text-align: center;">${getStatusBadge(log.status === 'complete' ? 'Complete' : 'Incomplete')}</td>
         </tr>
       `).join('');
@@ -769,7 +765,7 @@ export default function ManagerDashboard() {
         businessName: businessDisplayName,
         location: `${location.name} - ${businessDisplayName}`,
         dateRange: { start: startDate, end: endDate },
-        tableHeaders: ['Date/Time', 'Staff', 'HS', 'TP', 'BN', 'SD', 'FX', 'WT', 'FL', 'VL', 'Status'],
+        tableHeaders: ['Date/Time', 'Staff', 'SP', 'BN', 'SD', 'FX', 'FL', 'Status'],
         tableRows,
         showLegend: true,
       });
