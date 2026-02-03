@@ -370,11 +370,15 @@ export default function WashroomPublicScreen() {
   const canSubmit = staffName.trim() && (!hasUnchecked || maintenanceNotes.trim());
 
   const getTimeSince = (timestamp: number) => {
-    const diff = Date.now() - timestamp;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(minutes / 60);
-    if (hours > 0) return `${hours}h ${minutes % 60}m ago`;
-    return `${minutes}m ago`;
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
   };
 
   const handleOpenChecklist = () => {

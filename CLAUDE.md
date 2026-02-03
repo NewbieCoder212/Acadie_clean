@@ -8,6 +8,13 @@
   All packages are pre-installed. DO NOT install new packages unless they are @expo-google-font packages or pure JavaScript helpers like lodash, dayjs, etc.
 </stack>
 
+<deployment>
+  THIS APP IS A PWA deployed at app.acadiacleaniq.ca — NOT an App Store app.
+  All code runs via Expo Web in a browser.
+  When fixing bugs or adding features, ALWAYS search the entire codebase for all instances of related patterns.
+  Test assumptions against web/browser behavior, not just mobile.
+</deployment>
+
 <structure>
   src/app/          — Expo Router file-based routes (src/app/_layout.tsx is root). Add new screens to this folder.
   src/components/   — Reusable UI components. Add new components to this folder.

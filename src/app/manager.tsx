@@ -633,13 +633,15 @@ export default function ManagerDashboard() {
   };
 
   const formatTimeAgo = (timestamp: string) => {
-    const diff = Date.now() - new Date(timestamp).getTime();
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-    if (days > 0) return `${days}d ago`;
-    if (hours > 0) return `${hours}h ago`;
-    return `${minutes}m ago`;
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
   };
 
   const formatDateTime = (timestamp: string) => {
@@ -1432,7 +1434,7 @@ export default function ManagerDashboard() {
                         {log.location_name}
                       </Text>
                       <Text className="text-[10px]" style={{ color: C.textMuted }}>
-                        {formatTimeAgo(log.timestamp)}
+                        {formatDateTime(log.timestamp)}
                       </Text>
                     </View>
 
