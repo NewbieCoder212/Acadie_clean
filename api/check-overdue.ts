@@ -365,10 +365,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const authHeader = req.headers.authorization;
   const cronSecret = process.env.CRON_SECRET;
 
-  // Allow if CRON_SECRET matches or if no secret is configured (for manual testing)
-  const isAuthorized = !cronSecret || authHeader === `Bearer ${cronSecret}`;
+  // CRON_SECRET is required - fail if not configured
+  if (!cronSecret) {
+    console.error('[check-overdue] CRON_SECRET not configured');
+    res.status(500).json({ error: 'Server misconfigured' });
+    return;
+  }
 
-  if (!isAuthorized) {
+  // Verify the authorization header matches
+  if (authHeader !== `Bearer ${cronSecret}`) {
     console.error('[check-overdue] Unauthorized request');
     res.status(401).json({ error: 'Unauthorized' });
     return;
