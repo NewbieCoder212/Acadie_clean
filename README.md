@@ -45,7 +45,12 @@ The app uses a consistent color palette across all screens:
   - **Attention Required / Attention requise**: One or more items are unchecked
 - **Mandatory Notes**: When status is "Attention Required", maintenance notes are mandatory
 - **Status Icons**: Public display shows green checkmark for Complete, yellow warning for Attention Required (unless resolved)
-- **Email Alerts**: Automated server-side email alerts via Resend API when a cleaning requires attention. Emails are sent to the supervisor email (or default: sportsfansummer@hotmail.com) with a professionally formatted HTML template.
+- **Email Alerts**: Automated server-side email alerts via Resend API when a cleaning requires attention or an issue is reported. Supports multiple recipients with flexible configuration.
+- **Global & Location-Specific Alert Emails**:
+  - **Global Alerts**: Set one or more email addresses to receive alerts for ALL locations (great for general managers, operations directors)
+  - **Location-Specific Alerts**: Set different email addresses for each location (great for day/night supervisors at specific locations)
+  - **Toggle Control**: Enable "Use Global Emails for All Locations" to send all alerts to global emails, or disable to use location-specific emails only
+  - **Combined Delivery**: When global alerts are enabled, both global AND location-specific emails receive alerts
 - **Manager Resolution**: Managers can mark "Attention Required" entries as resolved, which removes the yellow warning from the public badge while keeping the note for audit purposes
 - **Compliance Record**: Displays the 2 most recent cleaning entries with date, time, staff name, and status
 - **Password-Protected Access**: Manager Dashboard requires password authentication from the main page

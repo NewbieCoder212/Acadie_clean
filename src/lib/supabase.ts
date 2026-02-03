@@ -496,6 +496,63 @@ export async function getWashroomById(washroomId: string): Promise<{ success: bo
   }
 }
 
+/**
+ * Get all alert email recipients for a washroom
+ * Combines global business emails (if enabled) with location-specific email
+ * Returns array of unique email addresses
+ */
+export async function getAlertRecipientsForWashroom(washroomId: string): Promise<{ success: boolean; emails: string[]; error?: string }> {
+  try {
+    // Get the washroom to find its business name and alert email
+    const { data: washroom, error: washroomError } = await supabase
+      .from('washrooms')
+      .select('id, business_name, alert_email')
+      .eq('id', washroomId)
+      .single();
+
+    if (washroomError || !washroom) {
+      return { success: false, emails: [], error: washroomError?.message || 'Washroom not found' };
+    }
+
+    const emails: string[] = [];
+
+    // Add location-specific email if set
+    if (washroom.alert_email) {
+      emails.push(washroom.alert_email.toLowerCase());
+    }
+
+    // Get business to check global alert settings
+    if (washroom.business_name) {
+      const { data: business, error: businessError } = await supabase
+        .from('businesses')
+        .select('global_alert_emails, use_global_alerts')
+        .eq('name', washroom.business_name)
+        .single();
+
+      if (!businessError && business) {
+        // Add global emails if global alerts are enabled
+        if (business.use_global_alerts && business.global_alert_emails && Array.isArray(business.global_alert_emails)) {
+          for (const email of business.global_alert_emails) {
+            const normalizedEmail = email.toLowerCase();
+            if (!emails.includes(normalizedEmail)) {
+              emails.push(normalizedEmail);
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback to default if no emails configured
+    if (emails.length === 0) {
+      emails.push('microsaasnb@proton.me');
+    }
+
+    return { success: true, emails };
+  } catch (error) {
+    return { success: false, emails: ['microsaasnb@proton.me'], error: String(error) };
+  }
+}
+
 // Verify PIN for a washroom (checks universal business PIN first, then washroom-specific PIN)
 // Returns pin_changed_at timestamp to track session validity
 export async function verifyWashroomPin(washroomId: string, pin: string): Promise<{
@@ -870,6 +927,9 @@ export interface BusinessRow {
   staff_pin_hash: string | null;
   staff_pin_display: string | null;
   staff_pin_changed_at: string | null; // Timestamp when PIN was last changed
+  // Global alert settings
+  global_alert_emails: string[] | null; // Array of email addresses for all location alerts
+  use_global_alerts: boolean; // Toggle: if true, use global emails for all locations
   created_at: string;
 }
 
@@ -887,6 +947,9 @@ export interface SafeBusinessRow {
   trial_ends_at: string | null;
   subscription_expires_at: string | null;
   staff_pin_display: string | null;
+  // Global alert settings
+  global_alert_emails: string[] | null;
+  use_global_alerts: boolean;
   created_at: string;
 }
 
@@ -1021,6 +1084,8 @@ export async function loginBusiness(email: string, password: string): Promise<{ 
         trial_ends_at: legacyData.trial_ends_at ?? null,
         subscription_expires_at: legacyData.subscription_expires_at ?? null,
         staff_pin_display: legacyData.staff_pin_display ?? null,
+        global_alert_emails: legacyData.global_alert_emails ?? null,
+        use_global_alerts: legacyData.use_global_alerts ?? false,
         created_at: legacyData.created_at,
       };
 
@@ -1047,6 +1112,8 @@ export async function loginBusiness(email: string, password: string): Promise<{ 
       trial_ends_at: data.trial_ends_at ?? null,
       subscription_expires_at: data.subscription_expires_at ?? null,
       staff_pin_display: data.staff_pin_display ?? null,
+      global_alert_emails: data.global_alert_emails ?? null,
+      use_global_alerts: data.use_global_alerts ?? false,
       created_at: data.created_at,
     };
 
@@ -1108,6 +1175,8 @@ export async function loginBusinessLegacy(email: string, password: string): Prom
       trial_ends_at: data.trial_ends_at ?? null,
       subscription_expires_at: data.subscription_expires_at ?? null,
       staff_pin_display: data.staff_pin_display ?? null,
+      global_alert_emails: data.global_alert_emails ?? null,
+      use_global_alerts: data.use_global_alerts ?? false,
       created_at: data.created_at,
     };
 
@@ -1165,6 +1234,8 @@ export async function getCurrentSession(): Promise<{ success: boolean; data?: Sa
       trial_ends_at: data.trial_ends_at ?? null,
       subscription_expires_at: data.subscription_expires_at ?? null,
       staff_pin_display: data.staff_pin_display ?? null,
+      global_alert_emails: data.global_alert_emails ?? null,
+      use_global_alerts: data.use_global_alerts ?? false,
       created_at: data.created_at,
     };
 
@@ -1205,6 +1276,8 @@ export async function getBusinessById(businessId: string): Promise<{ success: bo
       trial_ends_at: data.trial_ends_at ?? null,
       subscription_expires_at: data.subscription_expires_at ?? null,
       staff_pin_display: data.staff_pin_display ?? null,
+      global_alert_emails: data.global_alert_emails ?? null,
+      use_global_alerts: data.use_global_alerts ?? false,
       created_at: data.created_at,
     };
 
@@ -1238,6 +1311,30 @@ export async function updateBusinessAddress(businessId: string, address: string)
     const { error } = await supabase
       .from('businesses')
       .update({ address })
+      .eq('id', businessId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Update business global alert settings
+export async function updateBusinessGlobalAlertSettings(
+  businessId: string,
+  settings: { global_alert_emails: string[]; use_global_alerts: boolean }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('businesses')
+      .update({
+        global_alert_emails: settings.global_alert_emails,
+        use_global_alerts: settings.use_global_alerts,
+      })
       .eq('id', businessId);
 
     if (error) {

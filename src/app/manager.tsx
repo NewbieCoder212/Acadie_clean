@@ -42,6 +42,7 @@ import {
   toggleWashroomActive,
   updateBusinessAddress,
   updateBusinessStaffPin,
+  updateBusinessGlobalAlertSettings,
   updateWashroomPin,
   ReportedIssueRow,
   getIssuesForBusinessByName,
@@ -49,6 +50,7 @@ import {
   SubscriptionTier,
   logoutBusiness,
   getBusinessById,
+  SafeBusinessRow,
 } from '@/lib/supabase';
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { sendNewWashroomNotification } from '@/lib/email';
@@ -87,7 +89,7 @@ export default function ManagerDashboard() {
   const router = useRouter();
 
   // Business authentication state
-  const [currentBusiness, setCurrentBusiness] = useState<BusinessRow | null>(null);
+  const [currentBusiness, setCurrentBusiness] = useState<SafeBusinessRow | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [businessLocations, setBusinessLocations] = useState<WashroomRow[]>([]);
   const [allLogs, setAllLogs] = useState<CleaningLogRow[]>([]);
@@ -102,6 +104,13 @@ export default function ManagerDashboard() {
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
   const [emailInput, setEmailInput] = useState('');
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+
+  // Global Alert Settings state
+  const [showGlobalAlertSettings, setShowGlobalAlertSettings] = useState(false);
+  const [globalAlertEmails, setGlobalAlertEmails] = useState<string[]>([]);
+  const [newGlobalAlertEmail, setNewGlobalAlertEmail] = useState('');
+  const [useGlobalAlerts, setUseGlobalAlerts] = useState(false);
+  const [isSavingGlobalAlerts, setIsSavingGlobalAlerts] = useState(false);
 
   // Newly created location success modal (kept for when admin creates via admin page)
   const [newlyCreatedLocation, setNewlyCreatedLocation] = useState<{ id: string; name: string } | null>(null);
@@ -251,22 +260,27 @@ export default function ManagerDashboard() {
       const stored = await AsyncStorage.getItem('currentBusiness');
       if (stored) {
         try {
-          const business = JSON.parse(stored) as BusinessRow;
+          const business = JSON.parse(stored) as SafeBusinessRow;
           if (business?.id && business?.name) {
             // Refresh business data from database to get latest staff_pin_display
             const refreshedResult = await getBusinessById(business.id);
             if (refreshedResult.success && refreshedResult.data) {
-              const refreshedBusiness = refreshedResult.data as BusinessRow;
+              const refreshedBusiness = refreshedResult.data;
               // Update AsyncStorage with fresh data
               await AsyncStorage.setItem('currentBusiness', JSON.stringify(refreshedBusiness));
               setCurrentBusiness(refreshedBusiness);
               setBusinessName(refreshedBusiness.name);
               setBusinessAddress(refreshedBusiness.address || '');
+              // Initialize global alert settings
+              setGlobalAlertEmails(refreshedBusiness.global_alert_emails || []);
+              setUseGlobalAlerts(refreshedBusiness.use_global_alerts || false);
             } else {
               // Fallback to stored data if refresh fails
               setCurrentBusiness(business);
               setBusinessName(business.name);
               setBusinessAddress(business.address || '');
+              setGlobalAlertEmails(business.global_alert_emails || []);
+              setUseGlobalAlerts(business.use_global_alerts || false);
             }
             // Fetch business-specific washrooms
             const washroomsResult = await getWashroomsForBusiness(business.name);
@@ -429,6 +443,62 @@ export default function ManagerDashboard() {
       Alert.alert('Error', 'Network error. Please try again.');
     } finally {
       setIsSavingEmail(false);
+    }
+  };
+
+  // Handle adding a new global alert email
+  const handleAddGlobalAlertEmail = () => {
+    const email = newGlobalAlertEmail.trim().toLowerCase();
+    if (!email) return;
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address.\nVeuillez entrer une adresse courriel valide.');
+      return;
+    }
+
+    // Check for duplicates
+    if (globalAlertEmails.includes(email)) {
+      Alert.alert('Duplicate', 'This email is already in the list.\nCe courriel est déjà dans la liste.');
+      return;
+    }
+
+    setGlobalAlertEmails([...globalAlertEmails, email]);
+    setNewGlobalAlertEmail('');
+  };
+
+  // Handle removing a global alert email
+  const handleRemoveGlobalAlertEmail = (emailToRemove: string) => {
+    setGlobalAlertEmails(globalAlertEmails.filter(email => email !== emailToRemove));
+  };
+
+  // Handle saving global alert settings
+  const handleSaveGlobalAlertSettings = async () => {
+    if (!currentBusiness?.id) return;
+    setIsSavingGlobalAlerts(true);
+    try {
+      const result = await updateBusinessGlobalAlertSettings(currentBusiness.id, {
+        global_alert_emails: globalAlertEmails,
+        use_global_alerts: useGlobalAlerts,
+      });
+      if (result.success) {
+        // Update local storage with new settings
+        const updatedBusiness = {
+          ...currentBusiness,
+          global_alert_emails: globalAlertEmails,
+          use_global_alerts: useGlobalAlerts,
+        };
+        await AsyncStorage.setItem('currentBusiness', JSON.stringify(updatedBusiness));
+        setCurrentBusiness(updatedBusiness);
+        Alert.alert('Success', 'Alert settings saved!\nParamètres d\'alerte enregistrés!');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to save alert settings');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setIsSavingGlobalAlerts(false);
     }
   };
 
@@ -1541,6 +1611,174 @@ export default function ManagerDashboard() {
           )}
         </Animated.View>
 
+        {/* GLOBAL ALERT SETTINGS */}
+        <Animated.View
+          entering={FadeIn.delay(350).duration(500)}
+          className="px-5 py-4"
+        >
+          <Pressable
+            onPress={() => setShowGlobalAlertSettings(!showGlobalAlertSettings)}
+            className="rounded-xl p-4"
+            style={{ backgroundColor: '#1e40af' }}
+          >
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center">
+                <Mail size={20} color="#93c5fd" />
+                <View className="ml-2">
+                  <Text className="text-base font-semibold text-white">
+                    Alert Email Settings
+                  </Text>
+                  <Text className="text-xs" style={{ color: '#93c5fd' }}>
+                    Paramètres des courriels d'alerte
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight
+                size={20}
+                color="#93c5fd"
+                style={{ transform: [{ rotate: showGlobalAlertSettings ? '90deg' : '0deg' }] }}
+              />
+            </View>
+
+            {showGlobalAlertSettings && (
+              <Pressable onPress={(e) => e.stopPropagation()}>
+                <View className="mt-4">
+                  <Text className="text-sm mb-4" style={{ color: '#93c5fd' }}>
+                    Configure who receives alerts for all locations or set different emails per location.
+                  </Text>
+                  <Text className="text-xs mb-4 italic" style={{ color: '#60a5fa' }}>
+                    Configurez qui reçoit les alertes pour tous les emplacements ou définissez des courriels différents par emplacement.
+                  </Text>
+
+                  {/* Toggle for Global Alerts */}
+                  <View
+                    className="rounded-lg p-4 mb-4"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-1 mr-3">
+                        <Text className="text-sm font-semibold text-white">
+                          Use Global Emails for All Locations
+                        </Text>
+                        <Text className="text-xs mt-1" style={{ color: '#93c5fd' }}>
+                          Utiliser les courriels globaux pour tous les emplacements
+                        </Text>
+                      </View>
+                      <Switch
+                        value={useGlobalAlerts}
+                        onValueChange={setUseGlobalAlerts}
+                        trackColor={{ false: 'rgba(255,255,255,0.3)', true: '#22c55e' }}
+                        thumbColor={useGlobalAlerts ? '#fff' : '#fff'}
+                        ios_backgroundColor="rgba(255,255,255,0.3)"
+                      />
+                    </View>
+                    <Text className="text-xs mt-2" style={{ color: '#60a5fa' }}>
+                      {useGlobalAlerts
+                        ? 'All alerts will be sent to the global email list below.'
+                        : 'Alerts will be sent to location-specific emails (set in each location).'}
+                    </Text>
+                  </View>
+
+                  {/* Global Email List */}
+                  <View className="mb-3">
+                    <Text className="text-xs font-medium mb-2" style={{ color: '#93c5fd' }}>
+                      Global Alert Emails / Courriels d'alerte globaux
+                    </Text>
+
+                    {/* List of current emails */}
+                    {globalAlertEmails.length > 0 && (
+                      <View className="mb-3">
+                        {globalAlertEmails.map((email, index) => (
+                          <View
+                            key={index}
+                            className="flex-row items-center justify-between rounded-lg px-3 py-2 mb-2"
+                            style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+                          >
+                            <Text className="text-sm text-white flex-1" numberOfLines={1}>
+                              {email}
+                            </Text>
+                            <Pressable
+                              onPress={() => handleRemoveGlobalAlertEmail(email)}
+                              className="p-1 rounded-full ml-2"
+                              style={{ backgroundColor: 'rgba(239,68,68,0.3)' }}
+                            >
+                              <X size={16} color="#fca5a5" />
+                            </Pressable>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
+                    {globalAlertEmails.length === 0 && (
+                      <View
+                        className="rounded-lg p-3 mb-3 items-center"
+                        style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
+                      >
+                        <Text className="text-xs" style={{ color: '#93c5fd' }}>
+                          No global emails added yet
+                        </Text>
+                        <Text className="text-xs" style={{ color: '#60a5fa' }}>
+                          Aucun courriel global ajouté
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Add new email input */}
+                    <View className="flex-row items-center gap-2">
+                      <TextInput
+                        value={newGlobalAlertEmail}
+                        onChangeText={setNewGlobalAlertEmail}
+                        placeholder="supervisor@example.com"
+                        placeholderTextColor="rgba(255,255,255,0.5)"
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        className="flex-1 rounded-lg px-4 py-3 text-base text-white"
+                        style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}
+                      />
+                      <Pressable
+                        onPress={handleAddGlobalAlertEmail}
+                        className="rounded-lg px-4 py-3"
+                        style={{ backgroundColor: '#22c55e' }}
+                      >
+                        <Plus size={20} color="#fff" />
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {/* Info about location-specific emails */}
+                  <View
+                    className="rounded-lg p-3 mb-4"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
+                  >
+                    <Text className="text-xs" style={{ color: '#93c5fd' }}>
+                      {useGlobalAlerts
+                        ? 'Location-specific emails can still be set and will receive alerts in addition to global emails.'
+                        : 'Set location-specific emails by tapping on each location above.'}
+                    </Text>
+                  </View>
+
+                  {/* Save Button */}
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleSaveGlobalAlertSettings();
+                    }}
+                    disabled={isSavingGlobalAlerts}
+                    className="flex-row items-center justify-center py-4 rounded-lg"
+                    style={{ backgroundColor: '#22c55e' }}
+                  >
+                    {isSavingGlobalAlerts ? (
+                      <><ActivityIndicator size="small" color="#fff" /><Text className="text-white font-bold ml-2">Saving...</Text></>
+                    ) : (
+                      <><Save size={20} color="#fff" /><Text className="text-white font-bold ml-2">Save Alert Settings</Text></>
+                    )}
+                  </Pressable>
+                </View>
+              </Pressable>
+            )}
+          </Pressable>
+        </Animated.View>
+
         {/* INSPECTOR MODE - Available to all users */}
         <Animated.View
           entering={FadeIn.delay(400).duration(500)}
@@ -1915,15 +2153,33 @@ export default function ManagerDashboard() {
                     <Text className="text-xs" style={{ color: COLORS.primaryDark }}>Voir la page publique</Text>
                   </Pressable>
 
-                  {/* Supervisor Email - Editable */}
+                  {/* Location-Specific Alert Email */}
                   <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.slate200 }}>
                     <View className="mb-2">
                       <View className="flex-row items-center">
                         <Mail size={16} color={COLORS.slate500} />
-                        <Text className="text-sm font-semibold ml-2" style={{ color: COLORS.slate700 }}>Alert Email</Text>
+                        <Text className="text-sm font-semibold ml-2" style={{ color: COLORS.slate700 }}>Location Alert Email</Text>
                       </View>
-                      <Text className="text-xs ml-6" style={{ color: COLORS.slate400 }}>Courriel d'alerte</Text>
+                      <Text className="text-xs ml-6" style={{ color: COLORS.slate400 }}>Courriel d'alerte de l'emplacement</Text>
                     </View>
+
+                    {/* Info about global vs location-specific */}
+                    <View
+                      className="rounded-lg p-3 mb-3"
+                      style={{ backgroundColor: useGlobalAlerts ? '#dbeafe' : '#f1f5f9' }}
+                    >
+                      <Text className="text-xs" style={{ color: useGlobalAlerts ? '#1e40af' : COLORS.slate500 }}>
+                        {useGlobalAlerts
+                          ? 'Global alerts are ON. This email will receive alerts in addition to the global email list.'
+                          : 'Global alerts are OFF. Only this email will receive alerts for this location.'}
+                      </Text>
+                      <Text className="text-xs mt-1 italic" style={{ color: useGlobalAlerts ? '#3b82f6' : COLORS.slate400 }}>
+                        {useGlobalAlerts
+                          ? 'Alertes globales activées. Ce courriel recevra les alertes en plus de la liste globale.'
+                          : 'Alertes globales désactivées. Seul ce courriel recevra les alertes pour cet emplacement.'}
+                      </Text>
+                    </View>
+
                     <TextInput
                       value={editAlertEmail}
                       onChangeText={setEditAlertEmail}

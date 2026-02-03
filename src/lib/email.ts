@@ -43,7 +43,7 @@ async function sendEmailViaAPI(params: { to: string; subject: string; html: stri
 }
 
 interface EmailParams {
-  to: string;
+  to: string | string[]; // Support single email or array of emails
   locationName: string;
   locationId: string;
   staffName: string;
@@ -252,23 +252,34 @@ export interface SendAlertEmailResult {
 
 /**
  * Send an attention required alert email via secure API
+ * Supports sending to multiple recipients
  */
 export async function sendAttentionRequiredEmail(params: EmailParams): Promise<SendAlertEmailResult> {
   try {
     const htmlContent = generateEmailHTML(params);
     const textContent = generateEmailText(params);
 
-    const result = await sendEmailViaAPI({
-      to: params.to,
-      subject: `[Acadia Clean] Attention Required - ${params.locationName}`,
-      html: htmlContent,
-      text: textContent,
-    });
+    // Normalize to array of emails
+    const recipients = Array.isArray(params.to) ? params.to : [params.to];
 
-    if (!result.success) {
+    // Send to all recipients
+    const results = await Promise.all(
+      recipients.map(email =>
+        sendEmailViaAPI({
+          to: email,
+          subject: `[Acadia Clean] Attention Required - ${params.locationName}`,
+          html: htmlContent,
+          text: textContent,
+        })
+      )
+    );
+
+    // Check if any email failed
+    const failures = results.filter(r => !r.success);
+    if (failures.length > 0) {
       return {
         success: false,
-        error: result.error || 'Failed to send email alert. The log was saved successfully.'
+        error: failures[0].error || 'Failed to send some email alerts. The log was saved successfully.'
       };
     }
 
@@ -337,7 +348,7 @@ export const ISSUE_TYPES = [
 ];
 
 interface IssueReportParams {
-  to: string;
+  to: string | string[]; // Support single email or array of emails
   locationName: string;
   locationId: string;
   issueType: string;
@@ -491,23 +502,34 @@ function generateIssueReportHTML(params: IssueReportParams): string {
 
 /**
  * Send an urgent issue report email via secure API
+ * Supports sending to multiple recipients
  */
 export async function sendIssueReportEmail(params: IssueReportParams): Promise<{ success: boolean; error?: string }> {
   try {
     const htmlContent = generateIssueReportHTML(params);
     const issueLabel = ISSUE_TYPES.find(t => t.value === params.issueType)?.label || params.issueType;
 
-    const result = await sendEmailViaAPI({
-      to: params.to,
-      subject: `URGENT: Issue Reported at ${params.locationName} - ${issueLabel}`,
-      html: htmlContent,
-      text: `URGENT: Issue Reported at ${params.locationName}\n\nIssue Type: ${issueLabel}\nComment: ${params.comment || 'No comment provided'}\n\nPlease address this immediately.`,
-    });
+    // Normalize to array of emails
+    const recipients = Array.isArray(params.to) ? params.to : [params.to];
 
-    if (!result.success) {
+    // Send to all recipients
+    const results = await Promise.all(
+      recipients.map(email =>
+        sendEmailViaAPI({
+          to: email,
+          subject: `URGENT: Issue Reported at ${params.locationName} - ${issueLabel}`,
+          html: htmlContent,
+          text: `URGENT: Issue Reported at ${params.locationName}\n\nIssue Type: ${issueLabel}\nComment: ${params.comment || 'No comment provided'}\n\nPlease address this immediately.`,
+        })
+      )
+    );
+
+    // Check if any email failed
+    const failures = results.filter(r => !r.success);
+    if (failures.length > 0) {
       return {
         success: false,
-        error: result.error || 'Failed to send report'
+        error: failures[0].error || 'Failed to send some reports'
       };
     }
 

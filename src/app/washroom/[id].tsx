@@ -60,6 +60,7 @@ import {
   trackQrScanDetailed,
   getOpenIssuesForLocation,
   ReportedIssueRow,
+  getAlertRecipientsForWashroom,
 } from '@/lib/supabase';
 import { sendAttentionRequiredEmail, getUncheckedItems, sendIssueReportEmail, ISSUE_TYPES } from '@/lib/email';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
@@ -464,20 +465,24 @@ export default function WashroomPublicScreen() {
 
       // Try to send email notification (non-blocking - issue is already saved)
       const insertedIssueId = supabaseResult.data?.id;
-      const recipientEmail = supabaseWashroom?.alert_email || 'microsaasnb@proton.me';
 
-      sendIssueReportEmail({
-        to: recipientEmail,
-        locationName: location?.name || 'Unknown Location',
-        locationId: id || '',
-        issueType: selectedIssueType,
-        comment: issueComment.trim(),
-        timestamp: new Date(),
-        issueId: insertedIssueId,
-      }).then(result => {
-        if (!result.success) {
-          console.log('[Issue] Email notification failed (issue still saved):', result.error);
-        }
+      // Get all alert recipients (global + location-specific)
+      getAlertRecipientsForWashroom(id || '').then(recipientsResult => {
+        const recipientEmails = recipientsResult.emails;
+
+        sendIssueReportEmail({
+          to: recipientEmails,
+          locationName: location?.name || 'Unknown Location',
+          locationId: id || '',
+          issueType: selectedIssueType,
+          comment: issueComment.trim(),
+          timestamp: new Date(),
+          issueId: insertedIssueId,
+        }).then(result => {
+          if (!result.success) {
+            console.log('[Issue] Email notification failed (issue still saved):', result.error);
+          }
+        });
       });
 
     } catch (error) {
@@ -638,12 +643,13 @@ export default function WashroomPublicScreen() {
       }
 
       if (status === 'attention_required') {
-        // Use the location's alert_email, fallback to a default if not set
-        const recipientEmail = supabaseWashroom?.alert_email || 'microsaasnb@proton.me';
+        // Get all alert recipients (global + location-specific)
+        const recipientsResult = await getAlertRecipientsForWashroom(id);
+        const recipientEmails = recipientsResult.emails;
         const uncheckedItems = getUncheckedItems(checklist);
 
         const emailResult = await sendAttentionRequiredEmail({
-          to: recipientEmail,
+          to: recipientEmails,
           locationName: location?.name ?? 'Unknown Location',
           locationId: id,
           staffName: staffName.trim(),
