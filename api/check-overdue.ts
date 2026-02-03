@@ -158,24 +158,31 @@ function generateOverdueEmailHtml(
   washroomName: string,
   washroomId: string,
   lastCleaned: string | null,
-  thresholdHours: number
+  thresholdHours: number,
+  timezone: string = 'America/Moncton'
 ): string {
-  const loginUrl = `${APP_URL}/manager`;
+  const loginUrl = `${APP_URL}/login`;
   const now = new Date();
+
+  // Format current time in the washroom's timezone
   const formattedDate = now.toLocaleDateString('en-US', {
+    timeZone: timezone,
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric'
   });
   const formattedTime = now.toLocaleTimeString('en-US', {
+    timeZone: timezone,
     hour: 'numeric',
     minute: '2-digit',
     hour12: true
   });
 
+  // Format last cleaned time in the washroom's timezone
   const lastCleanedStr = lastCleaned
     ? new Date(lastCleaned).toLocaleString('en-US', {
+        timeZone: timezone,
         month: 'short',
         day: 'numeric',
         year: 'numeric',
@@ -281,9 +288,9 @@ function generateOverdueEmailHtml(
                 <tr>
                   <td align="center">
                     <a href="${loginUrl}" style="display: inline-block; background-color: #059669; color: #ffffff; font-size: 18px; font-weight: bold; text-decoration: none; padding: 18px 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(5, 150, 105, 0.3);">
-                      View Dashboard
+                      Login to Dashboard
                     </a>
-                    <p style="color: #64748b; font-size: 11px; margin: 12px 0 0;">Login to mark this location as cleaned</p>
+                    <p style="color: #64748b; font-size: 11px; margin: 12px 0 0;">Sign in to mark this location as cleaned</p>
                   </td>
                 </tr>
               </table>
@@ -467,7 +474,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         washroom.room_name,
         washroom.id,
         washroom.last_cleaned,
-        washroom.alert_threshold_hours || 8
+        washroom.alert_threshold_hours || 8,
+        washroom.timezone || 'America/Moncton'
       );
 
       const subject = `⚠️ Cleaning Overdue: ${washroom.room_name} - ${washroom.business_name}`;
