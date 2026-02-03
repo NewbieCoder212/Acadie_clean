@@ -30,6 +30,7 @@ import {
   QrCode,
   TrendingUp,
   Crown,
+  Key,
 } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -114,6 +115,7 @@ export default function AdminDashboardScreen() {
   const [newBusinessName, setNewBusinessName] = useState('');
   const [newBusinessEmail, setNewBusinessEmail] = useState('');
   const [newBusinessPassword, setNewBusinessPassword] = useState('');
+  const [newBusinessTrialDays, setNewBusinessTrialDays] = useState(14); // Default 14 days
 
   useEffect(() => {
     checkAuth();
@@ -255,6 +257,7 @@ export default function AdminDashboardScreen() {
         email: newBusinessEmail.trim(),
         password: newBusinessPassword.trim(),
         is_admin: false,
+        trial_days: newBusinessTrialDays,
       });
 
       console.log('[Admin] Create business result:', result.success, result.error);
@@ -264,8 +267,9 @@ export default function AdminDashboardScreen() {
         setNewBusinessName('');
         setNewBusinessEmail('');
         setNewBusinessPassword('');
+        setNewBusinessTrialDays(14); // Reset to default
         loadData();
-        Alert.alert('Success', 'Business created successfully');
+        Alert.alert('Success', `Business created successfully with ${newBusinessTrialDays}-day trial`);
       } else {
         Alert.alert('Error', result.error || 'Failed to create business');
       }
@@ -332,6 +336,24 @@ export default function AdminDashboardScreen() {
     // Count washrooms linked by business_name
     const washroomCount = washrooms.filter(w => w.business_name === business.name).length;
     return locationCount + washroomCount;
+  };
+
+  // Get logs count for a specific business
+  const getLogsCountForBusiness = (business: BusinessRow) => {
+    const businessWashroomIds = washrooms
+      .filter(w => w.business_name === business.name)
+      .map(w => w.id);
+    return logs.filter(log => businessWashroomIds.includes(log.location_id)).length;
+  };
+
+  // Get open issues count for a specific business
+  const getOpenIssuesCountForBusiness = (business: BusinessRow) => {
+    const businessWashroomIds = washrooms
+      .filter(w => w.business_name === business.name)
+      .map(w => w.id);
+    return issues.filter(issue =>
+      businessWashroomIds.includes(issue.location_id) && issue.status === 'open'
+    ).length;
   };
 
   // Format date for display
@@ -789,6 +811,15 @@ export default function AdminDashboardScreen() {
                           <Text className="text-sm" style={{ color: COLORS.textMuted }}>
                             {business.email}
                           </Text>
+                          {/* Staff PIN display */}
+                          {business.staff_pin_display && (
+                            <View className="flex-row items-center mt-1">
+                              <Key size={12} color="#d97706" />
+                              <Text className="text-xs font-mono ml-1" style={{ color: '#d97706' }}>
+                                PIN: {business.staff_pin_display}
+                              </Text>
+                            </View>
+                          )}
                         </View>
                       </View>
 
@@ -812,11 +843,29 @@ export default function AdminDashboardScreen() {
 
                     {/* Bottom row: Stats and navigate button */}
                     <View className="flex-row items-center justify-between mt-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
-                      <View className="flex-row items-center">
+                      <View className="flex-row items-center flex-wrap gap-y-1">
                         <MapPin size={14} color={COLORS.textMuted} />
                         <Text className="text-xs ml-1 mr-3" style={{ color: COLORS.textMuted }}>
                           {getLocationCountForBusiness(business)} locations
                         </Text>
+                        <ClipboardList size={14} color={COLORS.success} />
+                        <Text className="text-xs ml-1 mr-3" style={{ color: COLORS.success }}>
+                          {getLogsCountForBusiness(business)} logs
+                        </Text>
+                        {getOpenIssuesCountForBusiness(business) > 0 && (
+                          <>
+                            <AlertTriangle size={14} color={COLORS.warning} />
+                            <Text className="text-xs ml-1 mr-3" style={{ color: COLORS.warning }}>
+                              {getOpenIssuesCountForBusiness(business)} issues
+                            </Text>
+                          </>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Actions row */}
+                    <View className="flex-row items-center justify-between mt-2 pt-2" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
+                      <View className="flex-row items-center">
                         {/* Subscription Tier Toggle */}
                         <Pressable
                           onPress={() => handleToggleSubscriptionTier(business)}
@@ -1077,7 +1126,7 @@ export default function AdminDashboardScreen() {
                 />
               </View>
 
-              <View className="mb-6">
+              <View className="mb-4">
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                   Password
                 </Text>
@@ -1093,6 +1142,37 @@ export default function AdminDashboardScreen() {
                     color: COLORS.textDark,
                   }}
                 />
+              </View>
+
+              <View className="mb-6">
+                <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
+                  Free Trial Length
+                </Text>
+                <View className="flex-row gap-2">
+                  {[7, 14, 30, 60, 90].map((days) => (
+                    <Pressable
+                      key={days}
+                      onPress={() => setNewBusinessTrialDays(days)}
+                      className="flex-1 py-3 rounded-xl items-center"
+                      style={{
+                        backgroundColor: newBusinessTrialDays === days ? COLORS.primary : COLORS.primaryLight,
+                      }}
+                    >
+                      <Text
+                        className="text-sm font-bold"
+                        style={{ color: newBusinessTrialDays === days ? COLORS.white : COLORS.textDark }}
+                      >
+                        {days}
+                      </Text>
+                      <Text
+                        className="text-xs"
+                        style={{ color: newBusinessTrialDays === days ? COLORS.white : COLORS.textMuted }}
+                      >
+                        days
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
 
               <Pressable

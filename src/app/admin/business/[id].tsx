@@ -1592,7 +1592,7 @@ export default function BusinessDetailScreen() {
                             Alert after (hours without cleaning)
                           </Text>
                           <View className="flex-row gap-2 flex-wrap">
-                            {[4, 6, 8, 12, 24].map((hours) => (
+                            {[1, 2, 4, 6, 8, 12, 24].map((hours) => (
                               <Pressable
                                 key={hours}
                                 onPress={() => setAlertSettings(prev => ({ ...prev, alert_threshold_hours: hours }))}

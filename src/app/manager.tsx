@@ -51,7 +51,7 @@ import {
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { sendNewWashroomNotification } from '@/lib/email';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
-import { generatePDFHTML, getCheckIcon, getStatusBadge, truncateText, openPDFInNewWindow } from '@/lib/pdf-template';
+import { generatePDFHTML, getCheckIcon, getStatusBadge, truncateText, openPDFInNewWindow, generateIncidentReportsPDF } from '@/lib/pdf-template';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
 
@@ -142,6 +142,15 @@ export default function ManagerDashboard() {
   const [showPremiumStartPicker, setShowPremiumStartPicker] = useState(false);
   const [showPremiumEndPicker, setShowPremiumEndPicker] = useState(false);
   const [isPremiumExporting, setIsPremiumExporting] = useState(false);
+
+  // Incident Reports Export modal state
+  const [showIncidentExportModal, setShowIncidentExportModal] = useState(false);
+  const [incidentExportStartDate, setIncidentExportStartDate] = useState<Date>(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+  const [incidentExportEndDate, setIncidentExportEndDate] = useState<Date>(new Date());
+  const [showIncidentStartPicker, setShowIncidentStartPicker] = useState(false);
+  const [showIncidentEndPicker, setShowIncidentEndPicker] = useState(false);
+  const [isExportingIncidents, setIsExportingIncidents] = useState(false);
+  const [includeOpenIncidents, setIncludeOpenIncidents] = useState(true);
 
   // Universal Staff PIN management
   const [showPinManagement, setShowPinManagement] = useState(false);
@@ -897,6 +906,83 @@ export default function ManagerDashboard() {
     }
   };
 
+  // Generate Incident Reports PDF
+  const handleExportIncidentReports = async () => {
+    if (isExportingIncidents) return;
+    setIsExportingIncidents(true);
+
+    try {
+      // Ensure dates have proper time boundaries
+      const startDate = new Date(incidentExportStartDate);
+      startDate.setHours(0, 0, 0, 0);
+
+      const endDate = new Date(incidentExportEndDate);
+      endDate.setHours(23, 59, 59, 999);
+
+      console.log('[Manager] Generating incident reports for date range:', startDate.toISOString(), 'to', endDate.toISOString());
+
+      // Use reportedIssues from state (already fetched)
+      const issues = reportedIssues.map(issue => ({
+        id: issue.id,
+        location_name: issue.location_name,
+        issue_type: issue.issue_type,
+        description: issue.description,
+        status: issue.status,
+        created_at: issue.created_at,
+        resolved_at: issue.resolved_at,
+      }));
+
+      if (issues.length === 0) {
+        Alert.alert('No Data / Aucune donnée', 'No incident reports found for this business. / Aucun rapport d\'incident trouvé pour cette entreprise.');
+        setIsExportingIncidents(false);
+        return;
+      }
+
+      const businessDisplayName = currentBusiness?.name || businessName || 'Business';
+      const html = generateIncidentReportsPDF(
+        businessDisplayName,
+        issues,
+        { start: startDate, end: endDate },
+        includeOpenIncidents
+      );
+
+      // Handle web platform differently
+      if (Platform.OS === 'web') {
+        const success = openPDFInNewWindow(html);
+        if (!success) {
+          Alert.alert('Error', 'Failed to open PDF. Please try again.');
+        }
+      } else {
+        // Native platforms use expo-print with sharing
+        try {
+          const { uri } = await Print.printToFileAsync({ html });
+          const canShare = await Sharing.isAvailableAsync();
+          if (canShare) {
+            await Sharing.shareAsync(uri, {
+              mimeType: 'application/pdf',
+              dialogTitle: 'Incident Reports / Rapports d\'incidents',
+              UTI: 'com.adobe.pdf',
+            });
+          }
+        } catch (printError) {
+          console.error('[Manager] Print error:', printError);
+          Alert.alert('Error', 'Failed to generate PDF. Please try again.');
+          return;
+        }
+      }
+
+      setShowIncidentExportModal(false);
+    } catch (error) {
+      console.error('[Manager] Incident reports PDF error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (!errorMessage.includes('cancel') && !errorMessage.includes('dismissed')) {
+        Alert.alert('Error / Erreur', 'Failed to generate incident report. Please try again. / Échec de la génération du rapport. Veuillez réessayer.');
+      }
+    } finally {
+      setIsExportingIncidents(false);
+    }
+  };
+
   // Loading state
   if (isCheckingAuth) {
     return (
@@ -1304,16 +1390,29 @@ export default function ManagerDashboard() {
                   Problèmes signalés par le public
                 </Text>
               </View>
-              {openIssues.length > 0 && (
-                <View
-                  className="px-3 py-1 rounded-full"
-                  style={{ backgroundColor: C.error }}
+              <View className="flex-row items-center gap-2">
+                {/* Export Incident Reports Button */}
+                <Pressable
+                  onPress={() => setShowIncidentExportModal(true)}
+                  className="flex-row items-center px-3 py-1.5 rounded-lg active:opacity-80"
+                  style={{ backgroundColor: C.emeraldLight }}
                 >
-                  <Text className="text-xs font-bold" style={{ color: C.white }}>
-                    {openIssues.length}
+                  <Download size={14} color={C.emeraldDark} />
+                  <Text className="text-xs font-semibold ml-1" style={{ color: C.emeraldDark }}>
+                    Export
                   </Text>
-                </View>
-              )}
+                </Pressable>
+                {openIssues.length > 0 && (
+                  <View
+                    className="px-3 py-1 rounded-full"
+                    style={{ backgroundColor: C.error }}
+                  >
+                    <Text className="text-xs font-bold" style={{ color: C.white }}>
+                      {openIssues.length}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
 
@@ -2428,6 +2527,297 @@ export default function ManagerDashboard() {
                   }
                 }}
                 minimumDate={premiumExportStartDate}
+                maximumDate={new Date()}
+                style={{ height: 200, width: '100%' }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Incident Reports Export Modal */}
+      <Modal
+        visible={showIncidentExportModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowIncidentExportModal(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: C.mintBackground }}>
+          <View className="flex-1">
+            {/* Header */}
+            <View className="flex-row items-center justify-between px-5 py-4 border-b" style={{ borderBottomColor: C.borderLight }}>
+              <View className="flex-1">
+                <Text className="text-lg font-bold" style={{ color: C.emeraldDark }}>
+                  Incident Reports
+                </Text>
+                <Text className="text-sm" style={{ color: C.textSecondary }}>
+                  Rapports d'incidents
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setShowIncidentExportModal(false)}
+                className="p-2 rounded-full"
+                style={{ backgroundColor: C.borderLight }}
+              >
+                <X size={20} color={C.textSecondary} />
+              </Pressable>
+            </View>
+
+            <ScrollView className="flex-1 px-5 py-4">
+              {/* Date Range Selection */}
+              <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.borderMedium }}>
+                <Text className="text-sm font-semibold mb-3" style={{ color: C.emeraldDark }}>
+                  Select Date Range / Sélectionner la période
+                </Text>
+
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <Text className="text-xs font-medium mb-2" style={{ color: C.textSecondary }}>Start Date</Text>
+                    {Platform.OS === 'web' ? (
+                      <input
+                        type="date"
+                        value={incidentExportStartDate.toISOString().split('T')[0]}
+                        onChange={(e) => setIncidentExportStartDate(new Date(e.target.value))}
+                        style={{
+                          backgroundColor: '#f1f5f9',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 8,
+                          padding: 12,
+                          color: '#1e293b',
+                          fontSize: 14,
+                          width: '100%',
+                        }}
+                      />
+                    ) : (
+                      <Pressable
+                        onPress={() => setShowIncidentStartPicker(true)}
+                        className="flex-row items-center rounded-lg px-4 py-3"
+                        style={{ backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0' }}
+                      >
+                        <Calendar size={16} color={C.textSecondary} />
+                        <Text className="ml-2" style={{ color: C.textPrimary }}>
+                          {incidentExportStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-xs font-medium mb-2" style={{ color: C.textSecondary }}>End Date</Text>
+                    {Platform.OS === 'web' ? (
+                      <input
+                        type="date"
+                        value={incidentExportEndDate.toISOString().split('T')[0]}
+                        onChange={(e) => setIncidentExportEndDate(new Date(e.target.value))}
+                        style={{
+                          backgroundColor: '#f1f5f9',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 8,
+                          padding: 12,
+                          color: '#1e293b',
+                          fontSize: 14,
+                          width: '100%',
+                        }}
+                      />
+                    ) : (
+                      <Pressable
+                        onPress={() => setShowIncidentEndPicker(true)}
+                        className="flex-row items-center rounded-lg px-4 py-3"
+                        style={{ backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0' }}
+                      >
+                        <Calendar size={16} color={C.textSecondary} />
+                        <Text className="ml-2" style={{ color: C.textPrimary }}>
+                          {incidentExportEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                </View>
+              </View>
+
+              {/* Quick Select Buttons */}
+              <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.borderMedium }}>
+                <Text className="text-xs font-medium mb-3" style={{ color: C.textSecondary }}>
+                  Quick Select / Sélection rapide
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
+                  <Pressable
+                    onPress={() => {
+                      const end = new Date();
+                      const start = new Date();
+                      start.setDate(start.getDate() - 7);
+                      setIncidentExportStartDate(start);
+                      setIncidentExportEndDate(end);
+                    }}
+                    className="px-3 py-2 rounded-lg"
+                    style={{ backgroundColor: '#f1f5f9' }}
+                  >
+                    <Text className="text-xs font-medium" style={{ color: C.textPrimary }}>Last 7 Days</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      const end = new Date();
+                      const start = new Date();
+                      start.setDate(start.getDate() - 30);
+                      setIncidentExportStartDate(start);
+                      setIncidentExportEndDate(end);
+                    }}
+                    className="px-3 py-2 rounded-lg"
+                    style={{ backgroundColor: '#f1f5f9' }}
+                  >
+                    <Text className="text-xs font-medium" style={{ color: C.textPrimary }}>Last 30 Days</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      const end = new Date();
+                      const start = new Date();
+                      start.setDate(start.getDate() - 90);
+                      setIncidentExportStartDate(start);
+                      setIncidentExportEndDate(end);
+                    }}
+                    className="px-3 py-2 rounded-lg"
+                    style={{ backgroundColor: '#f1f5f9' }}
+                  >
+                    <Text className="text-xs font-medium" style={{ color: C.textPrimary }}>Last 90 Days</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      const end = new Date();
+                      const start = new Date();
+                      start.setMonth(start.getMonth() - 6);
+                      setIncidentExportStartDate(start);
+                      setIncidentExportEndDate(end);
+                    }}
+                    className="px-3 py-2 rounded-lg"
+                    style={{ backgroundColor: '#f1f5f9' }}
+                  >
+                    <Text className="text-xs font-medium" style={{ color: C.textPrimary }}>Last 6 Months</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Include Open Issues Toggle */}
+              <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.borderMedium }}>
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-1">
+                    <Text className="text-sm font-semibold" style={{ color: C.textPrimary }}>
+                      Include Open Issues
+                    </Text>
+                    <Text className="text-xs mt-0.5" style={{ color: C.textMuted }}>
+                      Inclure les problèmes en cours
+                    </Text>
+                  </View>
+                  <Switch
+                    value={includeOpenIncidents}
+                    onValueChange={setIncludeOpenIncidents}
+                    trackColor={{ false: '#d1d5db', true: C.emeraldLight }}
+                    thumbColor={includeOpenIncidents ? C.actionGreen : '#f4f3f4'}
+                  />
+                </View>
+              </View>
+
+              {/* Summary Preview */}
+              <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: C.emeraldLight, borderWidth: 1, borderColor: C.borderMedium }}>
+                <Text className="text-xs font-medium mb-2" style={{ color: C.emeraldDark }}>
+                  Report Preview / Aperçu du rapport
+                </Text>
+                <View className="flex-row gap-4">
+                  <View className="items-center">
+                    <Text className="text-2xl font-bold" style={{ color: C.emeraldDark }}>
+                      {reportedIssues.length}
+                    </Text>
+                    <Text className="text-xs" style={{ color: C.textSecondary }}>Total Issues</Text>
+                  </View>
+                  <View className="items-center">
+                    <Text className="text-2xl font-bold" style={{ color: C.actionGreen }}>
+                      {reportedIssues.filter(i => i.status === 'resolved').length}
+                    </Text>
+                    <Text className="text-xs" style={{ color: C.textSecondary }}>Resolved</Text>
+                  </View>
+                  <View className="items-center">
+                    <Text className="text-2xl font-bold" style={{ color: C.warning }}>
+                      {reportedIssues.filter(i => i.status === 'open').length}
+                    </Text>
+                    <Text className="text-xs" style={{ color: C.textSecondary }}>Open</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Export Button */}
+              <Pressable
+                onPress={handleExportIncidentReports}
+                disabled={isExportingIncidents}
+                className="flex-row items-center justify-center py-4 rounded-xl mb-4"
+                style={{ backgroundColor: isExportingIncidents ? '#94a3b8' : C.actionGreen }}
+              >
+                {isExportingIncidents ? (
+                  <>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text className="text-white font-bold ml-2">Generating PDF...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Download size={20} color="#fff" />
+                    <Text className="text-white font-bold ml-2">Export Incident Reports</Text>
+                  </>
+                )}
+              </Pressable>
+
+              <Text className="text-xs text-center mb-6" style={{ color: C.textMuted }}>
+                PDF will include all incident reports within the date range with resolution metrics.
+              </Text>
+            </ScrollView>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Incident Reports Date Pickers (Mobile) */}
+      {Platform.OS !== 'web' && showIncidentStartPicker && (
+        <Modal transparent animationType="slide" visible={showIncidentStartPicker} onRequestClose={() => setShowIncidentStartPicker(false)}>
+          <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
+            <View className="bg-white rounded-t-3xl p-4">
+              <View className="flex-row justify-between items-center mb-2">
+                <Text className="text-lg font-semibold" style={{ color: C.emeraldDark }}>Start Date</Text>
+                <Pressable onPress={() => setShowIncidentStartPicker(false)} className="px-4 py-2">
+                  <Text className="font-semibold" style={{ color: C.actionGreen }}>Done</Text>
+                </Pressable>
+              </View>
+              <DateTimePicker
+                value={incidentExportStartDate}
+                mode="date"
+                display="spinner"
+                onChange={(event, date) => {
+                  if (date) {
+                    setIncidentExportStartDate(date);
+                  }
+                }}
+                maximumDate={incidentExportEndDate}
+                style={{ height: 200, width: '100%' }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {Platform.OS !== 'web' && showIncidentEndPicker && (
+        <Modal transparent animationType="slide" visible={showIncidentEndPicker} onRequestClose={() => setShowIncidentEndPicker(false)}>
+          <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
+            <View className="bg-white rounded-t-3xl p-4">
+              <View className="flex-row justify-between items-center mb-2">
+                <Text className="text-lg font-semibold" style={{ color: C.emeraldDark }}>End Date</Text>
+                <Pressable onPress={() => setShowIncidentEndPicker(false)} className="px-4 py-2">
+                  <Text className="font-semibold" style={{ color: C.actionGreen }}>Done</Text>
+                </Pressable>
+              </View>
+              <DateTimePicker
+                value={incidentExportEndDate}
+                mode="date"
+                display="spinner"
+                onChange={(event, date) => {
+                  if (date) {
+                    setIncidentExportEndDate(date);
+                  }
+                }}
+                minimumDate={incidentExportStartDate}
                 maximumDate={new Date()}
                 style={{ height: 200, width: '100%' }}
               />

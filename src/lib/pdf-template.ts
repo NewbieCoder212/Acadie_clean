@@ -32,7 +32,7 @@ const CLIENT_LOGO_PLACEHOLDER = `
 
 export interface PDFTemplateConfig {
   documentTitle: string;
-  documentType: 'audit' | 'history' | 'scan-history';
+  documentType: 'audit' | 'history' | 'scan-history' | 'incident-reports';
   businessName: string;
   location?: string; // e.g., "Main Street Branch - All Units"
   dateRange: {
@@ -63,6 +63,8 @@ const getDocumentTitleLabel = (type: PDFTemplateConfig['documentType']): string 
       return 'Cleaning History Report';
     case 'scan-history':
       return 'QR Scan History Report';
+    case 'incident-reports':
+      return 'Incident Reports / Rapports d\'incidents';
     default:
       return 'Report';
   }
@@ -514,11 +516,35 @@ export const openPDFInNewWindow = (html: string): boolean => {
     ${bodyContent}
   </div>
   <script>
+    // Store the referrer URL for proper navigation back
+    var previousUrl = document.referrer || null;
+
     function closePDF() {
+      // Try to close window if opened as popup
       if (window.opener) {
         window.close();
-      } else {
+        return;
+      }
+
+      // If we have a referrer, navigate back to it
+      if (previousUrl && previousUrl.length > 0) {
+        window.location.href = previousUrl;
+        return;
+      }
+
+      // Try history.back() but with a fallback
+      if (window.history.length > 1) {
         history.back();
+        // If we're still on the same page after 100ms, redirect to manager
+        setTimeout(function() {
+          // Check if we're still on the blob URL (back didn't work)
+          if (window.location.href.startsWith('blob:')) {
+            window.location.href = '/manager';
+          }
+        }, 100);
+      } else {
+        // No history, redirect to manager dashboard
+        window.location.href = '/manager';
       }
     }
   </script>
@@ -618,4 +644,173 @@ export const addWebToolbar = (html: string, title: string): string => {
         <button class="btn-close" onclick="window.close()">Close / Fermer</button>
       </div>
     </div>`);
+};
+
+// Legend items for incident reports
+const INCIDENT_LEGEND_ITEMS = [
+  { code: 'Open', description: 'Awaiting resolution / En attente de résolution' },
+  { code: 'Resolved', description: 'Issue addressed / Problème résolu' },
+];
+
+// Incident report row interface
+export interface IncidentReportRow {
+  id: string;
+  location_name: string;
+  issue_type: string;
+  description: string;
+  status: 'open' | 'resolved';
+  created_at: string;
+  resolved_at?: string | null;
+}
+
+// Calculate average resolution time in hours
+const calculateAverageResolutionTime = (issues: IncidentReportRow[]): string => {
+  const resolvedIssues = issues.filter(i => i.status === 'resolved' && i.resolved_at);
+  if (resolvedIssues.length === 0) return 'N/A';
+
+  let totalMinutes = 0;
+  resolvedIssues.forEach(issue => {
+    const createdAt = new Date(issue.created_at).getTime();
+    const resolvedAt = new Date(issue.resolved_at!).getTime();
+    totalMinutes += (resolvedAt - createdAt) / (1000 * 60);
+  });
+
+  const avgMinutes = totalMinutes / resolvedIssues.length;
+
+  if (avgMinutes < 60) {
+    return `${Math.round(avgMinutes)} min`;
+  } else if (avgMinutes < 1440) {
+    const hours = Math.round(avgMinutes / 60 * 10) / 10;
+    return `${hours} hr${hours !== 1 ? 's' : ''}`;
+  } else {
+    const days = Math.round(avgMinutes / 1440 * 10) / 10;
+    return `${days} day${days !== 1 ? 's' : ''}`;
+  }
+};
+
+// Generate incident reports PDF HTML
+export const generateIncidentReportsPDF = (
+  businessName: string,
+  issues: IncidentReportRow[],
+  dateRange: { start: Date; end: Date },
+  includeOpenIssues: boolean = true
+): string => {
+  // Filter by date range and optionally by status
+  const filteredIssues = issues.filter(issue => {
+    const createdAt = new Date(issue.created_at);
+    const inDateRange = createdAt >= dateRange.start && createdAt <= dateRange.end;
+    if (!inDateRange) return false;
+    if (!includeOpenIssues && issue.status === 'open') return false;
+    return true;
+  });
+
+  // Sort by date (newest first)
+  filteredIssues.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  // Calculate metrics
+  const totalIssues = filteredIssues.length;
+  const resolvedIssues = filteredIssues.filter(i => i.status === 'resolved').length;
+  const openIssues = filteredIssues.filter(i => i.status === 'open').length;
+  const avgResolutionTime = calculateAverageResolutionTime(filteredIssues);
+
+  // Format date/time for display
+  const formatDateTime = (dateStr: string): string => {
+    const d = new Date(dateStr);
+    return d.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+  };
+
+  // Format time elapsed between two dates
+  const formatTimeElapsed = (startStr: string, endStr: string | null | undefined): string => {
+    if (!endStr) return '-';
+    const start = new Date(startStr).getTime();
+    const end = new Date(endStr).getTime();
+    const minutes = Math.round((end - start) / (1000 * 60));
+
+    if (minutes < 60) return `${minutes} min`;
+    if (minutes < 1440) {
+      const hours = Math.round(minutes / 60 * 10) / 10;
+      return `${hours} hr${hours !== 1 ? 's' : ''}`;
+    }
+    const days = Math.round(minutes / 1440 * 10) / 10;
+    return `${days} day${days !== 1 ? 's' : ''}`;
+  };
+
+  // Get status badge HTML
+  const getIssueStatusBadge = (status: 'open' | 'resolved'): string => {
+    if (status === 'resolved') {
+      return `<span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 9px; background-color: #dcfce7; color: #166534;">Resolved</span>`;
+    }
+    return `<span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 9px; background-color: #fef3c7; color: #92400e;">Open</span>`;
+  };
+
+  // Generate table rows
+  const tableRows = filteredIssues.map(issue => `
+    <tr>
+      <td style="white-space: nowrap;">${formatDateTime(issue.created_at)}</td>
+      <td>${truncateText(issue.location_name, 25)}</td>
+      <td>${issue.issue_type}</td>
+      <td>${truncateText(issue.description || '-', 40)}</td>
+      <td style="text-align: center;">${getIssueStatusBadge(issue.status)}</td>
+      <td style="text-align: center;">${issue.resolved_at ? formatDateTime(issue.resolved_at) : '-'}</td>
+      <td style="text-align: center;">${formatTimeElapsed(issue.created_at, issue.resolved_at)}</td>
+    </tr>
+  `).join('');
+
+  // Generate the PDF HTML using the template
+  const config: PDFTemplateConfig = {
+    documentTitle: 'Incident Reports / Rapports d\'incidents',
+    documentType: 'incident-reports',
+    businessName,
+    location: `${businessName} - All Locations / Tous les emplacements`,
+    dateRange,
+    tableHeaders: [
+      'Reported / Signalé',
+      'Location / Emplacement',
+      'Type',
+      'Description',
+      'Status / Statut',
+      'Resolved / Résolu',
+      'Time to Resolve / Temps',
+    ],
+    tableRows: tableRows || `<tr><td colspan="7" style="text-align: center; padding: 20px; color: #6b7280;">No incidents reported in this period / Aucun incident signalé pour cette période</td></tr>`,
+    showLegend: false, // We'll add custom summary instead
+  };
+
+  // Generate base HTML
+  let html = generatePDFHTML(config);
+
+  // Add summary metrics section before the table
+  const summaryHTML = `
+    <div style="display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;">
+      <div style="flex: 1; min-width: 120px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; text-align: center;">
+        <div style="font-size: 24px; font-weight: 800; color: #166534;">${totalIssues}</div>
+        <div style="font-size: 10px; color: #15803d; font-weight: 600;">Total Issues / Total</div>
+      </div>
+      <div style="flex: 1; min-width: 120px; background: #dcfce7; border: 1px solid #86efac; border-radius: 8px; padding: 12px; text-align: center;">
+        <div style="font-size: 24px; font-weight: 800; color: #166534;">${resolvedIssues}</div>
+        <div style="font-size: 10px; color: #15803d; font-weight: 600;">Resolved / Résolus</div>
+      </div>
+      ${includeOpenIssues ? `
+      <div style="flex: 1; min-width: 120px; background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 12px; text-align: center;">
+        <div style="font-size: 24px; font-weight: 800; color: #92400e;">${openIssues}</div>
+        <div style="font-size: 10px; color: #b45309; font-weight: 600;">Open / En cours</div>
+      </div>` : ''}
+      <div style="flex: 1; min-width: 120px; background: #ede9fe; border: 1px solid #c4b5fd; border-radius: 8px; padding: 12px; text-align: center;">
+        <div style="font-size: 24px; font-weight: 800; color: #5b21b6;">${avgResolutionTime}</div>
+        <div style="font-size: 10px; color: #7c3aed; font-weight: 600;">Avg Resolution / Moy. résolution</div>
+      </div>
+    </div>
+  `;
+
+  // Insert summary before the table
+  html = html.replace('<!-- DATA TABLE -->', `${summaryHTML}\n        <!-- DATA TABLE -->`);
+
+  return html;
 };

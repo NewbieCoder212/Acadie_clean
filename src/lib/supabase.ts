@@ -897,6 +897,7 @@ export interface InsertBusiness {
   is_admin?: boolean;
   is_active?: boolean;
   subscription_tier?: SubscriptionTier;
+  trial_days?: number; // Number of trial days (default 14)
 }
 
 // Insert a new business (using password hashing - no Supabase Auth dependency)
@@ -918,6 +919,10 @@ export async function insertBusiness(business: InsertBusiness): Promise<{ succes
     // Hash the password before storing
     const hashedPassword = await hashPassword(business.password);
 
+    // Calculate trial end date based on trial_days (default 14)
+    const trialDays = business.trial_days ?? 14;
+    const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
+
     // Insert business record with hashed password
     const businessId = generateId();
     const { data, error } = await supabase
@@ -933,7 +938,7 @@ export async function insertBusiness(business: InsertBusiness): Promise<{ succes
         subscription_tier: business.subscription_tier ?? 'standard',
         subscription_status: 'trial',
         trial_start_date: new Date().toISOString(),
-        trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 day trial
+        trial_ends_at: trialEndsAt,
         created_at: new Date().toISOString(),
       }])
       .select()

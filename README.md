@@ -53,6 +53,12 @@ The app uses a consistent color palette across all screens:
 - **Admin Email Notifications**: When a manager adds a new washroom, the admin (chris@acadiacleaniq.ca) receives an email notification with washroom details and a reminder to generate QR codes.
 - **Export History (PDF)**: Managers can export cleaning history for any location with custom date range selection (7, 14, 30, or 90 days, or custom dates)
 - **Send to Inspector**: Generate professional audit reports for NB Department of Health compliance with custom date ranges
+- **Incident Reports Export (PDF)**: Separate export for public-reported issues with:
+  - Bilingual headers (English/French)
+  - Issue type, time reported, time resolved, resolution notes
+  - Resolution metrics (average time to resolve)
+  - Toggle to include/exclude open issues
+  - Summary showing total issues, resolved count, open count
 
 ## Subscription Tiers (Future)
 
@@ -61,6 +67,10 @@ The database supports subscription tiers for future premium features. Currently 
 ### Admin Management
 - Admins can toggle subscription tier (Standard/Premium) for each business from the Admin Dashboard
 - The `subscription_tier` column exists in the database for future feature gating
+- **Customizable Trial Length**: Admins can set the free trial period (7, 14, 30, 60, or 90 days) when creating a new business
+- **Alert Threshold Options**: Alert settings support 1, 2, 4, 6, 8, 12, or 24 hour thresholds for overdue cleaning notifications
+- **Admin Dashboard Visibility**: Staff PINs are displayed under business emails for quick reference
+- **Logs & Issues Display**: Each business card shows total logs count and open issues count
 - Future premium features may include: photo attachments, automated reminders, supply tracking, analytics dashboard
 
 ## Security
