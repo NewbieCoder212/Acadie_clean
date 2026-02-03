@@ -16,6 +16,7 @@ interface VercelRequest {
   method: string;
   headers: {
     authorization?: string;
+    'x-vercel-cron'?: string;
   };
 }
 
@@ -361,23 +362,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // Verify this is a cron request or authorized request
+  // Verify this is a legitimate cron request
+  // Vercel crons send a special header we can verify
   const authHeader = req.headers.authorization;
   const cronSecret = process.env.CRON_SECRET;
+  const vercelCronHeader = req.headers['x-vercel-cron'];
 
-  // CRON_SECRET is required - fail if not configured
-  if (!cronSecret) {
-    console.error('[check-overdue] CRON_SECRET not configured');
-    res.status(500).json({ error: 'Server misconfigured' });
-    return;
-  }
+  // Allow request if:
+  // 1. It's from Vercel's cron scheduler (x-vercel-cron header present)
+  // 2. OR it has a valid Bearer token (for manual testing)
+  const isVercelCron = vercelCronHeader === '1';
+  const hasValidToken = cronSecret && authHeader === `Bearer ${cronSecret}`;
 
-  // Verify the authorization header matches
-  if (authHeader !== `Bearer ${cronSecret}`) {
-    console.error('[check-overdue] Unauthorized request');
+  if (!isVercelCron && !hasValidToken) {
+    console.error('[check-overdue] Unauthorized request - no valid cron header or token');
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
+
+  console.log(`[check-overdue] Auth method: ${isVercelCron ? 'Vercel Cron' : 'Bearer Token'}`);
 
   // Check required env vars
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
