@@ -268,11 +268,41 @@ serve(async (req: Request) => {
     const now = new Date();
     console.log(`Running overdue cleaning check at ${now.toISOString()}`);
 
+    // STEP 1: Get all active business NAMES first
+    const { data: activeBusinesses, error: bizError } = await supabase
+      .from("businesses")
+      .select("name")
+      .eq("is_active", true);
+
+    if (bizError) {
+      console.error("Error fetching active businesses:", bizError);
+      return new Response(JSON.stringify({ error: bizError.message }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const activeBusinessNames = (activeBusinesses || []).map((b: { name: string }) => b.name);
+    console.log(`Found ${activeBusinessNames.length} active businesses`);
+
+    if (activeBusinessNames.length === 0) {
+      console.log("No active businesses found, skipping alert check");
+      return new Response(JSON.stringify({
+        success: true,
+        results: { message: "No active businesses found", checked: 0, alertsSent: 0 }
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // STEP 2: Get washrooms that are BOTH active AND belong to active businesses (by name)
     const { data: washrooms, error } = await supabase
       .from("washrooms")
       .select("*")
       .eq("is_active", true)
-      .eq("alert_enabled", true);
+      .eq("alert_enabled", true)
+      .in("business_name", activeBusinessNames);
 
     if (error) {
       console.error("Error fetching washrooms:", error);
@@ -282,7 +312,7 @@ serve(async (req: Request) => {
       });
     }
 
-    console.log(`Found ${washrooms?.length || 0} washrooms with alerts enabled`);
+    console.log(`Found ${washrooms?.length || 0} active washrooms (from active businesses) with alerts enabled`);
 
     const results = {
       checked: 0,
