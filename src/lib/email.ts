@@ -1,12 +1,17 @@
 // Email service - uses Vercel serverless function to keep API key secure
 
 // Base URL for email links and API calls
-const BASE_URL = process.env.EXPO_PUBLIC_APP_URL || 'https://app.acadiacleaniq.ca';
+const BASE_URL = process.env.EXPO_PUBLIC_APP_URL || 'https://acadiacleaniq.vercel.app';
 
 // Send email via the secure API endpoint
 async function sendEmailViaAPI(params: { to: string; subject: string; html: string; text?: string }): Promise<{ success: boolean; error?: string }> {
   try {
-    const response = await fetch(`${BASE_URL}/api/send-email`, {
+    const apiUrl = `${BASE_URL}/api/send-email`;
+    console.log('[Email] Sending to:', params.to);
+    console.log('[Email] Subject:', params.subject);
+    console.log('[Email] API URL:', apiUrl);
+
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -14,16 +19,22 @@ async function sendEmailViaAPI(params: { to: string; subject: string; html: stri
       body: JSON.stringify(params),
     });
 
+    console.log('[Email] Response status:', response.status);
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({})) as { error?: string };
+      console.log('[Email] Error response:', errorData);
       return {
         success: false,
         error: errorData.error || `Failed to send email (${response.status})`
       };
     }
 
+    const successData = await response.json().catch(() => ({})) as { id?: string };
+    console.log('[Email] Success! Email ID:', successData.id);
     return { success: true };
   } catch (error) {
+    console.error('[Email] Exception:', error);
     return {
       success: false,
       error: 'Failed to connect to email service'

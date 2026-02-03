@@ -899,63 +899,55 @@ export interface InsertBusiness {
   subscription_tier?: SubscriptionTier;
 }
 
-// Insert a new business with Supabase Auth
+// Insert a new business (using password hashing - no Supabase Auth dependency)
 export async function insertBusiness(business: InsertBusiness): Promise<{ success: boolean; data?: BusinessRow; error?: string }> {
   try {
-    // Step 1: Create user in Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: business.email.toLowerCase(),
-      password: business.password,
-      options: {
-        data: {
-          business_name: business.name,
-          is_admin: business.is_admin ?? false,
-        },
-      },
-    });
+    console.log('[insertBusiness] Starting business creation for:', business.email);
 
-    if (authError) {
-      // Handle specific auth errors
-      if (authError.message.includes('already registered')) {
-        return { success: false, error: 'This email is already registered' };
-      }
-      return { success: false, error: authError.message };
+    // Check if email already exists
+    const { data: existingBusiness, error: checkError } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('email', business.email.toLowerCase())
+      .single();
+
+    if (existingBusiness) {
+      return { success: false, error: 'This email is already registered' };
     }
 
-    if (!authData.user) {
-      return { success: false, error: 'Failed to create auth user' };
-    }
+    // Hash the password before storing
+    const hashedPassword = await hashPassword(business.password);
 
-    // Step 2: Insert business record linked to auth user
+    // Insert business record with hashed password
     const businessId = generateId();
     const { data, error } = await supabase
       .from('businesses')
       .insert([{
         id: businessId,
-        auth_user_id: authData.user.id, // Link to Supabase Auth user
+        auth_user_id: null, // Not using Supabase Auth
         name: business.name,
         email: business.email.toLowerCase(),
-        password_hash: '', // No longer needed - Auth handles passwords
+        password_hash: hashedPassword,
         is_admin: business.is_admin ?? false,
         is_active: business.is_active ?? true,
         subscription_tier: business.subscription_tier ?? 'standard',
+        subscription_status: 'trial',
+        trial_start_date: new Date().toISOString(),
+        trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 day trial
         created_at: new Date().toISOString(),
       }])
       .select()
       .single();
 
     if (error) {
-      // If business insert fails, we should ideally clean up the auth user
-      // but for now just return the error
       console.error('[insertBusiness] Failed to insert business record:', error);
       return { success: false, error: error.message };
     }
 
-    // Sign out the newly created user (admin is creating the account, not the business)
-    await supabase.auth.signOut();
-
+    console.log('[insertBusiness] Business created successfully:', businessId);
     return { success: true, data };
   } catch (error) {
+    console.error('[insertBusiness] Unexpected error:', error);
     return { success: false, error: String(error) };
   }
 }

@@ -233,14 +233,31 @@ export default function AdminDashboardScreen() {
       return;
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newBusinessEmail.trim())) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+
+    // Validate password length (Supabase requires at least 6 characters)
+    if (newBusinessPassword.trim().length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters');
+      return;
+    }
+
     setIsCreating(true);
     try {
+      console.log('[Admin] Creating business:', newBusinessName.trim(), newBusinessEmail.trim());
+
       const result = await insertBusiness({
         name: newBusinessName.trim(),
         email: newBusinessEmail.trim(),
         password: newBusinessPassword.trim(),
         is_admin: false,
       });
+
+      console.log('[Admin] Create business result:', result.success, result.error);
 
       if (result.success) {
         setShowAddModal(false);
@@ -253,7 +270,8 @@ export default function AdminDashboardScreen() {
         Alert.alert('Error', result.error || 'Failed to create business');
       }
     } catch (error) {
-      Alert.alert('Error', 'Network error. Please try again.');
+      console.error('[Admin] Create business error:', error);
+      Alert.alert('Error', 'Network error. Please check your connection and try again.');
     } finally {
       setIsCreating(false);
     }
