@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/check-overdue",
+      "schedule": "*/30 * * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",
