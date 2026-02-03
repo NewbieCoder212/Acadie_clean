@@ -47,6 +47,7 @@ import {
   resolveReportedIssue,
   SubscriptionTier,
   logoutBusiness,
+  getBusinessById,
 } from '@/lib/supabase';
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { sendNewWashroomNotification } from '@/lib/email';
@@ -251,9 +252,21 @@ export default function ManagerDashboard() {
         try {
           const business = JSON.parse(stored) as BusinessRow;
           if (business?.id && business?.name) {
-            setCurrentBusiness(business);
-            setBusinessName(business.name);
-            setBusinessAddress(business.address || '');
+            // Refresh business data from database to get latest staff_pin_display
+            const refreshedResult = await getBusinessById(business.id);
+            if (refreshedResult.success && refreshedResult.data) {
+              const refreshedBusiness = refreshedResult.data as BusinessRow;
+              // Update AsyncStorage with fresh data
+              await AsyncStorage.setItem('currentBusiness', JSON.stringify(refreshedBusiness));
+              setCurrentBusiness(refreshedBusiness);
+              setBusinessName(refreshedBusiness.name);
+              setBusinessAddress(refreshedBusiness.address || '');
+            } else {
+              // Fallback to stored data if refresh fails
+              setCurrentBusiness(business);
+              setBusinessName(business.name);
+              setBusinessAddress(business.address || '');
+            }
             // Fetch business-specific washrooms
             const washroomsResult = await getWashroomsForBusiness(business.name);
             if (washroomsResult.success && washroomsResult.data) {

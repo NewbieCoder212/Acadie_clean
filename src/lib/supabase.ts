@@ -1174,6 +1174,46 @@ export async function getCurrentSession(): Promise<{ success: boolean; data?: Sa
   }
 }
 
+// Get a single business by ID (for refreshing business data)
+export async function getBusinessById(businessId: string): Promise<{ success: boolean; data?: SafeBusinessRow; error?: string }> {
+  try {
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('id', businessId)
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    if (!data) {
+      return { success: false, error: 'Business not found' };
+    }
+
+    // Return safe business data (without password_hash)
+    const safeData: SafeBusinessRow = {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      address: data.address ?? null,
+      is_admin: data.is_admin,
+      is_active: data.is_active,
+      subscription_tier: data.subscription_tier ?? 'standard',
+      subscription_status: data.subscription_status ?? 'trial',
+      trial_start_date: data.trial_start_date ?? null,
+      trial_ends_at: data.trial_ends_at ?? null,
+      subscription_expires_at: data.subscription_expires_at ?? null,
+      staff_pin_display: data.staff_pin_display ?? null,
+      created_at: data.created_at,
+    };
+
+    return { success: true, data: safeData };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
 // Get all businesses (admin only)
 export async function getAllBusinesses(): Promise<{ success: boolean; data?: BusinessRow[]; error?: string }> {
   try {
