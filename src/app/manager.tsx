@@ -42,6 +42,7 @@ import {
   toggleWashroomActive,
   updateBusinessAddress,
   updateBusinessStaffPin,
+  updateWashroomPin,
   ReportedIssueRow,
   getIssuesForBusinessByName,
   resolveReportedIssue,
@@ -453,7 +454,11 @@ export default function ManagerDashboard() {
   };
 
   const handleSaveStaffPin = async () => {
-    if (!currentBusiness?.id) return;
+    // When called from the location modal, update the washroom's PIN
+    if (!selectedLocationId) {
+      Alert.alert('Error', 'No location selected');
+      return;
+    }
 
     // Validate PIN
     if (!newStaffPin || newStaffPin.length < 4 || newStaffPin.length > 5 || !/^\d{4,5}$/.test(newStaffPin)) {
@@ -468,16 +473,20 @@ export default function ManagerDashboard() {
 
     setIsSavingPin(true);
     try {
-      const result = await updateBusinessStaffPin(currentBusiness.id, newStaffPin);
+      // Update the washroom's PIN (not the business-wide PIN)
+      const result = await updateWashroomPin(selectedLocationId, newStaffPin);
       if (result.success) {
-        // Update local storage with new PIN display
-        const updatedBusiness = { ...currentBusiness, staff_pin_display: newStaffPin };
-        await AsyncStorage.setItem('currentBusiness', JSON.stringify(updatedBusiness));
-        setCurrentBusiness(updatedBusiness);
+        // Refresh washroom data to get the updated PIN
+        if (currentBusiness) {
+          const washroomsResult = await getWashroomsForBusiness(currentBusiness.name);
+          if (washroomsResult.success && washroomsResult.data) {
+            setBusinessLocations(washroomsResult.data);
+          }
+        }
         setNewStaffPin('');
         setConfirmStaffPin('');
         setShowPinManagement(false);
-        Alert.alert('Success', 'Staff PIN updated!\nNIP du personnel mis à jour!');
+        Alert.alert('Success', 'PIN updated for this location!\nNIP mis à jour pour cet emplacement!');
       } else {
         Alert.alert('Error', result.error || 'Failed to update PIN');
       }
@@ -1796,10 +1805,17 @@ export default function ManagerDashboard() {
                         />
                       </View>
                       <Text className="text-xs mt-1" style={{ color: '#b45309' }}>NIP universel du personnel</Text>
-                      {currentBusiness?.staff_pin_display ? (
-                        <Text className="text-3xl font-black tracking-widest mt-2" style={{ color: '#92400e' }}>
-                          {currentBusiness.staff_pin_display}
-                        </Text>
+                      {(currentBusiness?.staff_pin_display || location.pinCode) ? (
+                        <>
+                          <Text className="text-3xl font-black tracking-widest mt-2" style={{ color: '#92400e' }}>
+                            {currentBusiness?.staff_pin_display || location.pinCode}
+                          </Text>
+                          {!currentBusiness?.staff_pin_display && location.pinCode && (
+                            <Text className="text-xs mt-1 italic" style={{ color: '#b45309' }}>
+                              (Location PIN / NIP de l'emplacement)
+                            </Text>
+                          )}
+                        </>
                       ) : (
                         <Text className="text-sm italic mt-2" style={{ color: '#b45309' }}>
                           No PIN set - Tap to configure
