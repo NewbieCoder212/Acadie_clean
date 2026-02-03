@@ -1384,24 +1384,41 @@ export async function getLogsForBusiness(businessId: string): Promise<{ success:
   }
 }
 
-// Get logs for a specific business by name (using washrooms table)
+// Get logs for a specific business by name (using washrooms table + legacy locations table)
 export async function getLogsForBusinessByName(businessName: string): Promise<{ success: boolean; data?: CleaningLogRow[]; error?: string }> {
   try {
+    // First try the new washrooms table
     const washroomsResult = await getWashroomsForBusiness(businessName);
-    if (!washroomsResult.success || !washroomsResult.data) {
-      return { success: false, error: washroomsResult.error };
+    const washroomIds = washroomsResult.success && washroomsResult.data
+      ? washroomsResult.data.map(w => w.id)
+      : [];
+
+    // Also try the legacy locations table - get business ID first
+    const { data: businessData } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('name', businessName)
+      .single();
+
+    let legacyLocationIds: string[] = [];
+    if (businessData?.id) {
+      const locationsResult = await getLocationsForBusiness(businessData.id);
+      if (locationsResult.success && locationsResult.data) {
+        legacyLocationIds = locationsResult.data.map(l => l.id);
+      }
     }
 
-    const washroomIds = washroomsResult.data.map(w => w.id);
+    // Combine all location IDs (washrooms + legacy locations)
+    const allLocationIds = [...new Set([...washroomIds, ...legacyLocationIds])];
 
-    if (washroomIds.length === 0) {
+    if (allLocationIds.length === 0) {
       return { success: true, data: [] };
     }
 
     const { data, error } = await supabase
       .from('cleaning_logs')
       .select('*')
-      .in('location_id', washroomIds)
+      .in('location_id', allLocationIds)
       .order('timestamp', { ascending: false });
 
     if (error) {
@@ -1414,28 +1431,45 @@ export async function getLogsForBusinessByName(businessName: string): Promise<{ 
   }
 }
 
-// Get logs for a specific business by name with date range
+// Get logs for a specific business by name with date range (using washrooms table + legacy locations table)
 export async function getLogsForBusinessByNameAndDateRange(
   businessName: string,
   startDate: Date,
   endDate: Date
 ): Promise<{ success: boolean; data?: CleaningLogRow[]; error?: string }> {
   try {
+    // First try the new washrooms table
     const washroomsResult = await getWashroomsForBusiness(businessName);
-    if (!washroomsResult.success || !washroomsResult.data) {
-      return { success: false, error: washroomsResult.error };
+    const washroomIds = washroomsResult.success && washroomsResult.data
+      ? washroomsResult.data.map(w => w.id)
+      : [];
+
+    // Also try the legacy locations table - get business ID first
+    const { data: businessData } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('name', businessName)
+      .single();
+
+    let legacyLocationIds: string[] = [];
+    if (businessData?.id) {
+      const locationsResult = await getLocationsForBusiness(businessData.id);
+      if (locationsResult.success && locationsResult.data) {
+        legacyLocationIds = locationsResult.data.map(l => l.id);
+      }
     }
 
-    const washroomIds = washroomsResult.data.map(w => w.id);
+    // Combine all location IDs (washrooms + legacy locations)
+    const allLocationIds = [...new Set([...washroomIds, ...legacyLocationIds])];
 
-    if (washroomIds.length === 0) {
+    if (allLocationIds.length === 0) {
       return { success: true, data: [] };
     }
 
     const { data, error } = await supabase
       .from('cleaning_logs')
       .select('*')
-      .in('location_id', washroomIds)
+      .in('location_id', allLocationIds)
       .gte('timestamp', startDate.toISOString())
       .lte('timestamp', endDate.toISOString())
       .order('timestamp', { ascending: false });
@@ -1480,24 +1514,41 @@ export async function getIssuesForBusiness(businessId: string): Promise<{ succes
   }
 }
 
-// Get reported issues for a specific business by name (uses washrooms table)
+// Get reported issues for a specific business by name (uses washrooms table + legacy locations table)
 export async function getIssuesForBusinessByName(businessName: string): Promise<{ success: boolean; data?: ReportedIssueRow[]; error?: string }> {
   try {
+    // First try the new washrooms table
     const washroomsResult = await getWashroomsForBusiness(businessName);
-    if (!washroomsResult.success || !washroomsResult.data) {
-      return { success: false, error: washroomsResult.error };
+    const washroomIds = washroomsResult.success && washroomsResult.data
+      ? washroomsResult.data.map(w => w.id)
+      : [];
+
+    // Also try the legacy locations table - get business ID first
+    const { data: businessData } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('name', businessName)
+      .single();
+
+    let legacyLocationIds: string[] = [];
+    if (businessData?.id) {
+      const locationsResult = await getLocationsForBusiness(businessData.id);
+      if (locationsResult.success && locationsResult.data) {
+        legacyLocationIds = locationsResult.data.map(l => l.id);
+      }
     }
 
-    const washroomIds = washroomsResult.data.map(w => w.id);
+    // Combine all location IDs (washrooms + legacy locations)
+    const allLocationIds = [...new Set([...washroomIds, ...legacyLocationIds])];
 
-    if (washroomIds.length === 0) {
+    if (allLocationIds.length === 0) {
       return { success: true, data: [] };
     }
 
     const { data, error } = await supabase
       .from('reported_issues')
       .select('*')
-      .in('location_id', washroomIds)
+      .in('location_id', allLocationIds)
       .order('created_at', { ascending: false });
 
     if (error) {
