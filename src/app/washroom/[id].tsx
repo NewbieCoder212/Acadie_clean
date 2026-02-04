@@ -979,34 +979,42 @@ export default function WashroomPublicScreen() {
                   </View>
                 )}
 
-                {/* Last Cleaned Info */}
-                {lastLog && (
+                {/* Last Cleaned Info - Show last 2 cleanings */}
+                {recentLogs.length > 0 && (
                   <View
                     className="px-6 py-4 border-t"
                     style={{ borderColor: COLORS.glassBorder, backgroundColor: COLORS.mintWhite }}
                   >
-                    <View className="flex-row items-center justify-between">
-                      <View className="flex-row items-center">
-                        <Clock size={16} color={COLORS.textMuted} />
-                        <Text className="text-sm ml-2" style={{ color: COLORS.textMuted }}>
-                          Last cleaned
-                        </Text>
-                      </View>
-                      <Text className="text-sm font-semibold" style={{ color: COLORS.textDark }}>
-                        {getTimeSince(lastLog.timestamp)}
+                    <View className="flex-row items-center mb-3">
+                      <Clock size={16} color={COLORS.textMuted} />
+                      <Text className="text-sm ml-2 font-medium" style={{ color: COLORS.textMuted }}>
+                        Recent Cleanings / Nettoyages récents
                       </Text>
                     </View>
-                    {lastLog.staffName && (
-                      <View className="flex-row items-center justify-between mt-2">
-                        <View className="flex-row items-center">
-                          <User size={16} color={COLORS.textMuted} />
-                          <Text className="text-sm ml-2" style={{ color: COLORS.textMuted }}>
-                            Cleaned by
-                          </Text>
-                        </View>
-                        <Text className="text-sm font-semibold" style={{ color: COLORS.textDark }}>
-                          {lastLog.staffName}
+
+                    {/* Most recent cleaning */}
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-sm font-semibold" style={{ color: COLORS.textDark }}>
+                        {getTimeSince(recentLogs[0].timestamp)}
+                      </Text>
+                      {recentLogs[0].staffName && (
+                        <Text className="text-xs" style={{ color: COLORS.textMuted }}>
+                          {recentLogs[0].staffName}
                         </Text>
+                      )}
+                    </View>
+
+                    {/* Second most recent cleaning */}
+                    {recentLogs[1] && (
+                      <View className="flex-row items-center justify-between mt-2 pt-2 border-t" style={{ borderColor: COLORS.glassBorder }}>
+                        <Text className="text-sm" style={{ color: COLORS.textMuted }}>
+                          {getTimeSince(recentLogs[1].timestamp)}
+                        </Text>
+                        {recentLogs[1].staffName && (
+                          <Text className="text-xs" style={{ color: COLORS.textMuted }}>
+                            {recentLogs[1].staffName}
+                          </Text>
+                        )}
                       </View>
                     )}
                   </View>
