@@ -1,7 +1,7 @@
 // Email service - uses Vercel serverless function to keep API key secure
 
 // Base URL for email links and API calls
-const BASE_URL = process.env.EXPO_PUBLIC_APP_URL || 'https://acadiacleaniq.vercel.app';
+const BASE_URL = process.env.EXPO_PUBLIC_APP_URL || 'https://app.acadiacleaniq.ca';
 
 // Send email via the secure API endpoint
 async function sendEmailViaAPI(params: { to: string; subject: string; html: string; text?: string }): Promise<{ success: boolean; error?: string }> {

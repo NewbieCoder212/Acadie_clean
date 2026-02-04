@@ -913,7 +913,7 @@ export default function WashroomPublicScreen() {
                         : COLORS.textMuted,
                     }}
                   >
-                    {showIssueStatus ? 'ISSUE' : isClean ? 'CLEAN' : needsAttention ? 'ATTENTION' : 'PENDING'}
+                    {showIssueStatus ? 'ISSUE IDENTIFIED' : isClean ? 'CLEAN' : needsAttention ? 'ATTENTION REQUIRED' : 'PENDING'}
                   </Text>
                   <Text
                     className="text-2xl font-bold text-center mb-4"
@@ -927,7 +927,7 @@ export default function WashroomPublicScreen() {
                         : COLORS.textDark,
                     }}
                   >
-                    {showIssueStatus ? 'PROBLÈME' : isClean ? 'PROPRE' : needsAttention ? 'REQUISE' : 'EN ATTENTE'}
+                    {showIssueStatus ? 'PROBLÈME IDENTIFIÉ' : isClean ? 'PROPRE' : needsAttention ? 'ATTENTION REQUISE' : 'EN ATTENTE'}
                   </Text>
 
                   {/* Business Name */}
