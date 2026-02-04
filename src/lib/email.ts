@@ -170,7 +170,7 @@ function generateEmailHTML(params: EmailParams): string {
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center">
-                    <a href="${BASE_URL}/manager" style="display: inline-block; background-color: #64748b; color: #ffffff; font-size: 16px; font-weight: bold; text-decoration: none; padding: 16px 32px; border-radius: 12px;">
+                    <a href="https://app.acadiacleaniq.ca/manage-acadia9511" style="display: inline-block; background-color: #64748b; color: #ffffff; font-size: 16px; font-weight: bold; text-decoration: none; padding: 16px 32px; border-radius: 12px;">
                       View Manager Dashboard
                     </a>
                     <p style="color: #64748b; font-size: 12px; margin: 16px 0 0;">This issue will be automatically resolved when the next complete cleaning is logged</p>
@@ -235,7 +235,7 @@ ${notes || 'No notes provided'}
 
 ---
 VIEW DASHBOARD:
-${BASE_URL}/manager
+https://app.acadiacleaniq.ca/manage-acadia9511
 
 Note: This issue will be automatically resolved when the next complete cleaning is logged.
 
@@ -379,7 +379,7 @@ function generateIssueReportHTML(params: IssueReportParams): string {
   });
 
   // Link directly to manager dashboard
-  const managerUrl = `${BASE_URL}/manager`;
+  const managerUrl = 'https://app.acadiacleaniq.ca/manage-acadia9511';
 
   return `
 <!DOCTYPE html>
@@ -542,188 +542,10 @@ export async function sendIssueReportEmail(params: IssueReportParams): Promise<{
   }
 }
 
-// Admin email for new washroom notifications
-const ADMIN_EMAIL = 'jay@acadiacleaniq.ca';
-
-interface NewWashroomParams {
-  businessName: string;
-  washroomName: string;
-  washroomId: string;
-  alertEmail: string;
-  timestamp: Date;
-}
-
-/**
- * Generate HTML email template for new washroom notifications
- */
-function generateNewWashroomHTML(params: NewWashroomParams): string {
-  const { businessName, washroomName, washroomId, alertEmail, timestamp } = params;
-
-  const formattedDate = timestamp.toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-
-  const formattedTime = timestamp.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>New Washroom Added - Acadia Clean</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f1f5f9;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f1f5f9; padding: 40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-
-          <!-- Header -->
-          <tr>
-            <td style="background-color: #0f172a; padding: 32px; text-align: center;">
-              <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold;">ACADIA CLEAN</h1>
-              <div style="width: 60px; height: 4px; background-color: #d4af37; margin: 16px auto 0;"></div>
-            </td>
-          </tr>
-
-          <!-- New Washroom Banner -->
-          <tr>
-            <td style="background-color: #ecfdf5; padding: 20px 32px; border-bottom: 2px solid #10b981;">
-              <table width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="vertical-align: middle;">
-                    <span style="font-size: 24px; margin-right: 12px;">🆕</span>
-                  </td>
-                  <td style="vertical-align: middle; width: 100%;">
-                    <h2 style="color: #065f46; margin: 0; font-size: 20px; font-weight: bold;">New Washroom Added</h2>
-                    <p style="color: #047857; margin: 4px 0 0; font-size: 14px;">QR Code Required</p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Content -->
-          <tr>
-            <td style="padding: 32px;">
-
-              <!-- Business Info -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
-                <tr>
-                  <td style="background-color: #f8fafc; border-radius: 12px; padding: 20px;">
-                    <p style="color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 8px;">Business / Entreprise</p>
-                    <h3 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: bold;">${businessName}</h3>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Washroom Details -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
-                <tr>
-                  <td style="background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 12px; padding: 20px;">
-                    <p style="color: #065f46; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 8px;">New Washroom Location</p>
-                    <h3 style="color: #047857; margin: 0; font-size: 18px; font-weight: bold;">${washroomName}</h3>
-                    <p style="color: #64748b; font-size: 14px; margin: 8px 0 0;">ID: ${washroomId}</p>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Alert Email -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
-                <tr>
-                  <td width="50%" style="padding-right: 12px; vertical-align: top;">
-                    <p style="color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 4px;">Alert Email</p>
-                    <p style="color: #0f172a; font-size: 16px; font-weight: 600; margin: 0;">${alertEmail}</p>
-                  </td>
-                  <td width="50%" style="padding-left: 12px; vertical-align: top;">
-                    <p style="color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 4px;">Added On</p>
-                    <p style="color: #0f172a; font-size: 16px; font-weight: 600; margin: 0;">${formattedDate}</p>
-                    <p style="color: #64748b; font-size: 14px; margin: 2px 0 0;">${formattedTime}</p>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Action Reminder -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
-                <tr>
-                  <td style="background-color: #fef3c7; border: 1px solid #fde68a; border-radius: 12px; padding: 20px;">
-                    <p style="color: #92400e; font-size: 14px; font-weight: 600; margin: 0 0 8px;">⚡ Action Required:</p>
-                    <p style="color: #78350f; font-size: 16px; margin: 0; line-height: 1.5;">Generate and print a QR code for this washroom location so staff can begin logging cleanings.</p>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Action Button -->
-              <table width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td align="center">
-                    <a href="${BASE_URL}/admin" style="display: inline-block; background-color: #7c3aed; color: #ffffff; font-size: 16px; font-weight: bold; text-decoration: none; padding: 16px 32px; border-radius: 12px;">
-                      Go to Admin Dashboard
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="background-color: #f8fafc; padding: 24px 32px; text-align: center; border-top: 1px solid #e2e8f0;">
-              <p style="color: #64748b; font-size: 12px; margin: 0;">This is an automated notification from Acadia Clean</p>
-              <p style="color: #94a3b8; font-size: 11px; margin: 8px 0 0;">New washroom requires QR code setup</p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-  `.trim();
-}
-
-/**
- * Send notification email to admin when a new washroom is added
- */
-export async function sendNewWashroomNotification(params: NewWashroomParams): Promise<{ success: boolean; error?: string }> {
-  try {
-    const htmlContent = generateNewWashroomHTML(params);
-
-    const result = await sendEmailViaAPI({
-      to: ADMIN_EMAIL,
-      subject: `[Acadia Clean] New Washroom Added - ${params.businessName}: ${params.washroomName}`,
-      html: htmlContent,
-      text: `New Washroom Added\n\nBusiness: ${params.businessName}\nWashroom: ${params.washroomName}\nID: ${params.washroomId}\nAlert Email: ${params.alertEmail}\nAdded: ${params.timestamp.toLocaleString()}\n\nPlease generate a QR code for this location.`,
-    });
-
-    if (!result.success) {
-      return {
-        success: false,
-        error: result.error || 'Failed to send notification'
-      };
-    }
-
-    return { success: true };
-
-  } catch (error) {
-    return {
-      success: false,
-      error: 'Failed to send notification email.'
-    };
-  }
-}
-
 // ============ TRIAL EXPIRY REMINDER EMAIL ============
+
+// Admin email for trial expiry notifications
+const ADMIN_EMAIL = 'jay@acadiacleaniq.ca';
 
 interface TrialReminderParams {
   businessName: string;

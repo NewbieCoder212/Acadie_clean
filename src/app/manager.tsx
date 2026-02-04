@@ -63,7 +63,6 @@ import {
   ManagerRole,
 } from '@/lib/supabase';
 import { hashPassword, verifyPassword } from '@/lib/password';
-import { sendNewWashroomNotification } from '@/lib/email';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
 import { generatePDFHTML, getCheckIcon, getStatusBadge, truncateText, openPDFInNewWindow, generateIncidentReportsPDF } from '@/lib/pdf-template';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
