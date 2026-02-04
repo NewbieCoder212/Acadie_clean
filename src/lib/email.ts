@@ -378,9 +378,8 @@ function generateIssueReportHTML(params: IssueReportParams): string {
     hour12: true,
   });
 
-  // Build the login URL - managers need to authenticate first
-  // After login, they'll be redirected to the dashboard
-  const loginUrl = `${BASE_URL}/login`;
+  // Link directly to manager dashboard
+  const managerUrl = `${BASE_URL}/manager`;
 
   return `
 <!DOCTYPE html>
@@ -472,10 +471,10 @@ function generateIssueReportHTML(params: IssueReportParams): string {
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center">
-                    <a href="${loginUrl}" style="display: inline-block; background-color: #2563eb; color: #ffffff; font-size: 18px; font-weight: bold; text-decoration: none; padding: 18px 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3);">
-                      Login to View Issue
+                    <a href="${managerUrl}" style="display: inline-block; background-color: #2563eb; color: #ffffff; font-size: 18px; font-weight: bold; text-decoration: none; padding: 18px 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3);">
+                      View Manager Dashboard
                     </a>
-                    <p style="color: #64748b; font-size: 11px; margin: 12px 0 0;">Sign in to access your Manager Dashboard and resolve this issue</p>
+                    <p style="color: #64748b; font-size: 11px; margin: 12px 0 0;">Access your Manager Dashboard to resolve this issue</p>
                   </td>
                 </tr>
               </table>
