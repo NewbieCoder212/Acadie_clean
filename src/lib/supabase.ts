@@ -2497,3 +2497,914 @@ export async function getSubscriptionDetails(businessId: string): Promise<{
     return { success: false, error: String(error) };
   }
 }
+
+// ============================================================
+// MANAGER MULTI-TENANT SYSTEM
+// ============================================================
+// This section handles:
+// - Manager authentication (separate from business login)
+// - Manager-Business relationships with roles
+// - Permission checking for role-based access
+
+// Manager role types
+export type ManagerRole = 'owner' | 'supervisor' | 'viewer';
+
+// Manager table types
+export interface ManagerRow {
+  id: string;
+  email: string;
+  password_hash: string;
+  name: string | null;
+  phone: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Safe manager data without password
+export interface SafeManagerRow {
+  id: string;
+  email: string;
+  name: string | null;
+  phone: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+// Manager-Business relationship with permissions
+export interface ManagerBusinessRow {
+  id: string;
+  manager_id: string;
+  business_id: string;
+  role: ManagerRole;
+  can_edit_locations: boolean;
+  can_edit_settings: boolean;
+  can_invite_users: boolean;
+  can_view_billing: boolean;
+  can_export_reports: boolean;
+  can_resolve_issues: boolean;
+  invited_by: string | null;
+  invited_at: string | null;
+  accepted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Permissions object for easy checking
+export interface ManagerPermissions {
+  role: ManagerRole;
+  canEditLocations: boolean;
+  canEditSettings: boolean;
+  canInviteUsers: boolean;
+  canViewBilling: boolean;
+  canExportReports: boolean;
+  canResolveIssues: boolean;
+}
+
+// Business with manager's role and permissions
+export interface ManagerBusinessAccess {
+  business: SafeBusinessRow;
+  role: ManagerRole;
+  permissions: ManagerPermissions;
+}
+
+// Login result for managers
+export interface ManagerLoginResult {
+  manager: SafeManagerRow;
+  businesses: ManagerBusinessAccess[];
+}
+
+// Insert new manager
+export interface InsertManager {
+  email: string;
+  password: string;
+  name?: string;
+  phone?: string;
+}
+
+// ============================================================
+// MANAGER AUTHENTICATION FUNCTIONS
+// ============================================================
+
+// Register a new manager
+export async function registerManager(manager: InsertManager): Promise<{ success: boolean; data?: SafeManagerRow; error?: string }> {
+  try {
+    console.log('[registerManager] Starting registration for:', manager.email);
+
+    // Check if email already exists
+    const { data: existingManager } = await supabase
+      .from('managers')
+      .select('id')
+      .eq('email', manager.email.toLowerCase())
+      .single();
+
+    if (existingManager) {
+      return { success: false, error: 'This email is already registered / Ce courriel est déjà enregistré' };
+    }
+
+    // Hash the password
+    const hashedPassword = await hashPassword(manager.password);
+
+    // Insert manager record
+    const managerId = generateUUID();
+    const { data, error } = await supabase
+      .from('managers')
+      .insert([{
+        id: managerId,
+        email: manager.email.toLowerCase(),
+        password_hash: hashedPassword,
+        name: manager.name || null,
+        phone: manager.phone || null,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[registerManager] Failed to insert:', error);
+      return { success: false, error: error.message };
+    }
+
+    const safeData: SafeManagerRow = {
+      id: data.id,
+      email: data.email,
+      name: data.name,
+      phone: data.phone,
+      is_active: data.is_active,
+      created_at: data.created_at,
+    };
+
+    console.log('[registerManager] Manager created successfully:', managerId);
+    return { success: true, data: safeData };
+  } catch (error) {
+    console.error('[registerManager] Unexpected error:', error);
+    return { success: false, error: String(error) };
+  }
+}
+
+// Login manager and get their businesses
+export async function loginManager(email: string, password: string): Promise<{ success: boolean; data?: ManagerLoginResult; error?: string }> {
+  try {
+    console.log('[loginManager] Attempting login for:', email);
+
+    // Get manager by email
+    const { data: manager, error: managerError } = await supabase
+      .from('managers')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .single();
+
+    if (managerError || !manager) {
+      console.log('[loginManager] Manager not found, trying legacy business login');
+      // Fall back to legacy business login and auto-migrate
+      return await loginManagerFromBusiness(email, password);
+    }
+
+    // Check if account is active
+    if (!manager.is_active) {
+      return { success: false, error: 'Your account has been deactivated / Votre compte a été désactivé' };
+    }
+
+    // Verify password
+    let passwordValid = false;
+    if (isBcryptHash(manager.password_hash)) {
+      passwordValid = await verifyPassword(password, manager.password_hash);
+    } else {
+      // Legacy plain text password - verify and upgrade
+      passwordValid = manager.password_hash === password;
+      if (passwordValid) {
+        const hashedPassword = await hashPassword(password);
+        await supabase
+          .from('managers')
+          .update({ password_hash: hashedPassword, updated_at: new Date().toISOString() })
+          .eq('id', manager.id);
+      }
+    }
+
+    if (!passwordValid) {
+      return { success: false, error: 'Invalid email or password / Courriel ou mot de passe invalide' };
+    }
+
+    // Get all businesses this manager has access to
+    const businessesResult = await getManagerBusinesses(manager.id);
+    if (!businessesResult.success) {
+      return { success: false, error: businessesResult.error };
+    }
+
+    const safeManager: SafeManagerRow = {
+      id: manager.id,
+      email: manager.email,
+      name: manager.name,
+      phone: manager.phone,
+      is_active: manager.is_active,
+      created_at: manager.created_at,
+    };
+
+    console.log('[loginManager] Login successful, found', businessesResult.data?.length, 'businesses');
+    return {
+      success: true,
+      data: {
+        manager: safeManager,
+        businesses: businessesResult.data || [],
+      },
+    };
+  } catch (error) {
+    console.error('[loginManager] Unexpected error:', error);
+    return { success: false, error: String(error) };
+  }
+}
+
+// Login using legacy business credentials and auto-migrate to manager system
+async function loginManagerFromBusiness(email: string, password: string): Promise<{ success: boolean; data?: ManagerLoginResult; error?: string }> {
+  try {
+    // Try to login as a business
+    const businessResult = await loginBusinessLegacy(email, password);
+    if (!businessResult.success || !businessResult.data) {
+      return { success: false, error: businessResult.error || 'Invalid email or password / Courriel ou mot de passe invalide' };
+    }
+
+    const business = businessResult.data;
+
+    // Check if manager already exists
+    const { data: existingManager } = await supabase
+      .from('managers')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .single();
+
+    let managerId: string;
+    let managerData: SafeManagerRow;
+
+    if (existingManager) {
+      managerId = existingManager.id;
+      managerData = {
+        id: existingManager.id,
+        email: existingManager.email,
+        name: existingManager.name,
+        phone: existingManager.phone,
+        is_active: existingManager.is_active,
+        created_at: existingManager.created_at,
+      };
+    } else {
+      // Create manager from business data
+      const hashedPassword = await hashPassword(password);
+      managerId = generateUUID();
+
+      const { data: newManager, error: createError } = await supabase
+        .from('managers')
+        .insert([{
+          id: managerId,
+          email: email.toLowerCase(),
+          password_hash: hashedPassword,
+          name: business.name,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }])
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('[loginManagerFromBusiness] Failed to create manager:', createError);
+        // Return business data as fallback
+        return {
+          success: true,
+          data: {
+            manager: {
+              id: business.id,
+              email: business.email,
+              name: business.name,
+              phone: null,
+              is_active: business.is_active,
+              created_at: business.created_at,
+            },
+            businesses: [{
+              business,
+              role: 'owner' as ManagerRole,
+              permissions: getDefaultPermissions('owner'),
+            }],
+          },
+        };
+      }
+
+      managerData = {
+        id: newManager.id,
+        email: newManager.email,
+        name: newManager.name,
+        phone: newManager.phone,
+        is_active: newManager.is_active,
+        created_at: newManager.created_at,
+      };
+    }
+
+    // Check if manager-business link exists
+    const { data: existingLink } = await supabase
+      .from('manager_businesses')
+      .select('id')
+      .eq('manager_id', managerId)
+      .eq('business_id', business.id)
+      .single();
+
+    if (!existingLink) {
+      // Create owner link
+      await supabase
+        .from('manager_businesses')
+        .insert([{
+          id: generateUUID(),
+          manager_id: managerId,
+          business_id: business.id,
+          role: 'owner',
+          can_edit_locations: true,
+          can_edit_settings: true,
+          can_invite_users: true,
+          can_view_billing: true,
+          can_export_reports: true,
+          can_resolve_issues: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }]);
+    }
+
+    // Get all businesses for this manager
+    const businessesResult = await getManagerBusinesses(managerId);
+
+    return {
+      success: true,
+      data: {
+        manager: managerData,
+        businesses: businessesResult.data || [{
+          business,
+          role: 'owner' as ManagerRole,
+          permissions: getDefaultPermissions('owner'),
+        }],
+      },
+    };
+  } catch (error) {
+    console.error('[loginManagerFromBusiness] Unexpected error:', error);
+    return { success: false, error: String(error) };
+  }
+}
+
+// Get default permissions for a role
+export function getDefaultPermissions(role: ManagerRole): ManagerPermissions {
+  switch (role) {
+    case 'owner':
+      return {
+        role,
+        canEditLocations: true,
+        canEditSettings: true,
+        canInviteUsers: true,
+        canViewBilling: true,
+        canExportReports: true,
+        canResolveIssues: true,
+      };
+    case 'supervisor':
+      return {
+        role,
+        canEditLocations: false,
+        canEditSettings: false,
+        canInviteUsers: false,
+        canViewBilling: false,
+        canExportReports: true,
+        canResolveIssues: true,
+      };
+    case 'viewer':
+      return {
+        role,
+        canEditLocations: false,
+        canEditSettings: false,
+        canInviteUsers: false,
+        canViewBilling: false,
+        canExportReports: false,
+        canResolveIssues: false,
+      };
+  }
+}
+
+// ============================================================
+// MANAGER-BUSINESS RELATIONSHIP FUNCTIONS
+// ============================================================
+
+// Get all businesses a manager has access to
+export async function getManagerBusinesses(managerId: string): Promise<{ success: boolean; data?: ManagerBusinessAccess[]; error?: string }> {
+  try {
+    // Get manager-business relationships
+    const { data: links, error: linksError } = await supabase
+      .from('manager_businesses')
+      .select('*')
+      .eq('manager_id', managerId);
+
+    if (linksError) {
+      return { success: false, error: linksError.message };
+    }
+
+    if (!links || links.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    // Get business details
+    const businessIds = links.map(l => l.business_id);
+    const { data: businesses, error: businessError } = await supabase
+      .from('businesses')
+      .select('*')
+      .in('id', businessIds)
+      .eq('is_active', true);
+
+    if (businessError) {
+      return { success: false, error: businessError.message };
+    }
+
+    // Combine data
+    const result: ManagerBusinessAccess[] = [];
+    for (const link of links) {
+      const business = businesses?.find(b => b.id === link.business_id);
+      if (business) {
+        const safeBusiness: SafeBusinessRow = {
+          id: business.id,
+          name: business.name,
+          email: business.email,
+          address: business.address ?? null,
+          is_admin: business.is_admin,
+          is_active: business.is_active,
+          subscription_tier: business.subscription_tier ?? 'standard',
+          subscription_status: business.subscription_status ?? 'trial',
+          trial_start_date: business.trial_start_date ?? null,
+          trial_ends_at: business.trial_ends_at ?? null,
+          subscription_expires_at: business.subscription_expires_at ?? null,
+          staff_pin_display: business.staff_pin_display ?? null,
+          global_alert_emails: business.global_alert_emails ?? null,
+          use_global_alerts: business.use_global_alerts ?? false,
+          created_at: business.created_at,
+        };
+
+        result.push({
+          business: safeBusiness,
+          role: link.role as ManagerRole,
+          permissions: {
+            role: link.role as ManagerRole,
+            canEditLocations: link.can_edit_locations,
+            canEditSettings: link.can_edit_settings,
+            canInviteUsers: link.can_invite_users,
+            canViewBilling: link.can_view_billing,
+            canExportReports: link.can_export_reports,
+            canResolveIssues: link.can_resolve_issues,
+          },
+        });
+      }
+    }
+
+    return { success: true, data: result };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Get all managers for a business
+export async function getBusinessManagers(businessId: string): Promise<{ success: boolean; data?: (SafeManagerRow & { role: ManagerRole; permissions: ManagerPermissions })[]; error?: string }> {
+  try {
+    const { data: links, error: linksError } = await supabase
+      .from('manager_businesses')
+      .select('*')
+      .eq('business_id', businessId);
+
+    if (linksError) {
+      return { success: false, error: linksError.message };
+    }
+
+    if (!links || links.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    const managerIds = links.map(l => l.manager_id);
+    const { data: managers, error: managersError } = await supabase
+      .from('managers')
+      .select('*')
+      .in('id', managerIds)
+      .eq('is_active', true);
+
+    if (managersError) {
+      return { success: false, error: managersError.message };
+    }
+
+    const result = [];
+    for (const link of links) {
+      const manager = managers?.find(m => m.id === link.manager_id);
+      if (manager) {
+        result.push({
+          id: manager.id,
+          email: manager.email,
+          name: manager.name,
+          phone: manager.phone,
+          is_active: manager.is_active,
+          created_at: manager.created_at,
+          role: link.role as ManagerRole,
+          permissions: {
+            role: link.role as ManagerRole,
+            canEditLocations: link.can_edit_locations,
+            canEditSettings: link.can_edit_settings,
+            canInviteUsers: link.can_invite_users,
+            canViewBilling: link.can_view_billing,
+            canExportReports: link.can_export_reports,
+            canResolveIssues: link.can_resolve_issues,
+          },
+        });
+      }
+    }
+
+    return { success: true, data: result };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Invite a user to a business
+export async function inviteUserToBusiness(
+  businessId: string,
+  inviterManagerId: string,
+  inviteeEmail: string,
+  role: ManagerRole,
+  inviteeName?: string
+): Promise<{ success: boolean; data?: { managerId: string; isNewUser: boolean }; error?: string }> {
+  try {
+    // Check if inviter has permission to invite
+    const { data: inviterLink } = await supabase
+      .from('manager_businesses')
+      .select('can_invite_users')
+      .eq('manager_id', inviterManagerId)
+      .eq('business_id', businessId)
+      .single();
+
+    if (!inviterLink?.can_invite_users) {
+      return { success: false, error: 'You do not have permission to invite users / Vous n\'avez pas la permission d\'inviter des utilisateurs' };
+    }
+
+    // Check if user already has access to this business
+    const { data: existingManager } = await supabase
+      .from('managers')
+      .select('id')
+      .eq('email', inviteeEmail.toLowerCase())
+      .single();
+
+    let managerId: string;
+    let isNewUser = false;
+
+    if (existingManager) {
+      managerId = existingManager.id;
+
+      // Check if already linked
+      const { data: existingLink } = await supabase
+        .from('manager_businesses')
+        .select('id')
+        .eq('manager_id', managerId)
+        .eq('business_id', businessId)
+        .single();
+
+      if (existingLink) {
+        return { success: false, error: 'This user already has access to this business / Cet utilisateur a déjà accès à cette entreprise' };
+      }
+    } else {
+      // Create a new manager with temporary password
+      const tempPassword = Math.random().toString(36).slice(-8);
+      const hashedPassword = await hashPassword(tempPassword);
+      managerId = generateUUID();
+      isNewUser = true;
+
+      const { error: createError } = await supabase
+        .from('managers')
+        .insert([{
+          id: managerId,
+          email: inviteeEmail.toLowerCase(),
+          password_hash: hashedPassword,
+          name: inviteeName || null,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }]);
+
+      if (createError) {
+        return { success: false, error: createError.message };
+      }
+    }
+
+    // Create the link with role-based permissions
+    const permissions = getDefaultPermissions(role);
+    const { error: linkError } = await supabase
+      .from('manager_businesses')
+      .insert([{
+        id: generateUUID(),
+        manager_id: managerId,
+        business_id: businessId,
+        role,
+        can_edit_locations: permissions.canEditLocations,
+        can_edit_settings: permissions.canEditSettings,
+        can_invite_users: permissions.canInviteUsers,
+        can_view_billing: permissions.canViewBilling,
+        can_export_reports: permissions.canExportReports,
+        can_resolve_issues: permissions.canResolveIssues,
+        invited_by: inviterManagerId,
+        invited_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }]);
+
+    if (linkError) {
+      return { success: false, error: linkError.message };
+    }
+
+    return { success: true, data: { managerId, isNewUser } };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Remove a user from a business
+export async function removeUserFromBusiness(
+  businessId: string,
+  removerManagerId: string,
+  targetManagerId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Check if remover has permission
+    const { data: removerLink } = await supabase
+      .from('manager_businesses')
+      .select('role, can_invite_users')
+      .eq('manager_id', removerManagerId)
+      .eq('business_id', businessId)
+      .single();
+
+    if (!removerLink?.can_invite_users && removerLink?.role !== 'owner') {
+      return { success: false, error: 'You do not have permission to remove users / Vous n\'avez pas la permission de retirer des utilisateurs' };
+    }
+
+    // Can't remove yourself if you're the only owner
+    if (removerManagerId === targetManagerId && removerLink.role === 'owner') {
+      const { data: otherOwners } = await supabase
+        .from('manager_businesses')
+        .select('id')
+        .eq('business_id', businessId)
+        .eq('role', 'owner')
+        .neq('manager_id', targetManagerId);
+
+      if (!otherOwners || otherOwners.length === 0) {
+        return { success: false, error: 'Cannot remove the only owner / Impossible de retirer le seul propriétaire' };
+      }
+    }
+
+    // Remove the link
+    const { error } = await supabase
+      .from('manager_businesses')
+      .delete()
+      .eq('manager_id', targetManagerId)
+      .eq('business_id', businessId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Update a user's role in a business
+export async function updateUserRole(
+  businessId: string,
+  updaterManagerId: string,
+  targetManagerId: string,
+  newRole: ManagerRole
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Check if updater has permission (must be owner)
+    const { data: updaterLink } = await supabase
+      .from('manager_businesses')
+      .select('role')
+      .eq('manager_id', updaterManagerId)
+      .eq('business_id', businessId)
+      .single();
+
+    if (updaterLink?.role !== 'owner') {
+      return { success: false, error: 'Only owners can change roles / Seuls les propriétaires peuvent modifier les rôles' };
+    }
+
+    // Can't demote yourself if you're the only owner
+    if (updaterManagerId === targetManagerId && newRole !== 'owner') {
+      const { data: otherOwners } = await supabase
+        .from('manager_businesses')
+        .select('id')
+        .eq('business_id', businessId)
+        .eq('role', 'owner')
+        .neq('manager_id', targetManagerId);
+
+      if (!otherOwners || otherOwners.length === 0) {
+        return { success: false, error: 'Cannot demote the only owner / Impossible de rétrograder le seul propriétaire' };
+      }
+    }
+
+    // Update role and permissions
+    const permissions = getDefaultPermissions(newRole);
+    const { error } = await supabase
+      .from('manager_businesses')
+      .update({
+        role: newRole,
+        can_edit_locations: permissions.canEditLocations,
+        can_edit_settings: permissions.canEditSettings,
+        can_invite_users: permissions.canInviteUsers,
+        can_view_billing: permissions.canViewBilling,
+        can_export_reports: permissions.canExportReports,
+        can_resolve_issues: permissions.canResolveIssues,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('manager_id', targetManagerId)
+      .eq('business_id', businessId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Get manager by ID
+export async function getManagerById(managerId: string): Promise<{ success: boolean; data?: SafeManagerRow; error?: string }> {
+  try {
+    const { data, error } = await supabase
+      .from('managers')
+      .select('*')
+      .eq('id', managerId)
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const safeData: SafeManagerRow = {
+      id: data.id,
+      email: data.email,
+      name: data.name,
+      phone: data.phone,
+      is_active: data.is_active,
+      created_at: data.created_at,
+    };
+
+    return { success: true, data: safeData };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Update manager profile
+export async function updateManagerProfile(
+  managerId: string,
+  updates: { name?: string; phone?: string }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('managers')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', managerId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Update manager password
+export async function updateManagerPassword(
+  managerId: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Get current password hash
+    const { data: manager, error: fetchError } = await supabase
+      .from('managers')
+      .select('password_hash')
+      .eq('id', managerId)
+      .single();
+
+    if (fetchError || !manager) {
+      return { success: false, error: 'Manager not found' };
+    }
+
+    // Verify current password
+    const currentValid = await verifyPassword(currentPassword, manager.password_hash);
+    if (!currentValid) {
+      return { success: false, error: 'Current password is incorrect / Le mot de passe actuel est incorrect' };
+    }
+
+    // Hash and update new password
+    const hashedPassword = await hashPassword(newPassword);
+    const { error } = await supabase
+      .from('managers')
+      .update({
+        password_hash: hashedPassword,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', managerId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// ============================================================
+// WASHROOM FUNCTIONS WITH BUSINESS_ID
+// ============================================================
+
+// Get washrooms for a business by ID (new method using business_id FK)
+export async function getWashroomsForBusinessById(businessId: string): Promise<{ success: boolean; data?: WashroomRow[]; error?: string }> {
+  try {
+    // First try using business_id column
+    const { data, error } = await supabase
+      .from('washrooms')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('is_active', true)
+      .order('room_name', { ascending: true });
+
+    if (error) {
+      // If business_id column doesn't exist, fall back to business_name
+      if (error.message.includes('business_id')) {
+        console.log('[getWashroomsForBusinessById] Falling back to business_name lookup');
+        const { data: business } = await supabase
+          .from('businesses')
+          .select('name')
+          .eq('id', businessId)
+          .single();
+
+        if (business) {
+          return getWashroomsForBusiness(business.name);
+        }
+      }
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data ?? [] };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Insert washroom with business_id
+export async function insertWashroomWithBusinessId(
+  washroom: Omit<InsertWashroom, 'business_name'> & { business_id: string; business_name?: string }
+): Promise<{ success: boolean; data?: WashroomRow; error?: string }> {
+  try {
+    // Get business name if not provided (for backward compatibility)
+    let businessName = washroom.business_name;
+    if (!businessName) {
+      const { data: business } = await supabase
+        .from('businesses')
+        .select('name')
+        .eq('id', washroom.business_id)
+        .single();
+      businessName = business?.name || '';
+    }
+
+    // Hash the PIN before storing
+    const hashedPin = await hashPin(washroom.pin_code);
+
+    const { data, error } = await supabase
+      .from('washrooms')
+      .insert([{
+        id: washroom.id,
+        business_id: washroom.business_id,
+        business_name: businessName, // Keep for backward compatibility
+        room_name: washroom.room_name,
+        pin_code: hashedPin,
+        pin_display: washroom.pin_code,
+        alert_email: washroom.alert_email || null,
+        is_active: washroom.is_active ?? true,
+        created_at: new Date().toISOString(),
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}

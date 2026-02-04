@@ -432,3 +432,72 @@ The app supports **offline cleaning log submission** for environments with unrel
 - Initial page load requires internet (to fetch washroom data and recent logs)
 - Email alerts are sent only when log syncs to server (may be delayed)
 - QR scan tracking only works when online
+
+## Multi-Tenant Manager System
+
+The app now supports a **multi-tenant architecture** where managers can access multiple businesses with role-based permissions.
+
+### Manager Roles
+
+| Role | Description | Permissions |
+|------|-------------|-------------|
+| **Owner** | Business owner / full admin | All permissions - edit locations, settings, billing, invite users |
+| **Supervisor** | Shift supervisor | View dashboard, export reports, resolve issues |
+| **Viewer** | Read-only access | View dashboard only, no actions |
+
+### Features
+
+- **One Login, Multiple Businesses**: Managers with access to multiple businesses see a business picker after login
+- **Business Switcher**: Managers can switch between businesses from the dashboard header
+- **Role-Based UI**: Features are shown/hidden based on the user's role for the current business
+- **Team Management**: Owners can invite supervisors and viewers to their business
+- **Individual Credentials**: Each user has their own email/password - no password sharing required
+
+### How It Works
+
+1. **Manager logs in** with their email/password
+2. **System checks** the `managers` table and `manager_businesses` junction table
+3. **If 1 business**: Goes directly to dashboard
+4. **If 2+ businesses**: Shows business picker screen
+5. **Permissions loaded**: UI adapts based on role (owner/supervisor/viewer)
+
+### Database Tables
+
+**managers** - User accounts
+- `id` - Unique identifier
+- `email` - Login email (unique)
+- `password_hash` - Hashed password
+- `name` - Display name
+- `is_active` - Account status
+
+**manager_businesses** - Links managers to businesses with roles
+- `manager_id` - Reference to manager
+- `business_id` - Reference to business
+- `role` - 'owner', 'supervisor', or 'viewer'
+- `can_edit_locations` - Permission flag
+- `can_edit_settings` - Permission flag
+- `can_invite_users` - Permission flag
+- `can_view_billing` - Permission flag
+- `can_export_reports` - Permission flag
+- `can_resolve_issues` - Permission flag
+- `invited_by` - Who invited this user
+- `invited_at` - When they were invited
+
+### Inviting Team Members
+
+Owners can invite supervisors/viewers:
+1. Tap the **Team** icon in the dashboard header
+2. Tap **Invite Team Member**
+3. Enter email and name (optional)
+4. Select role (Supervisor or Viewer)
+5. Tap **Send Invite**
+
+If the email already has an account, they're added to the business immediately. If not, a new account is created.
+
+### Migration from Legacy System
+
+Existing business owners are automatically migrated:
+- First login creates a `managers` record
+- Links to their business as `owner`
+- All existing functionality continues to work
+

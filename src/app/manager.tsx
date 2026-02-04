@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Shield, Lock, Eye, EyeOff, Download, MapPin, AlertTriangle, CheckCircle2, Mail, ExternalLink, Plus, Link, Copy, LogOut, Trash2, Key, FileText, Calendar, ClipboardList, RefreshCw, Sparkles, ChevronRight, Save, Power, AlertOctagon, Crown, X } from 'lucide-react-native';
+import { Shield, Lock, Eye, EyeOff, Download, MapPin, AlertTriangle, CheckCircle2, Mail, ExternalLink, Plus, Link, Copy, LogOut, Trash2, Key, FileText, Calendar, ClipboardList, RefreshCw, Sparkles, ChevronRight, Save, Power, AlertOctagon, Crown, X, Users, UserPlus } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
@@ -51,12 +51,23 @@ import {
   logoutBusiness,
   getBusinessById,
   SafeBusinessRow,
+  // New manager imports
+  ManagerBusinessAccess,
+  ManagerPermissions,
+  SafeManagerRow,
+  getManagerBusinesses,
+  getBusinessManagers,
+  inviteUserToBusiness,
+  removeUserFromBusiness,
+  updateUserRole,
+  ManagerRole,
 } from '@/lib/supabase';
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { sendNewWashroomNotification } from '@/lib/email';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
 import { generatePDFHTML, getCheckIcon, getStatusBadge, truncateText, openPDFInNewWindow, generateIncidentReportsPDF } from '@/lib/pdf-template';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
+import { BusinessSwitcher } from '@/components/BusinessPicker';
 import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
 
 // Legacy color mapping for backward compatibility
@@ -104,6 +115,21 @@ export default function ManagerDashboard() {
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
   const [emailInput, setEmailInput] = useState('');
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+
+  // Manager multi-tenant state
+  const [currentManager, setCurrentManager] = useState<SafeManagerRow | null>(null);
+  const [managerBusinesses, setManagerBusinesses] = useState<ManagerBusinessAccess[]>([]);
+  const [currentPermissions, setCurrentPermissions] = useState<ManagerPermissions | null>(null);
+
+  // Team management state
+  const [showTeamModal, setShowTeamModal] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<(SafeManagerRow & { role: ManagerRole; permissions: ManagerPermissions })[]>([]);
+  const [isLoadingTeam, setIsLoadingTeam] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
+  const [inviteRole, setInviteRole] = useState<ManagerRole>('supervisor');
+  const [isInviting, setIsInviting] = useState(false);
 
   // Global Alert Settings state
   const [showGlobalAlertSettings, setShowGlobalAlertSettings] = useState(false);
@@ -257,6 +283,32 @@ export default function ManagerDashboard() {
   const checkBusinessAuth = async () => {
     setIsCheckingAuth(true);
     try {
+      // Load manager session if available
+      const managerStored = await AsyncStorage.getItem('currentManager');
+      const businessAccessStored = await AsyncStorage.getItem('selectedBusinessAccess');
+      const businessesStored = await AsyncStorage.getItem('managerBusinesses');
+
+      if (managerStored) {
+        try {
+          const manager = JSON.parse(managerStored) as SafeManagerRow;
+          setCurrentManager(manager);
+
+          // Load manager's businesses
+          if (businessesStored) {
+            const businesses = JSON.parse(businessesStored) as ManagerBusinessAccess[];
+            setManagerBusinesses(businesses);
+          }
+
+          // Load current business access and permissions
+          if (businessAccessStored) {
+            const businessAccess = JSON.parse(businessAccessStored) as ManagerBusinessAccess;
+            setCurrentPermissions(businessAccess.permissions);
+          }
+        } catch (parseError) {
+          console.log('[Manager] Failed to parse manager session');
+        }
+      }
+
       const stored = await AsyncStorage.getItem('currentBusiness');
       if (stored) {
         try {
@@ -297,6 +349,124 @@ export default function ManagerDashboard() {
       // Storage error
     }
     setIsCheckingAuth(false);
+  };
+
+  // Handle switching businesses (for managers with multiple businesses)
+  const handleSwitchBusiness = async (businessAccess: ManagerBusinessAccess) => {
+    try {
+      await AsyncStorage.setItem('currentBusiness', JSON.stringify(businessAccess.business));
+      await AsyncStorage.setItem('selectedBusinessAccess', JSON.stringify(businessAccess));
+      setCurrentBusiness(businessAccess.business);
+      setCurrentPermissions(businessAccess.permissions);
+      setBusinessName(businessAccess.business.name);
+      setBusinessAddress(businessAccess.business.address || '');
+      setGlobalAlertEmails(businessAccess.business.global_alert_emails || []);
+      setUseGlobalAlerts(businessAccess.business.use_global_alerts || false);
+
+      // Reload washrooms for new business
+      const washroomsResult = await getWashroomsForBusiness(businessAccess.business.name);
+      if (washroomsResult.success && washroomsResult.data) {
+        setBusinessLocations(washroomsResult.data);
+      }
+
+      // Reload logs and issues
+      fetchAllData();
+    } catch (error) {
+      console.error('[Manager] Error switching business:', error);
+    }
+  };
+
+  // Load team members for current business
+  const loadTeamMembers = async () => {
+    if (!currentBusiness?.id || !currentManager?.id) return;
+
+    setIsLoadingTeam(true);
+    try {
+      const result = await getBusinessManagers(currentBusiness.id);
+      if (result.success && result.data) {
+        setTeamMembers(result.data);
+      }
+    } catch (error) {
+      console.error('[Manager] Error loading team:', error);
+    } finally {
+      setIsLoadingTeam(false);
+    }
+  };
+
+  // Handle inviting a user
+  const handleInviteUser = async () => {
+    if (!inviteEmail.trim() || !currentBusiness?.id || !currentManager?.id) {
+      Alert.alert('Error', 'Please enter an email address');
+      return;
+    }
+
+    setIsInviting(true);
+    try {
+      const result = await inviteUserToBusiness(
+        currentBusiness.id,
+        currentManager.id,
+        inviteEmail.trim(),
+        inviteRole,
+        inviteName.trim() || undefined
+      );
+
+      if (result.success) {
+        Alert.alert(
+          'Success',
+          result.data?.isNewUser
+            ? 'Invitation sent! The user will need to set up their password.'
+            : 'User has been added to this business.'
+        );
+        setShowInviteModal(false);
+        setInviteEmail('');
+        setInviteName('');
+        setInviteRole('supervisor');
+        loadTeamMembers();
+      } else {
+        Alert.alert('Error', result.error || 'Failed to invite user');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
+  // Handle removing a user
+  const handleRemoveUser = async (targetManagerId: string, targetName: string | null) => {
+    if (!currentBusiness?.id || !currentManager?.id) return;
+
+    Alert.alert(
+      'Remove User',
+      `Are you sure you want to remove ${targetName || 'this user'} from this business?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await removeUserFromBusiness(
+              currentBusiness.id,
+              currentManager.id,
+              targetManagerId
+            );
+            if (result.success) {
+              Alert.alert('Success', 'User has been removed');
+              loadTeamMembers();
+            } else {
+              Alert.alert('Error', result.error || 'Failed to remove user');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Check if current user can perform action based on permissions
+  const canPerformAction = (action: keyof ManagerPermissions): boolean => {
+    // If no permissions loaded yet, fall back to legacy behavior (owner has all permissions)
+    if (!currentPermissions) return true;
+    return currentPermissions[action] === true;
   };
 
   // Generate QR code URL - uses environment variable for production URL
@@ -386,8 +556,17 @@ export default function ManagerDashboard() {
 
   const handleLogout = async () => {
     await logoutBusiness();
-    await AsyncStorage.removeItem('currentBusiness');
+    // Clear all session data
+    await AsyncStorage.multiRemove([
+      'currentBusiness',
+      'currentManager',
+      'selectedBusinessAccess',
+      'managerBusinesses',
+    ]);
     setCurrentBusiness(null);
+    setCurrentManager(null);
+    setManagerBusinesses([]);
+    setCurrentPermissions(null);
     logoutManager();
     router.replace('/');
   };
@@ -1205,14 +1384,68 @@ export default function ManagerDashboard() {
                 <Text className="text-white/80 text-[10px] ml-1">Déconnexion</Text>
               </View>
             </Pressable>
-            <Pressable
-              onPress={handleRefreshData}
-              className="p-2 rounded-lg active:opacity-70"
-              style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-            >
-              <RefreshCw size={18} color="#ffffff" />
-            </Pressable>
+            <View className="flex-row items-center gap-2">
+              {/* Team Management Button - Only show for owners */}
+              {canPerformAction('canInviteUsers') && (
+                <Pressable
+                  onPress={() => {
+                    setShowTeamModal(true);
+                    loadTeamMembers();
+                  }}
+                  className="p-2 rounded-lg active:opacity-70"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
+                >
+                  <Users size={18} color="#ffffff" />
+                </Pressable>
+              )}
+              <Pressable
+                onPress={handleRefreshData}
+                className="p-2 rounded-lg active:opacity-70"
+                style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
+              >
+                <RefreshCw size={18} color="#ffffff" />
+              </Pressable>
+            </View>
           </View>
+
+          {/* Business Switcher - Show if manager has multiple businesses */}
+          {managerBusinesses.length > 1 && (
+            <View className="mb-3 items-center">
+              <BusinessSwitcher
+                businesses={managerBusinesses}
+                selectedBusinessId={currentBusiness?.id || null}
+                onSelectBusiness={handleSwitchBusiness}
+              />
+            </View>
+          )}
+
+          {/* Role Badge - Show current role */}
+          {currentPermissions && (
+            <View className="items-center mb-2">
+              <View
+                className="px-3 py-1 rounded-full"
+                style={{
+                  backgroundColor:
+                    currentPermissions.role === 'owner'
+                      ? 'rgba(251, 191, 36, 0.3)'
+                      : currentPermissions.role === 'supervisor'
+                      ? 'rgba(59, 130, 246, 0.3)'
+                      : 'rgba(255, 255, 255, 0.2)',
+                }}
+              >
+                <Text
+                  className="text-xs font-semibold"
+                  style={{ color: C.white }}
+                >
+                  {currentPermissions.role === 'owner'
+                    ? '👑 Owner'
+                    : currentPermissions.role === 'supervisor'
+                    ? '🛡️ Supervisor'
+                    : '👁️ Viewer'}
+                </Text>
+              </View>
+            </View>
+          )}
 
           <View className="items-center py-4">
             <View
@@ -1613,7 +1846,8 @@ export default function ManagerDashboard() {
           )}
         </Animated.View>
 
-        {/* GLOBAL ALERT SETTINGS */}
+        {/* GLOBAL ALERT SETTINGS - Owner only */}
+        {canPerformAction('canEditSettings') && (
         <Animated.View
           entering={FadeIn.delay(350).duration(500)}
           className="px-5 py-4"
@@ -1780,6 +2014,7 @@ export default function ManagerDashboard() {
             )}
           </Pressable>
         </Animated.View>
+        )}
 
         {/* INSPECTOR MODE - Available to all users */}
         <Animated.View
@@ -2028,7 +2263,8 @@ export default function ManagerDashboard() {
                     </View>
                   </View>
 
-                  {/* Universal Staff PIN - Managed here */}
+                  {/* Universal Staff PIN - Managed here - Owner only */}
+                  {canPerformAction('canEditSettings') && (
                   <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: COLORS.amberLight, borderWidth: 1, borderColor: '#fcd34d' }}>
                     <Pressable
                       onPress={() => setShowPinManagement(!showPinManagement)}
@@ -2141,6 +2377,7 @@ export default function ManagerDashboard() {
                       </Pressable>
                     )}
                   </View>
+                  )}
 
                   {/* View Public Page */}
                   <Pressable
@@ -3112,6 +3349,257 @@ export default function ManagerDashboard() {
           </View>
         </Modal>
       )}
+
+      {/* Team Management Modal */}
+      <Modal
+        visible={showTeamModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowTeamModal(false)}
+      >
+        <View className="flex-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <Pressable className="flex-1" onPress={() => setShowTeamModal(false)} />
+          <View
+            className="bg-white rounded-t-3xl p-6"
+            style={{ maxHeight: '80%' }}
+          >
+            {/* Header */}
+            <View className="flex-row items-center justify-between mb-4">
+              <View>
+                <Text className="text-xl font-bold" style={{ color: C.textPrimary }}>
+                  Team Management
+                </Text>
+                <Text className="text-sm" style={{ color: C.textMuted }}>
+                  Gestion de l'équipe
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setShowTeamModal(false)}
+                className="p-2"
+              >
+                <X size={24} color={C.textMuted} />
+              </Pressable>
+            </View>
+
+            {/* Invite Button */}
+            {canPerformAction('canInviteUsers') && (
+              <Pressable
+                onPress={() => setShowInviteModal(true)}
+                className="flex-row items-center justify-center py-3 rounded-xl mb-4"
+                style={{ backgroundColor: C.emeraldLight, borderWidth: 2, borderColor: C.emeraldDark }}
+              >
+                <UserPlus size={20} color={C.emeraldDark} />
+                <Text className="ml-2 font-semibold" style={{ color: C.emeraldDark }}>
+                  Invite Team Member
+                </Text>
+              </Pressable>
+            )}
+
+            {/* Team List */}
+            <ScrollView style={{ maxHeight: 400 }}>
+              {isLoadingTeam ? (
+                <ActivityIndicator color={C.emeraldDark} style={{ marginVertical: 20 }} />
+              ) : teamMembers.length === 0 ? (
+                <View className="py-8 items-center">
+                  <Users size={40} color={C.textMuted} />
+                  <Text className="mt-2 text-center" style={{ color: C.textMuted }}>
+                    No team members yet
+                  </Text>
+                </View>
+              ) : (
+                teamMembers.map((member) => (
+                  <View
+                    key={member.id}
+                    className="flex-row items-center py-3 border-b"
+                    style={{ borderBottomColor: C.borderLight }}
+                  >
+                    <View
+                      className="w-10 h-10 rounded-full items-center justify-center mr-3"
+                      style={{
+                        backgroundColor:
+                          member.role === 'owner'
+                            ? '#FEF3C7'
+                            : member.role === 'supervisor'
+                            ? '#DBEAFE'
+                            : '#F3F4F6',
+                      }}
+                    >
+                      {member.role === 'owner' ? (
+                        <Crown size={20} color="#D97706" />
+                      ) : member.role === 'supervisor' ? (
+                        <Shield size={20} color="#2563EB" />
+                      ) : (
+                        <Eye size={20} color="#6B7280" />
+                      )}
+                    </View>
+                    <View className="flex-1">
+                      <Text className="font-semibold" style={{ color: C.textPrimary }}>
+                        {member.name || member.email}
+                      </Text>
+                      <Text className="text-sm" style={{ color: C.textMuted }}>
+                        {member.email}
+                      </Text>
+                      <Text
+                        className="text-xs mt-1 font-medium"
+                        style={{
+                          color:
+                            member.role === 'owner'
+                              ? '#D97706'
+                              : member.role === 'supervisor'
+                              ? '#2563EB'
+                              : '#6B7280',
+                        }}
+                      >
+                        {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
+                      </Text>
+                    </View>
+                    {/* Remove button - only show for non-self and if has permission */}
+                    {canPerformAction('canInviteUsers') &&
+                      member.id !== currentManager?.id &&
+                      member.role !== 'owner' && (
+                        <Pressable
+                          onPress={() => handleRemoveUser(member.id, member.name)}
+                          className="p-2"
+                        >
+                          <Trash2 size={18} color={C.error} />
+                        </Pressable>
+                      )}
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Invite User Modal */}
+      <Modal
+        visible={showInviteModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowInviteModal(false)}
+      >
+        <View className="flex-1 justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)', padding: 20 }}>
+          <View className="bg-white rounded-2xl p-6" style={{ ...D.shadow.lg }}>
+            {/* Header */}
+            <View className="flex-row items-center justify-between mb-4">
+              <View>
+                <Text className="text-xl font-bold" style={{ color: C.textPrimary }}>
+                  Invite Team Member
+                </Text>
+                <Text className="text-sm" style={{ color: C.textMuted }}>
+                  Inviter un membre de l'équipe
+                </Text>
+              </View>
+              <Pressable onPress={() => setShowInviteModal(false)} className="p-2">
+                <X size={24} color={C.textMuted} />
+              </Pressable>
+            </View>
+
+            {/* Email Input */}
+            <View className="mb-4">
+              <Text className="text-sm font-semibold mb-2" style={{ color: C.textPrimary }}>
+                Email Address *
+              </Text>
+              <View
+                className="flex-row items-center rounded-xl px-4"
+                style={{ backgroundColor: C.white, borderWidth: 2, borderColor: C.borderMedium }}
+              >
+                <Mail size={18} color={C.textMuted} />
+                <TextInput
+                  value={inviteEmail}
+                  onChangeText={setInviteEmail}
+                  placeholder="user@example.com"
+                  placeholderTextColor={C.textMuted}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  className="flex-1 py-3 px-3"
+                  style={{ color: C.textPrimary }}
+                />
+              </View>
+            </View>
+
+            {/* Name Input */}
+            <View className="mb-4">
+              <Text className="text-sm font-semibold mb-2" style={{ color: C.textPrimary }}>
+                Name (Optional)
+              </Text>
+              <TextInput
+                value={inviteName}
+                onChangeText={setInviteName}
+                placeholder="John Doe"
+                placeholderTextColor={C.textMuted}
+                className="py-3 px-4 rounded-xl"
+                style={{ backgroundColor: C.white, borderWidth: 2, borderColor: C.borderMedium, color: C.textPrimary }}
+              />
+            </View>
+
+            {/* Role Selection */}
+            <View className="mb-6">
+              <Text className="text-sm font-semibold mb-2" style={{ color: C.textPrimary }}>
+                Role
+              </Text>
+              <View className="flex-row gap-2">
+                <Pressable
+                  onPress={() => setInviteRole('supervisor')}
+                  className="flex-1 py-3 rounded-xl items-center"
+                  style={{
+                    backgroundColor: inviteRole === 'supervisor' ? '#DBEAFE' : C.white,
+                    borderWidth: 2,
+                    borderColor: inviteRole === 'supervisor' ? '#2563EB' : C.borderMedium,
+                  }}
+                >
+                  <Shield size={20} color={inviteRole === 'supervisor' ? '#2563EB' : C.textMuted} />
+                  <Text
+                    className="mt-1 font-medium text-sm"
+                    style={{ color: inviteRole === 'supervisor' ? '#2563EB' : C.textMuted }}
+                  >
+                    Supervisor
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setInviteRole('viewer')}
+                  className="flex-1 py-3 rounded-xl items-center"
+                  style={{
+                    backgroundColor: inviteRole === 'viewer' ? '#F3F4F6' : C.white,
+                    borderWidth: 2,
+                    borderColor: inviteRole === 'viewer' ? '#6B7280' : C.borderMedium,
+                  }}
+                >
+                  <Eye size={20} color={inviteRole === 'viewer' ? '#6B7280' : C.textMuted} />
+                  <Text
+                    className="mt-1 font-medium text-sm"
+                    style={{ color: inviteRole === 'viewer' ? '#6B7280' : C.textMuted }}
+                  >
+                    Viewer
+                  </Text>
+                </Pressable>
+              </View>
+              <Text className="text-xs mt-2" style={{ color: C.textMuted }}>
+                {inviteRole === 'supervisor'
+                  ? 'Can view logs, export reports, resolve issues'
+                  : 'Can only view dashboard (read-only)'}
+              </Text>
+            </View>
+
+            {/* Invite Button */}
+            <Pressable
+              onPress={handleInviteUser}
+              disabled={isInviting || !inviteEmail.trim()}
+              className="py-4 rounded-xl items-center"
+              style={{
+                backgroundColor: isInviting || !inviteEmail.trim() ? C.textMuted : C.actionGreen,
+              }}
+            >
+              {isInviting ? (
+                <ActivityIndicator color={C.white} />
+              ) : (
+                <Text className="text-white font-bold text-lg">Send Invite</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

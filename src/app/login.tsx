@@ -15,9 +15,18 @@ import { useRouter } from 'expo-router';
 import { Lock, Mail, Shield } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loginBusiness } from '@/lib/supabase';
+import { loginManager, loginBusiness, ManagerLoginResult, ManagerBusinessAccess } from '@/lib/supabase';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
+import { BusinessPickerScreen } from '@/components/BusinessPicker';
 import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
+
+// Storage keys for manager session
+const STORAGE_KEYS = {
+  currentManager: 'currentManager',
+  currentBusiness: 'currentBusiness',
+  selectedBusinessAccess: 'selectedBusinessAccess',
+  managerBusinesses: 'managerBusinesses',
+};
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -25,6 +34,10 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Multi-business selection state
+  const [loginResult, setLoginResult] = useState<ManagerLoginResult | null>(null);
+  const [showBusinessPicker, setShowBusinessPicker] = useState(false);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -36,20 +49,79 @@ export default function LoginScreen() {
     setError(null);
 
     try {
-      const result = await loginBusiness(email.trim(), password);
+      // Try the new manager login system first
+      const managerResult = await loginManager(email.trim(), password);
 
-      if (result.success && result.data) {
-        await AsyncStorage.setItem('currentBusiness', JSON.stringify(result.data));
+      if (managerResult.success && managerResult.data) {
+        const { manager, businesses } = managerResult.data;
+
+        // Store manager info
+        await AsyncStorage.setItem(STORAGE_KEYS.currentManager, JSON.stringify(manager));
+        await AsyncStorage.setItem(STORAGE_KEYS.managerBusinesses, JSON.stringify(businesses));
+
+        if (businesses.length === 0) {
+          // No businesses - show error
+          setError('No businesses associated with this account / Aucune entreprise associée à ce compte');
+          setIsLoading(false);
+          return;
+        }
+
+        if (businesses.length === 1) {
+          // Only one business - go directly to dashboard
+          await selectBusiness(businesses[0]);
+          return;
+        }
+
+        // Multiple businesses - show picker
+        setLoginResult(managerResult.data);
+        setShowBusinessPicker(true);
+        setIsLoading(false);
+        return;
+      }
+
+      // Fall back to legacy business login if manager login fails
+      console.log('[Login] Manager login failed, trying legacy business login');
+      const businessResult = await loginBusiness(email.trim(), password);
+
+      if (businessResult.success && businessResult.data) {
+        // Store as legacy business session
+        await AsyncStorage.setItem(STORAGE_KEYS.currentBusiness, JSON.stringify(businessResult.data));
         router.replace('/manager');
       } else {
-        setError(result.error || 'Login failed / Échec de connexion');
+        setError(businessResult.error || managerResult.error || 'Login failed / Échec de connexion');
       }
     } catch (err) {
+      console.error('[Login] Error:', err);
       setError('Network error. Please try again. / Erreur réseau. Veuillez réessayer.');
     } finally {
       setIsLoading(false);
     }
   };
+
+  const selectBusiness = async (businessAccess: ManagerBusinessAccess) => {
+    try {
+      // Store selected business and permissions
+      await AsyncStorage.setItem(STORAGE_KEYS.currentBusiness, JSON.stringify(businessAccess.business));
+      await AsyncStorage.setItem(STORAGE_KEYS.selectedBusinessAccess, JSON.stringify(businessAccess));
+
+      // Navigate to manager dashboard
+      router.replace('/manager');
+    } catch (err) {
+      console.error('[Login] Error selecting business:', err);
+      setError('Failed to select business. Please try again.');
+    }
+  };
+
+  // Show business picker screen if user has multiple businesses
+  if (showBusinessPicker && loginResult) {
+    return (
+      <BusinessPickerScreen
+        businesses={loginResult.businesses}
+        managerName={loginResult.manager.name}
+        onSelectBusiness={selectBusiness}
+      />
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: C.mintBackground }}>
