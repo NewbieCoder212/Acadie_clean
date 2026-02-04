@@ -389,6 +389,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   console.log(`[check-overdue] Auth method: ${isVercelCron ? 'Vercel Cron' : 'Bearer Token'}`);
 
+  // Helper function to add delay between API calls (for rate limiting)
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
   // Check required env vars
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     console.error('[check-overdue] Supabase not configured');
@@ -490,6 +493,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else {
         results.push({ washroom: washroomName, status: 'send_failed' });
       }
+
+      // Rate limit: wait 600ms between emails to stay under Resend's 2 req/sec limit
+      await delay(600);
     }
 
     console.log(`[check-overdue] Complete. Checked: ${washrooms.length}, Alerts sent: ${alertsSent}`);
