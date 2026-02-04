@@ -161,7 +161,7 @@ function generateOverdueEmailHtml(
   thresholdHours: number,
   timezone: string = 'America/Moncton'
 ): string {
-  const loginUrl = `${APP_URL}/login`;
+  const loginUrl = `${APP_URL}/manage-acadia9511`;
   const now = new Date();
 
   // Format current time in the washroom's timezone

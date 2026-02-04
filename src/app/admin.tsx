@@ -31,6 +31,8 @@ import {
   TrendingUp,
   Crown,
   Key,
+  Clock,
+  Eye,
 } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -59,6 +61,7 @@ import {
   getBusinessesNeedingTrialReminder,
   markTrialReminderSent,
   logoutBusiness,
+  extendTrial,
 } from '@/lib/supabase';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
 import { sendTrialExpiryReminderToAdmin } from '@/lib/email';
@@ -110,6 +113,16 @@ export default function AdminDashboardScreen() {
   const [showBusinessEndPicker, setShowBusinessEndPicker] = useState(false);
   const [isBusinessExporting, setIsBusinessExporting] = useState(false);
   const [businessExportSuccess, setBusinessExportSuccess] = useState(false);
+
+  // Trial management state
+  const [showTrialModal, setShowTrialModal] = useState(false);
+  const [trialBusiness, setTrialBusiness] = useState<BusinessRow | null>(null);
+  const [isExtendingTrial, setIsExtendingTrial] = useState(false);
+
+  // Quick view modal state
+  const [showQuickViewModal, setShowQuickViewModal] = useState(false);
+  const [quickViewBusiness, setQuickViewBusiness] = useState<BusinessRow | null>(null);
+  const [quickViewTab, setQuickViewTab] = useState<'logs' | 'issues'>('logs');
 
   // New business form
   const [newBusinessName, setNewBusinessName] = useState('');
@@ -226,7 +239,7 @@ export default function AdminDashboardScreen() {
   const handleLogout = async () => {
     await logoutBusiness();
     await AsyncStorage.removeItem('currentBusiness');
-    router.replace('/login');
+    router.replace('/admin-login');
   };
 
   const handleAddBusiness = async () => {
@@ -354,6 +367,66 @@ export default function AdminDashboardScreen() {
     return issues.filter(issue =>
       businessWashroomIds.includes(issue.location_id) && issue.status === 'open'
     ).length;
+  };
+
+  // Get logs for a specific business (for quick view)
+  const getLogsForBusiness = (business: BusinessRow) => {
+    const businessWashroomIds = washrooms
+      .filter(w => w.business_name === business.name)
+      .map(w => w.id);
+    return logs.filter(log => businessWashroomIds.includes(log.location_id));
+  };
+
+  // Get issues for a specific business (for quick view)
+  const getIssuesForBusiness = (business: BusinessRow) => {
+    const businessWashroomIds = washrooms
+      .filter(w => w.business_name === business.name)
+      .map(w => w.id);
+    return issues.filter(issue => businessWashroomIds.includes(issue.location_id));
+  };
+
+  // Get trial days remaining for a business
+  const getTrialDaysRemaining = (business: BusinessRow) => {
+    if (!business.trial_ends_at) return null;
+    const trialEnd = new Date(business.trial_ends_at);
+    const now = new Date();
+    const diffTime = trialEnd.getTime() - now.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  // Handle extending trial
+  const handleExtendTrial = async (days: number) => {
+    if (!trialBusiness) return;
+
+    setIsExtendingTrial(true);
+    try {
+      const result = await extendTrial(trialBusiness.id, days);
+      if (result.success) {
+        Alert.alert('Success', `Trial extended by ${days} days!`);
+        setShowTrialModal(false);
+        setTrialBusiness(null);
+        await loadData();
+      } else {
+        Alert.alert('Error', result.error || 'Failed to extend trial');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setIsExtendingTrial(false);
+    }
+  };
+
+  // Open trial management modal
+  const openTrialModal = (business: BusinessRow) => {
+    setTrialBusiness(business);
+    setShowTrialModal(true);
+  };
+
+  // Open quick view modal
+  const openQuickViewModal = (business: BusinessRow, tab: 'logs' | 'issues') => {
+    setQuickViewBusiness(business);
+    setQuickViewTab(tab);
+    setShowQuickViewModal(true);
   };
 
   // Format date for display
@@ -848,20 +921,53 @@ export default function AdminDashboardScreen() {
                         <Text className="text-xs ml-1 mr-3" style={{ color: COLORS.textMuted }}>
                           {getLocationCountForBusiness(business)} locations
                         </Text>
-                        <ClipboardList size={14} color={COLORS.success} />
-                        <Text className="text-xs ml-1 mr-3" style={{ color: COLORS.success }}>
-                          {getLogsCountForBusiness(business)} logs
-                        </Text>
-                        {getOpenIssuesCountForBusiness(business) > 0 && (
-                          <>
-                            <AlertTriangle size={14} color={COLORS.warning} />
-                            <Text className="text-xs ml-1 mr-3" style={{ color: COLORS.warning }}>
-                              {getOpenIssuesCountForBusiness(business)} issues
-                            </Text>
-                          </>
-                        )}
+                        {/* Tappable logs count */}
+                        <Pressable
+                          onPress={() => openQuickViewModal(business, 'logs')}
+                          className="flex-row items-center active:opacity-70"
+                        >
+                          <ClipboardList size={14} color={COLORS.success} />
+                          <Text className="text-xs ml-1 mr-3 underline" style={{ color: COLORS.success }}>
+                            {getLogsCountForBusiness(business)} logs
+                          </Text>
+                        </Pressable>
+                        {/* Tappable issues count */}
+                        <Pressable
+                          onPress={() => openQuickViewModal(business, 'issues')}
+                          className="flex-row items-center active:opacity-70"
+                        >
+                          <AlertTriangle size={14} color={getOpenIssuesCountForBusiness(business) > 0 ? COLORS.warning : COLORS.textMuted} />
+                          <Text className="text-xs ml-1 mr-3 underline" style={{ color: getOpenIssuesCountForBusiness(business) > 0 ? COLORS.warning : COLORS.textMuted }}>
+                            {getOpenIssuesCountForBusiness(business)} issues
+                          </Text>
+                        </Pressable>
                       </View>
                     </View>
+
+                    {/* Trial Status Row */}
+                    {business.subscription_status === 'trial' && business.trial_ends_at && (
+                      <View className="flex-row items-center justify-between mt-2 pt-2" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
+                        <View className="flex-row items-center">
+                          <Clock size={14} color={getTrialDaysRemaining(business) !== null && getTrialDaysRemaining(business)! <= 7 ? COLORS.warning : '#2563eb'} />
+                          <Text className="text-xs ml-1" style={{ color: getTrialDaysRemaining(business) !== null && getTrialDaysRemaining(business)! <= 7 ? COLORS.warning : '#2563eb' }}>
+                            Trial: {getTrialDaysRemaining(business)} days left
+                          </Text>
+                          <Text className="text-xs ml-2" style={{ color: COLORS.textMuted }}>
+                            (ends {formatDate(new Date(business.trial_ends_at))})
+                          </Text>
+                        </View>
+                        <Pressable
+                          onPress={() => openTrialModal(business)}
+                          className="flex-row items-center px-2 py-1 rounded-md active:opacity-70"
+                          style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe' }}
+                        >
+                          <Calendar size={12} color="#2563eb" />
+                          <Text className="text-xs font-medium ml-1" style={{ color: '#2563eb' }}>
+                            Extend
+                          </Text>
+                        </Pressable>
+                      </View>
+                    )}
 
                     {/* Actions row */}
                     <View className="flex-row items-center justify-between mt-2 pt-2" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
@@ -1452,6 +1558,259 @@ export default function AdminDashboardScreen() {
               <Text className="text-xs text-center mt-3" style={{ color: COLORS.textMuted }}>
                 Exports cleaning logs for {exportingBusiness?.name || 'this business'} only
               </Text>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Trial Management Modal */}
+        <Modal
+          visible={showTrialModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowTrialModal(false)}
+        >
+          <View className="flex-1 bg-black/60 items-center justify-center px-6">
+            <View
+              className="w-full max-w-sm rounded-3xl p-6"
+              style={{ backgroundColor: COLORS.white }}
+            >
+              <View className="flex-row items-center justify-between mb-4">
+                <Text className="text-xl font-bold" style={{ color: COLORS.textDark }}>
+                  Extend Trial
+                </Text>
+                <Pressable onPress={() => setShowTrialModal(false)} className="p-1">
+                  <X size={24} color={COLORS.textMuted} />
+                </Pressable>
+              </View>
+
+              {/* Business Info */}
+              <View className="mb-4 p-3 rounded-xl" style={{ backgroundColor: '#eff6ff' }}>
+                <Text className="text-sm" style={{ color: COLORS.textMuted }}>Business</Text>
+                <Text className="text-base font-semibold" style={{ color: COLORS.textDark }}>
+                  {trialBusiness?.name}
+                </Text>
+                {trialBusiness?.trial_ends_at && (
+                  <View className="flex-row items-center mt-2">
+                    <Clock size={14} color="#2563eb" />
+                    <Text className="text-sm ml-1" style={{ color: '#2563eb' }}>
+                      Current end: {formatDate(new Date(trialBusiness.trial_ends_at))}
+                    </Text>
+                    <Text className="text-sm ml-2" style={{ color: getTrialDaysRemaining(trialBusiness) !== null && getTrialDaysRemaining(trialBusiness)! <= 7 ? COLORS.warning : COLORS.textMuted }}>
+                      ({getTrialDaysRemaining(trialBusiness)} days left)
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Extension Options */}
+              <Text className="text-sm font-semibold mb-3" style={{ color: COLORS.textDark }}>
+                Add Extra Days
+              </Text>
+              <View className="flex-row flex-wrap gap-2 mb-6">
+                {[7, 14, 30, 60, 90].map((days) => (
+                  <Pressable
+                    key={days}
+                    onPress={() => handleExtendTrial(days)}
+                    disabled={isExtendingTrial}
+                    className="flex-1 min-w-[60px] py-3 rounded-xl items-center active:opacity-80"
+                    style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe' }}
+                  >
+                    {isExtendingTrial ? (
+                      <ActivityIndicator size="small" color="#2563eb" />
+                    ) : (
+                      <>
+                        <Text className="text-lg font-bold" style={{ color: '#2563eb' }}>
+                          +{days}
+                        </Text>
+                        <Text className="text-xs" style={{ color: '#64748b' }}>
+                          days
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+                ))}
+              </View>
+
+              {/* Info text */}
+              <Text className="text-xs text-center" style={{ color: COLORS.textMuted }}>
+                Days will be added to the current trial end date
+              </Text>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Quick View Modal (Logs/Issues) */}
+        <Modal
+          visible={showQuickViewModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowQuickViewModal(false)}
+        >
+          <View className="flex-1 bg-black/60 items-center justify-center px-4">
+            <View
+              className="w-full max-w-md rounded-3xl overflow-hidden"
+              style={{ backgroundColor: COLORS.white, maxHeight: '80%' }}
+            >
+              {/* Header */}
+              <View className="flex-row items-center justify-between px-5 py-4" style={{ backgroundColor: COLORS.primary }}>
+                <View>
+                  <Text className="text-lg font-bold" style={{ color: COLORS.white }}>
+                    {quickViewBusiness?.name}
+                  </Text>
+                  <Text className="text-sm opacity-80" style={{ color: COLORS.white }}>
+                    {quickViewTab === 'logs' ? 'Recent Cleaning Logs' : 'Reported Issues'}
+                  </Text>
+                </View>
+                <Pressable onPress={() => setShowQuickViewModal(false)} className="p-1">
+                  <X size={24} color={COLORS.white} />
+                </Pressable>
+              </View>
+
+              {/* Tab Switcher */}
+              <View className="flex-row px-4 pt-4">
+                <Pressable
+                  onPress={() => setQuickViewTab('logs')}
+                  className="flex-1 py-2 rounded-lg mr-2"
+                  style={{ backgroundColor: quickViewTab === 'logs' ? COLORS.primary : COLORS.primaryLight }}
+                >
+                  <Text
+                    className="text-center font-semibold"
+                    style={{ color: quickViewTab === 'logs' ? COLORS.white : COLORS.primary }}
+                  >
+                    Logs ({quickViewBusiness ? getLogsForBusiness(quickViewBusiness).length : 0})
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setQuickViewTab('issues')}
+                  className="flex-1 py-2 rounded-lg ml-2"
+                  style={{ backgroundColor: quickViewTab === 'issues' ? COLORS.warning : '#fef3c7' }}
+                >
+                  <Text
+                    className="text-center font-semibold"
+                    style={{ color: quickViewTab === 'issues' ? COLORS.white : COLORS.warning }}
+                  >
+                    Issues ({quickViewBusiness ? getIssuesForBusiness(quickViewBusiness).filter(i => i.status === 'open').length : 0})
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* Content */}
+              <ScrollView className="flex-1 px-4 py-4" style={{ maxHeight: 400 }}>
+                {quickViewTab === 'logs' && quickViewBusiness && (
+                  <>
+                    {getLogsForBusiness(quickViewBusiness).length === 0 ? (
+                      <View className="items-center py-8">
+                        <ClipboardList size={48} color={COLORS.textMuted} />
+                        <Text className="text-sm mt-2" style={{ color: COLORS.textMuted }}>
+                          No cleaning logs yet
+                        </Text>
+                      </View>
+                    ) : (
+                      getLogsForBusiness(quickViewBusiness).slice(0, 20).map((log, index) => (
+                        <View
+                          key={log.id}
+                          className="p-3 rounded-xl mb-2"
+                          style={{ backgroundColor: log.status === 'attention_required' ? '#fef2f2' : '#f0fdf4' }}
+                        >
+                          <View className="flex-row items-center justify-between">
+                            <Text className="text-sm font-semibold" style={{ color: COLORS.textDark }}>
+                              {log.location_name || 'Unknown Location'}
+                            </Text>
+                            <View
+                              className="px-2 py-0.5 rounded-full"
+                              style={{ backgroundColor: log.status === 'complete' ? '#dcfce7' : '#fecaca' }}
+                            >
+                              <Text
+                                className="text-xs font-medium"
+                                style={{ color: log.status === 'complete' ? '#16a34a' : '#dc2626' }}
+                              >
+                                {log.status === 'complete' ? 'Complete' : 'Attention'}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                            {log.staff_name || 'Unknown Staff'} • {new Date(log.timestamp).toLocaleString()}
+                          </Text>
+                          {log.notes && (
+                            <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                              {log.notes}
+                            </Text>
+                          )}
+                        </View>
+                      ))
+                    )}
+                    {getLogsForBusiness(quickViewBusiness).length > 20 && (
+                      <Text className="text-xs text-center py-2" style={{ color: COLORS.textMuted }}>
+                        Showing 20 of {getLogsForBusiness(quickViewBusiness).length} logs
+                      </Text>
+                    )}
+                  </>
+                )}
+
+                {quickViewTab === 'issues' && quickViewBusiness && (
+                  <>
+                    {getIssuesForBusiness(quickViewBusiness).length === 0 ? (
+                      <View className="items-center py-8">
+                        <AlertTriangle size={48} color={COLORS.textMuted} />
+                        <Text className="text-sm mt-2" style={{ color: COLORS.textMuted }}>
+                          No reported issues
+                        </Text>
+                      </View>
+                    ) : (
+                      getIssuesForBusiness(quickViewBusiness).map((issue, index) => (
+                        <View
+                          key={issue.id}
+                          className="p-3 rounded-xl mb-2"
+                          style={{ backgroundColor: issue.status === 'open' ? '#fef3c7' : '#f1f5f9' }}
+                        >
+                          <View className="flex-row items-center justify-between">
+                            <Text className="text-sm font-semibold" style={{ color: COLORS.textDark }}>
+                              {issue.issue_type || 'Unknown Issue'}
+                            </Text>
+                            <View
+                              className="px-2 py-0.5 rounded-full"
+                              style={{ backgroundColor: issue.status === 'open' ? '#fde68a' : '#e2e8f0' }}
+                            >
+                              <Text
+                                className="text-xs font-medium"
+                                style={{ color: issue.status === 'open' ? '#d97706' : '#64748b' }}
+                              >
+                                {issue.status === 'open' ? 'Open' : 'Resolved'}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                            {issue.location_name || 'Unknown Location'} • {new Date(issue.created_at).toLocaleString()}
+                          </Text>
+                          {issue.description && (
+                            <Text className="text-xs mt-1" style={{ color: COLORS.textDark }}>
+                              {issue.description}
+                            </Text>
+                          )}
+                        </View>
+                      ))
+                    )}
+                  </>
+                )}
+              </ScrollView>
+
+              {/* View Details Button */}
+              <View className="px-4 pb-4">
+                <Pressable
+                  onPress={() => {
+                    setShowQuickViewModal(false);
+                    if (quickViewBusiness) {
+                      router.push(`/admin/business/${quickViewBusiness.id}`);
+                    }
+                  }}
+                  className="py-3 rounded-xl items-center active:opacity-80"
+                  style={{ backgroundColor: COLORS.primary }}
+                >
+                  <Text className="font-semibold" style={{ color: COLORS.white }}>
+                    View Full Details
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         </Modal>

@@ -2426,6 +2426,43 @@ export async function extendSubscription(businessId: string, months: number = 12
   }
 }
 
+// Extend trial for a business (admin feature)
+export async function extendTrial(businessId: string, additionalDays: number): Promise<{ success: boolean; newTrialEndsAt?: string; error?: string }> {
+  try {
+    // Get current trial end date
+    const { data: business, error: fetchError } = await supabase
+      .from('businesses')
+      .select('trial_ends_at, subscription_status')
+      .eq('id', businessId)
+      .single();
+
+    if (fetchError) {
+      return { success: false, error: fetchError.message };
+    }
+
+    // Calculate new trial end date
+    const currentEnd = business?.trial_ends_at ? new Date(business.trial_ends_at) : new Date();
+    const baseDate = currentEnd > new Date() ? currentEnd : new Date();
+    const newTrialEndsAt = new Date(baseDate.getTime() + additionalDays * 24 * 60 * 60 * 1000);
+
+    const { error } = await supabase
+      .from('businesses')
+      .update({
+        trial_ends_at: newTrialEndsAt.toISOString(),
+        subscription_status: 'trial', // Ensure status is trial
+      })
+      .eq('id', businessId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, newTrialEndsAt: newTrialEndsAt.toISOString() };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
 // Update subscription status
 export async function updateSubscriptionStatus(businessId: string, status: SubscriptionStatus): Promise<{ success: boolean; error?: string }> {
   try {

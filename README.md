@@ -73,8 +73,17 @@ The database supports subscription tiers for future premium features. Currently 
 - Admins can toggle subscription tier (Standard/Premium) for each business from the Admin Dashboard
 - The `subscription_tier` column exists in the database for future feature gating
 - **Customizable Trial Length**: Admins can set the free trial period (7, 14, 30, 60, or 90 days) when creating a new business
+- **Trial Extension**: Admins can extend a business's trial period directly from the dashboard by tapping the "Extend" button next to the trial status. Options: +7, +14, +30, +60, or +90 days
 - **Alert Threshold Options**: Alert settings support 1, 2, 4, 6, 8, 12, or 24 hour thresholds for overdue cleaning notifications
-- **Admin Dashboard Visibility**: Staff PINs are displayed under business emails for quick reference
+- **Admin Dashboard Visibility**:
+  - Staff PINs are displayed under business emails for quick reference (updates automatically when managers change their PIN)
+  - Trial status shows days remaining and expiration date
+  - Logs and issues counts are tappable to open quick view modal
+- **Quick View Modal**: Tap on logs or issues count to see recent entries without navigating away. Includes:
+  - Tab switcher between Logs and Issues
+  - Recent cleaning logs with status, staff name, and notes
+  - Reported issues with status (open/resolved) and descriptions
+  - "View Full Details" button to navigate to full business detail page
 - **Logs & Issues Display**: Each business card shows total logs count and open issues count
 - Future premium features may include: photo attachments, automated reminders, supply tracking, analytics dashboard
 
