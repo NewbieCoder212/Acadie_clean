@@ -1385,17 +1385,31 @@ export default function ManagerDashboard() {
               </View>
             </Pressable>
             <View className="flex-row items-center gap-2">
-              {/* Team Management Button - Only show for owners */}
+              {/* Team Management Button - Coming Soon (greyed out) */}
               {canPerformAction('canInviteUsers') && (
                 <Pressable
                   onPress={() => {
-                    setShowTeamModal(true);
-                    loadTeamMembers();
+                    // Show coming soon alert
+                    alert('Coming Soon! / Bientôt disponible!');
                   }}
-                  className="p-2 rounded-lg active:opacity-70"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
+                  className="p-2 rounded-lg relative"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.1)', opacity: 0.5 }}
                 >
                   <Users size={18} color="#ffffff" />
+                  {/* Coming Soon badge */}
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: -4,
+                      right: -4,
+                      backgroundColor: '#F59E0B',
+                      borderRadius: 4,
+                      paddingHorizontal: 3,
+                      paddingVertical: 1,
+                    }}
+                  >
+                    <Text style={{ fontSize: 6, color: '#fff', fontWeight: '700' }}>SOON</Text>
+                  </View>
                 </Pressable>
               )}
               <Pressable
