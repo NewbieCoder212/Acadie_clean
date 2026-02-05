@@ -52,6 +52,14 @@ The app uses a consistent color palette across all screens:
   - **Toggle Control**: Enable "Use Global Emails for All Locations" to send all alerts to global emails, or disable to use location-specific emails only
   - **Combined Delivery**: When global alerts are enabled, both global AND location-specific emails receive alerts
 - **Manager Resolution**: Managers can mark "Attention Required" entries as resolved, which removes the yellow warning from the public badge while keeping the note for audit purposes
+- **Issue Resolution with Actions**: When resolving a reported issue, managers choose from context-specific resolution options:
+  - **Out of Supplies**: "Restocked" (creates cleaning log) or "Not Needed"
+  - **Needs Cleaning**: "Cleaned" (creates cleaning log) or "Already Clean"
+  - **Maintenance Required**: "Fixed", "Scheduled for Repair", or "Not an Issue"
+  - **Safety Concern**: "Resolved", "Area Secured", or "Not an Issue"
+  - **Other**: "Addressed", "Cleaned" (creates cleaning log), or "Not an Issue"
+  - Options that create a cleaning log automatically update the location status to CLEAN
+  - All labels are bilingual (English/French)
 - **Compliance Record**: Displays the 2 most recent cleaning entries with date, time, staff name, and status
 - **Password-Protected Access**: Manager Dashboard requires password authentication from the main page
 - **NEW Washroom Badge**: New washrooms without any cleaning logs are highlighted with a blue "NEW" badge and "NEEDS QR CODE" status to remind admins to generate QR codes.

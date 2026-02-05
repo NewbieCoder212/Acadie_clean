@@ -37,6 +37,8 @@ import {
   SubscriptionTier,
   AlertSchedule,
   DEFAULT_ALERT_SCHEDULE,
+  ResolutionAction,
+  RESOLUTION_ACTIONS,
 } from '@/lib/supabase';
 import { generatePDFHTML, getCheckIcon, getStatusBadge, truncateText, openPDFInNewWindow, generateIncidentReportsPDF } from '@/lib/pdf-template';
 import * as Print from 'expo-print';
@@ -57,7 +59,9 @@ export type {
   ManagerRole,
   SubscriptionTier,
   AlertSchedule,
+  ResolutionAction,
 };
+export { RESOLUTION_ACTIONS };
 
 export interface ManagerContextType {
   // Auth state
@@ -91,7 +95,7 @@ export interface ManagerContextType {
 
   // Helpers
   canPerformAction: (action: keyof ManagerPermissions) => boolean;
-  getLocationStatus: (locationId: string) => 'clean' | 'attention' | 'unknown';
+  getLocationStatus: (locationId: string) => 'clean' | 'attention' | 'issue' | 'unknown';
   getLocationUrl: (locationId: string) => string;
   formatDateTime: (timestamp: string) => string;
   formatTimeAgo: (timestamp: string) => string;
@@ -100,7 +104,7 @@ export interface ManagerContextType {
   handleRefreshData: () => void;
   handleLogout: () => Promise<void>;
   handleSwitchBusiness: (businessAccess: ManagerBusinessAccess) => Promise<void>;
-  handleResolveIssue: (issueId: string) => Promise<void>;
+  handleResolveIssue: (issueId: string, action?: ResolutionAction, issue?: ReportedIssueRow) => Promise<void>;
   handleSaveAlertEmail: (locationId: string, email: string) => Promise<void>;
   handleToggleLocationActive: (location: WashroomLocation) => void;
   handleDeleteLocation: (location: WashroomLocation) => void;
@@ -192,13 +196,25 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
       }))
     : locations;
 
-  const getLocationStatus = useCallback((locationId: string): 'clean' | 'attention' | 'unknown' => {
+  const getLocationStatus = useCallback((locationId: string): 'clean' | 'attention' | 'issue' | 'unknown' => {
+    // Check for open issues reported after the last cleaning (same logic as public page)
+    const locationIssues = reportedIssues.filter(
+      issue => issue.location_id === locationId && issue.status === 'open'
+    );
     const locationLogs = allLogs.filter(log => log.location_id === locationId);
-    if (locationLogs.length === 0) return 'unknown';
     const lastLog = locationLogs[0];
+
+    if (locationIssues.length > 0) {
+      const mostRecentIssue = locationIssues[0];
+      const issueAfterCleaning = !lastLog ||
+        new Date(mostRecentIssue.created_at).getTime() > new Date(lastLog.timestamp).getTime();
+      if (issueAfterCleaning) return 'issue';
+    }
+
+    if (locationLogs.length === 0) return 'unknown';
     if (lastLog.status === 'attention_required' && !lastLog.resolved) return 'attention';
     return 'clean';
-  }, [allLogs]);
+  }, [allLogs, reportedIssues]);
 
   const openIssues = useMemo(() => {
     return reportedIssues.filter(issue => issue.status === 'open');
@@ -375,18 +391,40 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const handleResolveIssue = useCallback(async (issueId: string) => {
+  const handleResolveIssue = useCallback(async (
+    issueId: string,
+    action?: ResolutionAction,
+    issue?: ReportedIssueRow
+  ) => {
     setResolvingIssueId(issueId);
     try {
-      const result = await resolveReportedIssue(issueId);
+      // Get the manager/business name for the log
+      const resolvedBy = currentManager?.name || currentBusiness?.name || 'Manager';
+
+      const result = await resolveReportedIssue(issueId, {
+        action,
+        locationId: issue?.location_id,
+        locationName: issue?.location_name,
+        resolvedBy,
+      });
+
       if (result.success) {
         setReportedIssues(prev =>
-          prev.map(issue =>
-            issue.id === issueId
-              ? { ...issue, status: 'resolved' as const, resolved_at: new Date().toISOString() }
-              : issue
+          prev.map(i =>
+            i.id === issueId
+              ? { ...i, status: 'resolved' as const, resolved_at: new Date().toISOString() }
+              : i
           )
         );
+
+        // If a cleaning log was created, refresh the logs
+        if (action?.createsLog) {
+          // Refresh logs to show the new entry
+          const logsResult = await getLogsForBusinessByName(businessName);
+          if (logsResult.success && logsResult.data) {
+            setAllLogs(logsResult.data);
+          }
+        }
       } else {
         Alert.alert('Error', result.error || 'Failed to resolve issue');
       }
@@ -395,7 +433,7 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
     } finally {
       setResolvingIssueId(null);
     }
-  }, []);
+  }, [currentManager, currentBusiness, businessName]);
 
   const handleSaveAlertEmail = useCallback(async (locationId: string, email: string) => {
     const result = await updateWashroomAlertEmail(locationId, email);

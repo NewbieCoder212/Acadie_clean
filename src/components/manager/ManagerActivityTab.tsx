@@ -8,7 +8,7 @@ import {
   Calendar, ClipboardList,
 } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
-import { useManagerContext, CleaningLogRow } from './ManagerContext';
+import { useManagerContext, CleaningLogRow, ReportedIssueRow, ResolutionAction, RESOLUTION_ACTIONS } from './ManagerContext';
 import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
 
 export function ManagerActivityTab() {
@@ -22,6 +22,10 @@ export function ManagerActivityTab() {
   const [fourteenDaysLogs, setFourteenDaysLogs] = useState<CleaningLogRow[]>([]);
   const [viewing14DaysLocationName, setViewing14DaysLocationName] = useState('');
   const [isLoading14Days, setIsLoading14Days] = useState(false);
+
+  // Resolution modal
+  const [showResolveModal, setShowResolveModal] = useState(false);
+  const [selectedIssue, setSelectedIssue] = useState<ReportedIssueRow | null>(null);
 
   // Incident export
   const [showIncidentExport, setShowIncidentExport] = useState(false);
@@ -50,6 +54,18 @@ export function ManagerActivityTab() {
     setShowIncidentExport(false);
   };
 
+  const handleOpenResolveModal = (issue: ReportedIssueRow) => {
+    setSelectedIssue(issue);
+    setShowResolveModal(true);
+  };
+
+  const handleSelectResolution = async (action: ResolutionAction) => {
+    if (!selectedIssue) return;
+    setShowResolveModal(false);
+    await ctx.handleResolveIssue(selectedIssue.id, action, selectedIssue);
+    setSelectedIssue(null);
+  };
+
   const issueTypeLabels: Record<string, string> = {
     out_of_supplies: 'Out of Supplies',
     needs_cleaning: 'Needs Cleaning',
@@ -57,6 +73,19 @@ export function ManagerActivityTab() {
     safety_concern: 'Safety Concern',
     other: 'Other',
   };
+
+  const issueTypeLabelsFr: Record<string, string> = {
+    out_of_supplies: 'Rupture de stock',
+    needs_cleaning: 'Nécessite un nettoyage',
+    maintenance_required: 'Entretien requis',
+    safety_concern: 'Problème de sécurité',
+    other: 'Autre',
+  };
+
+  // Get resolution options for the selected issue
+  const resolutionOptions = selectedIssue
+    ? RESOLUTION_ACTIONS[selectedIssue.issue_type] || RESOLUTION_ACTIONS['other']
+    : [];
 
   return (
     <>
@@ -206,6 +235,10 @@ export function ManagerActivityTab() {
                       </Text>
                     </View>
 
+                    <Text className="text-[10px] mb-1" style={{ color: C.textMuted }}>
+                      {issueTypeLabelsFr[issue.issue_type] || issue.issue_type}
+                    </Text>
+
                     <View className="flex-row items-center mb-2">
                       <MapPin size={12} color={C.textMuted} />
                       <Text className="text-xs ml-1" style={{ color: C.textPrimary }}>{issue.location_name}</Text>
@@ -218,7 +251,7 @@ export function ManagerActivityTab() {
                     )}
 
                     <Pressable
-                      onPress={() => ctx.handleResolveIssue(issue.id)}
+                      onPress={() => handleOpenResolveModal(issue)}
                       disabled={ctx.resolvingIssueId === issue.id}
                       className="flex-row items-center justify-center py-2.5 rounded-lg active:opacity-80"
                       style={{ backgroundColor: C.actionGreen }}
@@ -226,7 +259,10 @@ export function ManagerActivityTab() {
                       {ctx.resolvingIssueId === issue.id ? (
                         <ActivityIndicator size="small" color="#fff" />
                       ) : (
-                        <><CheckCircle2 size={16} color="#fff" /><Text className="text-sm font-bold text-white ml-2">Mark Resolved</Text></>
+                        <>
+                          <CheckCircle2 size={16} color="#fff" />
+                          <Text className="text-sm font-bold text-white ml-2">Resolve / Résoudre</Text>
+                        </>
                       )}
                     </Pressable>
                   </Animated.View>
@@ -398,6 +434,126 @@ export function ManagerActivityTab() {
                 <><Download size={20} color="#fff" /><Text className="text-white font-bold ml-2">Export Incident Reports</Text></>
               )}
             </Pressable>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Resolution Action Modal */}
+      <Modal
+        visible={showResolveModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setShowResolveModal(false);
+          setSelectedIssue(null);
+        }}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: C.mintBackground }}>
+          {/* Header */}
+          <View className="flex-row items-center justify-between px-5 py-4" style={{ borderBottomWidth: 1, borderBottomColor: C.borderLight }}>
+            <View className="flex-1">
+              <Text className="text-lg font-bold" style={{ color: C.emeraldDark }}>
+                Resolve Issue
+              </Text>
+              <Text className="text-sm" style={{ color: C.textMuted }}>
+                Résoudre le problème
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => {
+                setShowResolveModal(false);
+                setSelectedIssue(null);
+              }}
+              className="p-2 rounded-full"
+              style={{ backgroundColor: C.borderLight }}
+            >
+              <X size={20} color={C.textMuted} />
+            </Pressable>
+          </View>
+
+          <ScrollView className="flex-1 px-5 py-4">
+            {/* Issue Info Card */}
+            {selectedIssue && (
+              <View className="rounded-xl p-4 mb-6" style={{ backgroundColor: '#fef2f2', borderWidth: 1, borderColor: C.error }}>
+                <View className="flex-row items-center mb-2">
+                  <AlertOctagon size={18} color={C.error} />
+                  <Text className="text-base font-bold ml-2" style={{ color: C.error }}>
+                    {issueTypeLabels[selectedIssue.issue_type] || selectedIssue.issue_type}
+                  </Text>
+                </View>
+                <Text className="text-xs mb-2" style={{ color: C.textMuted }}>
+                  {issueTypeLabelsFr[selectedIssue.issue_type] || selectedIssue.issue_type}
+                </Text>
+                <View className="flex-row items-center mb-2">
+                  <MapPin size={14} color={C.textMuted} />
+                  <Text className="text-sm ml-1.5" style={{ color: C.textPrimary }}>
+                    {selectedIssue.location_name}
+                  </Text>
+                </View>
+                {selectedIssue.description && (
+                  <Text className="text-sm p-2 rounded-lg mt-1" style={{ backgroundColor: C.white, color: C.textPrimary }}>
+                    "{selectedIssue.description}"
+                  </Text>
+                )}
+              </View>
+            )}
+
+            {/* Resolution Options */}
+            <Text className="text-sm font-semibold mb-1" style={{ color: C.textPrimary }}>
+              How was this resolved?
+            </Text>
+            <Text className="text-xs mb-4" style={{ color: C.textMuted }}>
+              Comment cela a-t-il été résolu?
+            </Text>
+
+            <View className="gap-3">
+              {resolutionOptions.map((action, index) => (
+                <Pressable
+                  key={action.value}
+                  onPress={() => handleSelectResolution(action)}
+                  className="rounded-xl p-4 active:opacity-80"
+                  style={{
+                    backgroundColor: C.white,
+                    borderWidth: 1.5,
+                    borderColor: action.createsLog ? C.actionGreen : C.borderMedium,
+                    ...D.shadow.sm,
+                  }}
+                >
+                  <View className="flex-row items-center justify-between">
+                    <View className="flex-1">
+                      <Text className="text-base font-semibold" style={{ color: C.textPrimary }}>
+                        {action.label}
+                      </Text>
+                      <Text className="text-sm mt-0.5" style={{ color: C.textMuted }}>
+                        {action.labelFr}
+                      </Text>
+                    </View>
+                    {action.createsLog && (
+                      <View className="px-2 py-1 rounded-full" style={{ backgroundColor: '#dcfce7' }}>
+                        <Text className="text-[10px] font-semibold" style={{ color: '#166534' }}>
+                          + Log
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  {action.createsLog && action.logNotes && (
+                    <Text className="text-xs mt-2 italic" style={{ color: C.actionGreen }}>
+                      Creates cleaning log: "{action.logNotes}"
+                    </Text>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Info text */}
+            <View className="mt-6 p-4 rounded-xl" style={{ backgroundColor: '#f1f5f9' }}>
+              <Text className="text-xs" style={{ color: C.textMuted }}>
+                Options marked with "+ Log" will create a cleaning log entry, updating the location status to CLEAN.
+              </Text>
+              <Text className="text-xs mt-2" style={{ color: C.textMuted }}>
+                Les options avec "+ Log" créent une entrée de nettoyage et mettent le statut à PROPRE.
+              </Text>
+            </View>
           </ScrollView>
         </SafeAreaView>
       </Modal>

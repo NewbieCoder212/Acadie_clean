@@ -152,28 +152,6 @@ export function ManagerSettingsTab() {
     <>
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 }}>
 
-        {/* Team Management */}
-        {ctx.canPerformAction('canInviteUsers') && (
-          <Animated.View entering={FadeIn.duration(400)}>
-            <Pressable
-              onPress={handleOpenTeam}
-              className="rounded-2xl p-4 mb-3 flex-row items-center justify-between active:opacity-90"
-              style={{ backgroundColor: C.white, ...D.shadow.sm }}
-            >
-              <View className="flex-row items-center">
-                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: '#ede9fe' }}>
-                  <Users size={20} color="#7c3aed" />
-                </View>
-                <View className="ml-3">
-                  <Text className="text-sm font-bold" style={{ color: C.textPrimary }}>Team Management</Text>
-                  <Text className="text-xs" style={{ color: C.textMuted }}>Gestion de l'équipe</Text>
-                </View>
-              </View>
-              <ChevronRight size={18} color={C.textMuted} />
-            </Pressable>
-          </Animated.View>
-        )}
-
         {/* Alert Email Settings - Owner only */}
         {ctx.canPerformAction('canEditSettings') && (
           <Animated.View entering={FadeIn.delay(100).duration(400)}>

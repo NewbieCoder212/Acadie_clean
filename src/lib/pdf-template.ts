@@ -661,6 +661,9 @@ export interface IncidentReportRow {
   status: 'open' | 'resolved';
   created_at: string;
   resolved_at?: string | null;
+  resolution_action?: string | null;
+  resolution_action_label?: string | null;
+  resolved_by?: string | null;
 }
 
 // Calculate average resolution time in hours
@@ -750,15 +753,23 @@ export const generateIncidentReportsPDF = (
     return `<span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 9px; background-color: #fef3c7; color: #92400e;">Open</span>`;
   };
 
+  // Get resolution action badge HTML
+  const getResolutionActionBadge = (issue: IncidentReportRow): string => {
+    if (issue.status === 'open') return '-';
+    if (!issue.resolution_action_label) return '<span style="color: #6b7280; font-size: 9px;">-</span>';
+    return `<span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-weight: 500; font-size: 8px; background-color: #f1f5f9; color: #475569;">${issue.resolution_action_label}</span>`;
+  };
+
   // Generate table rows
   const tableRows = filteredIssues.map(issue => `
     <tr>
       <td style="white-space: nowrap;">${formatDateTime(issue.created_at)}</td>
-      <td>${truncateText(issue.location_name, 25)}</td>
+      <td>${truncateText(issue.location_name, 20)}</td>
       <td>${issue.issue_type}</td>
-      <td>${truncateText(issue.description || '-', 40)}</td>
+      <td>${truncateText(issue.description || '-', 30)}</td>
       <td style="text-align: center;">${getIssueStatusBadge(issue.status)}</td>
-      <td style="text-align: center;">${issue.resolved_at ? formatDateTime(issue.resolved_at) : '-'}</td>
+      <td style="text-align: center;">${getResolutionActionBadge(issue)}</td>
+      <td style="text-align: center;">${issue.resolved_by ? truncateText(issue.resolved_by, 15) : '-'}</td>
       <td style="text-align: center;">${formatTimeElapsed(issue.created_at, issue.resolved_at)}</td>
     </tr>
   `).join('');
@@ -772,14 +783,15 @@ export const generateIncidentReportsPDF = (
     dateRange,
     tableHeaders: [
       'Reported / Signalé',
-      'Location / Emplacement',
+      'Location',
       'Type',
       'Description',
-      'Status / Statut',
-      'Resolved / Résolu',
-      'Time to Resolve / Temps',
+      'Status',
+      'Action',
+      'Resolved By',
+      'Time',
     ],
-    tableRows: tableRows || `<tr><td colspan="7" style="text-align: center; padding: 20px; color: #6b7280;">No incidents reported in this period / Aucun incident signalé pour cette période</td></tr>`,
+    tableRows: tableRows || `<tr><td colspan="8" style="text-align: center; padding: 20px; color: #6b7280;">No incidents reported in this period / Aucun incident signalé pour cette période</td></tr>`,
     showLegend: false, // We'll add custom summary instead
   };
 

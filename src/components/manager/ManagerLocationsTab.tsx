@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  MapPin, CheckCircle2, AlertTriangle, ExternalLink, Power,
+  MapPin, CheckCircle2, AlertTriangle, AlertOctagon, ExternalLink, Power,
   Sparkles, Download, Mail, Key, ChevronRight, Save, X, Clock,
 } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -133,6 +133,8 @@ export function ManagerLocationsTab() {
             ? { color: '#94a3b8', bg: '#f1f5f9', text: 'INACTIVE', textFr: 'Inactif', icon: Power, borderColor: '#e2e8f0' }
             : isNew
             ? { color: '#2563eb', bg: '#dbeafe', text: 'NEW', textFr: 'Nouveau', icon: Sparkles, borderColor: '#93c5fd' }
+            : status === 'issue'
+            ? { color: '#dc2626', bg: '#fef2f2', text: 'ISSUE IDENTIFIED', textFr: 'Problème identifié', icon: AlertOctagon, borderColor: '#fca5a5' }
             : status === 'clean'
             ? { color: C.actionGreen, bg: C.successBg, text: 'CLEAN', textFr: 'Propre', icon: CheckCircle2, borderColor: '#86efac' }
             : status === 'attention'
@@ -145,62 +147,67 @@ export function ManagerLocationsTab() {
             <Animated.View key={location.id} entering={FadeInDown.delay(index * 60).duration(400)}>
               <Pressable
                 onPress={() => openLocationSettings(location.id)}
-                className="mb-3 active:opacity-90"
+                className="mb-4 active:opacity-90"
                 style={{ opacity: isInactive ? 0.6 : 1 }}
               >
                 <View
-                  className="rounded-2xl p-4"
+                  className="rounded-2xl overflow-hidden"
                   style={{
                     backgroundColor: C.white,
-                    borderLeftWidth: 4,
+                    borderLeftWidth: 6,
                     borderLeftColor: statusConfig.color,
                     ...D.shadow.sm,
                   }}
                 >
-                  <View className="flex-row items-center">
-                    {/* Status icon */}
-                    <View
-                      className="w-11 h-11 rounded-xl items-center justify-center mr-3"
-                      style={{ backgroundColor: statusConfig.bg }}
-                    >
-                      <StatusIcon size={22} color={statusConfig.color} />
+                  {/* Status banner */}
+                  <View
+                    className="px-5 py-4 flex-row items-center justify-between"
+                    style={{ backgroundColor: statusConfig.bg }}
+                  >
+                    <View className="flex-row items-center">
+                      <StatusIcon size={28} color={statusConfig.color} />
+                      <View className="ml-3">
+                        <Text className="text-2xl font-black tracking-wide" style={{ color: statusConfig.color }}>
+                          {statusConfig.text}
+                        </Text>
+                        <Text className="text-sm font-medium" style={{ color: statusConfig.color, opacity: 0.8 }}>
+                          {statusConfig.textFr}
+                        </Text>
+                      </View>
                     </View>
+                    <ChevronRight size={20} color={statusConfig.color} />
+                  </View>
 
-                    {/* Name + last cleaned */}
-                    <View className="flex-1">
-                      <Text
-                        className="text-base font-bold"
-                        style={{ color: C.textPrimary }}
-                        numberOfLines={1}
-                      >
-                        {location.name}
-                      </Text>
-                      {lastCleaned ? (
-                        <View className="flex-row items-center mt-1">
-                          <Clock size={11} color={C.textMuted} />
-                          <Text className="text-xs ml-1" style={{ color: C.textMuted }}>
+                  {/* Main content */}
+                  <View className="px-5 py-5">
+                    {/* Location name - large */}
+                    <Text
+                      className="text-xl font-bold mb-3"
+                      style={{ color: C.textPrimary }}
+                      numberOfLines={2}
+                    >
+                      {location.name}
+                    </Text>
+
+                    {/* Last cleaned info */}
+                    {lastCleaned ? (
+                      <View className="flex-row items-center py-2.5 px-3 rounded-xl" style={{ backgroundColor: '#f8fafc' }}>
+                        <Clock size={16} color={C.textMuted} />
+                        <View className="ml-2.5">
+                          <Text className="text-xs font-medium" style={{ color: C.textMuted }}>Last Cleaned / Dernier nettoyage</Text>
+                          <Text className="text-sm font-semibold mt-0.5" style={{ color: C.textPrimary }}>
                             {lastCleaned}
                           </Text>
                         </View>
-                      ) : (
-                        <Text className="text-xs mt-1" style={{ color: statusConfig.color }}>
-                          {isNew ? 'Awaiting first scan' : statusConfig.textFr}
-                        </Text>
-                      )}
-                    </View>
-
-                    {/* Status badge + arrow */}
-                    <View className="items-end">
-                      <View
-                        className="px-2.5 py-1 rounded-full mb-1"
-                        style={{ backgroundColor: statusConfig.bg }}
-                      >
-                        <Text className="text-[10px] font-bold" style={{ color: statusConfig.color }}>
-                          {statusConfig.text}
+                      </View>
+                    ) : (
+                      <View className="flex-row items-center py-2.5 px-3 rounded-xl" style={{ backgroundColor: statusConfig.bg }}>
+                        <StatusIcon size={16} color={statusConfig.color} />
+                        <Text className="text-sm font-medium ml-2.5" style={{ color: statusConfig.color }}>
+                          {isNew ? 'Awaiting first scan / En attente du premier scan' : statusConfig.textFr}
                         </Text>
                       </View>
-                      <ChevronRight size={16} color={C.textMuted} />
-                    </View>
+                    )}
                   </View>
                 </View>
               </Pressable>

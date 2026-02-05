@@ -126,6 +126,7 @@ CREATE POLICY "washrooms_delete" ON washrooms
 DROP POLICY IF EXISTS "cleaning_logs_select" ON cleaning_logs;
 DROP POLICY IF EXISTS "cleaning_logs_insert" ON cleaning_logs;
 DROP POLICY IF EXISTS "cleaning_logs_update" ON cleaning_logs;
+DROP POLICY IF EXISTS "cleaning_logs_delete" ON cleaning_logs;
 
 -- Allow reading cleaning logs
 CREATE POLICY "cleaning_logs_select" ON cleaning_logs
@@ -143,6 +144,11 @@ CREATE POLICY "cleaning_logs_update" ON cleaning_logs
   USING (true)
   WITH CHECK (true);
 
+-- Allow deleting cleaning logs (for washroom deletion)
+CREATE POLICY "cleaning_logs_delete" ON cleaning_logs
+  FOR DELETE
+  USING (true);
+
 -- ============================================
 -- 7. REPORTED_ISSUES TABLE POLICIES
 -- ============================================
@@ -150,6 +156,7 @@ CREATE POLICY "cleaning_logs_update" ON cleaning_logs
 DROP POLICY IF EXISTS "reported_issues_select" ON reported_issues;
 DROP POLICY IF EXISTS "reported_issues_insert" ON reported_issues;
 DROP POLICY IF EXISTS "reported_issues_update" ON reported_issues;
+DROP POLICY IF EXISTS "reported_issues_delete" ON reported_issues;
 
 -- Allow reading reported issues
 CREATE POLICY "reported_issues_select" ON reported_issues
@@ -166,6 +173,11 @@ CREATE POLICY "reported_issues_update" ON reported_issues
   FOR UPDATE
   USING (true)
   WITH CHECK (true);
+
+-- Allow deleting issues (for washroom deletion)
+CREATE POLICY "reported_issues_delete" ON reported_issues
+  FOR DELETE
+  USING (true);
 
 -- ============================================
 -- 8. LOCATIONS TABLE POLICIES (Legacy)
@@ -203,6 +215,7 @@ CREATE POLICY "locations_delete" ON locations
 
 DROP POLICY IF EXISTS "qr_scan_logs_select" ON qr_scan_logs;
 DROP POLICY IF EXISTS "qr_scan_logs_insert" ON qr_scan_logs;
+DROP POLICY IF EXISTS "qr_scan_logs_delete" ON qr_scan_logs;
 
 -- Allow reading scan logs
 CREATE POLICY "qr_scan_logs_select" ON qr_scan_logs
@@ -213,6 +226,11 @@ CREATE POLICY "qr_scan_logs_select" ON qr_scan_logs
 CREATE POLICY "qr_scan_logs_insert" ON qr_scan_logs
   FOR INSERT
   WITH CHECK (true);
+
+-- Allow deleting scan logs (for washroom deletion)
+CREATE POLICY "qr_scan_logs_delete" ON qr_scan_logs
+  FOR DELETE
+  USING (true);
 
 -- ============================================
 -- 10. SECURITY RECOMMENDATIONS

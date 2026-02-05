@@ -873,10 +873,76 @@ export async function deleteLogsForLocation(locationId: string): Promise<{ succe
       .eq('location_id', locationId);
 
     if (error) {
+      console.warn('[deleteLogsForLocation] Error:', error.message);
       return { success: false, error: error.message };
     }
 
     return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Delete all reported issues for a specific location
+export async function deleteIssuesForLocation(locationId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('reported_issues')
+      .delete()
+      .eq('location_id', locationId);
+
+    if (error) {
+      console.warn('[deleteIssuesForLocation] Error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Delete all QR scan logs for a specific location
+export async function deleteQrScansForLocation(locationId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('qr_scan_logs')
+      .delete()
+      .eq('location_id', locationId);
+
+    if (error) {
+      console.warn('[deleteQrScansForLocation] Error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Delete a washroom and ALL related data (logs, issues, QR scans)
+export async function deleteWashroomAndRelatedData(washroomId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Delete all related data first (order matters for foreign keys)
+    const logsResult = await deleteLogsForLocation(washroomId);
+    if (!logsResult.success) {
+      console.warn('[deleteWashroomAndRelatedData] Failed to delete logs:', logsResult.error);
+    }
+
+    const issuesResult = await deleteIssuesForLocation(washroomId);
+    if (!issuesResult.success) {
+      console.warn('[deleteWashroomAndRelatedData] Failed to delete issues:', issuesResult.error);
+    }
+
+    const qrResult = await deleteQrScansForLocation(washroomId);
+    if (!qrResult.success) {
+      console.warn('[deleteWashroomAndRelatedData] Failed to delete QR scans:', qrResult.error);
+    }
+
+    // Now delete the washroom itself
+    const result = await hardDeleteWashroom(washroomId);
+    return result;
   } catch (error) {
     return { success: false, error: String(error) };
   }
@@ -1762,6 +1828,9 @@ export interface ReportedIssueRow {
   status: 'open' | 'resolved';
   created_at: string;
   resolved_at?: string | null;
+  resolution_action?: string | null;
+  resolution_action_label?: string | null;
+  resolved_by?: string | null;
 }
 
 export interface InsertReportedIssue {
@@ -1817,19 +1886,99 @@ export async function getOpenReportedIssues(): Promise<{ success: boolean; data?
   }
 }
 
-// Resolve a reported issue
-export async function resolveReportedIssue(issueId: string): Promise<{ success: boolean; error?: string }> {
+// Resolution action types for each issue type
+export interface ResolutionAction {
+  value: string;
+  label: string;
+  labelFr: string;
+  createsLog: boolean;
+  logStatus?: 'complete' | 'attention_required';
+  logNotes?: string;
+  logNotesFr?: string;
+}
+
+export const RESOLUTION_ACTIONS: Record<string, ResolutionAction[]> = {
+  out_of_supplies: [
+    { value: 'restocked', label: 'Restocked', labelFr: 'Réapprovisionné', createsLog: true, logStatus: 'complete', logNotes: 'Supplies restocked', logNotesFr: 'Fournitures réapprovisionnées' },
+    { value: 'not_needed', label: 'Not Needed', labelFr: 'Non requis', createsLog: false },
+  ],
+  needs_cleaning: [
+    { value: 'cleaned', label: 'Cleaned', labelFr: 'Nettoyé', createsLog: true, logStatus: 'complete', logNotes: 'Cleaned (issue resolved)', logNotesFr: 'Nettoyé (problème résolu)' },
+    { value: 'already_clean', label: 'Already Clean', labelFr: 'Déjà propre', createsLog: false },
+  ],
+  maintenance_required: [
+    { value: 'fixed', label: 'Fixed', labelFr: 'Réparé', createsLog: false },
+    { value: 'scheduled', label: 'Scheduled for Repair', labelFr: 'Réparation programmée', createsLog: false },
+    { value: 'not_an_issue', label: 'Not an Issue', labelFr: 'Pas un problème', createsLog: false },
+  ],
+  safety_concern: [
+    { value: 'resolved', label: 'Resolved', labelFr: 'Résolu', createsLog: false },
+    { value: 'secured', label: 'Area Secured', labelFr: 'Zone sécurisée', createsLog: false },
+    { value: 'not_an_issue', label: 'Not an Issue', labelFr: 'Pas un problème', createsLog: false },
+  ],
+  other: [
+    { value: 'addressed', label: 'Addressed', labelFr: 'Traité', createsLog: false },
+    { value: 'cleaned', label: 'Cleaned', labelFr: 'Nettoyé', createsLog: true, logStatus: 'complete', logNotes: 'Issue addressed and cleaned', logNotesFr: 'Problème traité et nettoyé' },
+    { value: 'not_an_issue', label: 'Not an Issue', labelFr: 'Pas un problème', createsLog: false },
+  ],
+};
+
+// Resolve a reported issue with an action
+export async function resolveReportedIssue(
+  issueId: string,
+  options?: {
+    action?: ResolutionAction;
+    locationId?: string;
+    locationName?: string;
+    resolvedBy?: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
   try {
+    // Update the issue status and resolution details
     const { error } = await supabase
       .from('reported_issues')
       .update({
         status: 'resolved',
         resolved_at: new Date().toISOString(),
+        resolution_action: options?.action?.value || null,
+        resolution_action_label: options?.action?.label || null,
+        resolved_by: options?.resolvedBy || null,
       })
       .eq('id', issueId);
 
     if (error) {
       return { success: false, error: error.message };
+    }
+
+    // If the action creates a cleaning log, insert it
+    if (options?.action?.createsLog && options?.locationId && options?.locationName) {
+      const staffName = options.resolvedBy || 'Manager';
+      const notes = options.action.logNotes || 'Issue resolved';
+
+      // Insert cleaning log directly with all required fields
+      const { error: logError } = await supabase
+        .from('cleaning_logs')
+        .insert([{
+          id: generateId(),
+          location_id: options.locationId,
+          location_name: options.locationName,
+          staff_name: staffName,
+          timestamp: new Date().toISOString(),
+          status: options.action.logStatus || 'complete',
+          notes: notes,
+          checklist_supplies: true,
+          checklist_surfaces: true,
+          checklist_fixtures: true,
+          checklist_trash: true,
+          checklist_floors: true,
+          checklist_odor: true,
+          created_at: new Date().toISOString(),
+        }]);
+
+      if (logError) {
+        console.warn('[resolveReportedIssue] Failed to create cleaning log:', logError.message);
+        // Don't fail the resolution, just log the warning
+      }
     }
 
     return { success: true };

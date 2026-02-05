@@ -65,8 +65,7 @@ import {
   getWashroomsForBusiness,
   WashroomRow,
   WashroomAlertSettings,
-  hardDeleteWashroom,
-  deleteLogsForLocation,
+  deleteWashroomAndRelatedData,
   updateBusinessAddress,
   updateBusinessPassword,
   getQrScanStatsForLocations,
@@ -641,10 +640,8 @@ export default function BusinessDetailScreen() {
           onPress: async () => {
             setDeletingWashroomId(washroom.id);
             try {
-              // First delete all logs for this location
-              await deleteLogsForLocation(washroom.id);
-              // Then delete the washroom
-              const result = await hardDeleteWashroom(washroom.id);
+              // Delete washroom and all related data (logs, issues, QR scans)
+              const result = await deleteWashroomAndRelatedData(washroom.id);
               if (result.success) {
                 Alert.alert('Success', `"${washroom.room_name}" has been permanently deleted.`);
                 loadData();
