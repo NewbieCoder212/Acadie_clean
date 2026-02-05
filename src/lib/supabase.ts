@@ -1954,7 +1954,6 @@ export async function resolveReportedIssue(
     if (options?.action?.createsLog && options?.locationId && options?.locationName) {
       const staffName = options.resolvedBy || 'Manager';
       const notes = options.action.logNotes || 'Issue resolved';
-      const timestamp = new Date().toISOString();
 
       // Insert cleaning log directly with all required fields
       const { error: logError } = await supabase
@@ -1964,7 +1963,7 @@ export async function resolveReportedIssue(
           location_id: options.locationId,
           location_name: options.locationName,
           staff_name: staffName,
-          timestamp: timestamp,
+          timestamp: new Date().toISOString(),
           status: options.action.logStatus || 'complete',
           notes: notes,
           checklist_supplies: true,
@@ -1973,22 +1972,12 @@ export async function resolveReportedIssue(
           checklist_trash: true,
           checklist_floors: true,
           checklist_odor: true,
-          created_at: timestamp,
+          created_at: new Date().toISOString(),
         }]);
 
       if (logError) {
         console.warn('[resolveReportedIssue] Failed to create cleaning log:', logError.message);
         // Don't fail the resolution, just log the warning
-      } else {
-        // Update the washroom's last_cleaned timestamp so public status card updates
-        const { error: updateError } = await supabase
-          .from('washrooms')
-          .update({ last_cleaned: timestamp })
-          .eq('id', options.locationId);
-
-        if (updateError) {
-          console.warn('[resolveReportedIssue] Failed to update washroom last_cleaned:', updateError.message);
-        }
       }
     }
 
@@ -2101,14 +2090,9 @@ export async function updateBusinessSubscriptionTier(businessId: string, tier: S
 // Update alert email for a washroom
 export async function updateWashroomAlertEmail(washroomId: string, alertEmail: string): Promise<{ success: boolean; error?: string }> {
   try {
-    // When setting an alert email, also enable alerts for this washroom
-    // When removing the email (empty string), disable alerts
     const { error } = await supabase
       .from('washrooms')
-      .update({
-        alert_email: alertEmail,
-        alert_enabled: alertEmail.trim().length > 0, // Enable alerts when email is provided
-      })
+      .update({ alert_email: alertEmail })
       .eq('id', washroomId);
 
     if (error) {
