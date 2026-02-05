@@ -128,6 +128,7 @@ export default function AdminDashboardScreen() {
   const [newBusinessName, setNewBusinessName] = useState('');
   const [newBusinessEmail, setNewBusinessEmail] = useState('');
   const [newBusinessPassword, setNewBusinessPassword] = useState('');
+  const [newBusinessAddress, setNewBusinessAddress] = useState('');
   const [newBusinessTrialDays, setNewBusinessTrialDays] = useState(14); // Default 14 days
 
   useEffect(() => {
@@ -269,6 +270,7 @@ export default function AdminDashboardScreen() {
         name: newBusinessName.trim(),
         email: newBusinessEmail.trim(),
         password: newBusinessPassword.trim(),
+        address: newBusinessAddress.trim() || undefined,
         is_admin: false,
         trial_days: newBusinessTrialDays,
       });
@@ -280,6 +282,7 @@ export default function AdminDashboardScreen() {
         setNewBusinessName('');
         setNewBusinessEmail('');
         setNewBusinessPassword('');
+        setNewBusinessAddress('');
         setNewBusinessTrialDays(14); // Reset to default
         loadData();
         Alert.alert('Success', `Business created successfully with ${newBusinessTrialDays}-day trial`);
@@ -1240,6 +1243,27 @@ export default function AdminDashboardScreen() {
                   value={newBusinessPassword}
                   onChangeText={setNewBusinessPassword}
                   placeholder="Create password"
+                  placeholderTextColor={COLORS.textMuted}
+                  className="rounded-xl px-4 py-3"
+                  style={{
+                    backgroundColor: COLORS.primaryLight,
+                    fontSize: 16,
+                    color: COLORS.textDark,
+                  }}
+                />
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
+                  Business Address
+                </Text>
+                <Text className="text-xs mb-1" style={{ color: COLORS.textMuted }}>
+                  Adresse de l'entreprise (optional)
+                </Text>
+                <TextInput
+                  value={newBusinessAddress}
+                  onChangeText={setNewBusinessAddress}
+                  placeholder="Enter business address"
                   placeholderTextColor={COLORS.textMuted}
                   className="rounded-xl px-4 py-3"
                   style={{

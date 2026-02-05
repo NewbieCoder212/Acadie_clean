@@ -957,6 +957,7 @@ export interface InsertBusiness {
   name: string;
   email: string;
   password: string;
+  address?: string;
   is_admin?: boolean;
   is_active?: boolean;
   subscription_tier?: SubscriptionTier;
@@ -996,6 +997,7 @@ export async function insertBusiness(business: InsertBusiness): Promise<{ succes
         name: business.name,
         email: business.email.toLowerCase(),
         password_hash: hashedPassword,
+        address: business.address ?? null,
         is_admin: business.is_admin ?? false,
         is_active: business.is_active ?? true,
         subscription_tier: business.subscription_tier ?? 'standard',

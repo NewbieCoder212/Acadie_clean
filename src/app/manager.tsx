@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Shield, Lock, Eye, EyeOff, Download, MapPin, AlertTriangle, CheckCircle2, Mail, ExternalLink, Plus, Link, Copy, LogOut, Trash2, Key, FileText, Calendar, ClipboardList, RefreshCw, Sparkles, ChevronRight, Save, Power, AlertOctagon, Crown, X, Users, UserPlus } from 'lucide-react-native';
+import { Shield, Lock, Eye, EyeOff, Download, MapPin, AlertTriangle, CheckCircle2, Mail, ExternalLink, Plus, Copy, LogOut, Trash2, Key, FileText, Calendar, ClipboardList, RefreshCw, Sparkles, ChevronRight, Save, Power, AlertOctagon, Crown, X, Users, UserPlus } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
@@ -1473,12 +1473,6 @@ export default function ManagerDashboard() {
             >
               {currentBusiness?.name || 'Acadia Clean IQ'}
             </Text>
-            <Text
-              className="text-sm font-medium mt-1"
-              style={{ color: 'rgba(255,255,255,0.8)' }}
-            >
-              Business Portal / Portail d'entreprise
-            </Text>
           </View>
         </Animated.View>
 
@@ -2238,44 +2232,6 @@ export default function ManagerDashboard() {
                   <View style={{ width: 50 }} />
                 </View>
                 <ScrollView className="flex-1 px-5 py-6">
-                  {/* QR Code URL Actions */}
-                  <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: '#dbeafe', borderWidth: 1, borderColor: '#93c5fd' }}>
-                    <View className="mb-2">
-                      <View className="flex-row items-center">
-                        <Link size={16} color="#2563eb" />
-                        <Text className="text-sm font-semibold ml-2" style={{ color: '#1e40af' }}>QR Code URL</Text>
-                      </View>
-                      <Text className="text-xs ml-6" style={{ color: '#3b82f6' }}>URL du code QR</Text>
-                    </View>
-                    <Text className="text-xs font-mono mb-3" style={{ color: '#1e3a8a' }} selectable>
-                      {getLocationUrl(location.id)}
-                    </Text>
-                    <View className="flex-row gap-2">
-                      <Pressable
-                        onPress={() => handleCopyUrl(getLocationUrl(location.id))}
-                        className="flex-1 items-center justify-center py-3 rounded-lg"
-                        style={{ backgroundColor: '#2563eb' }}
-                      >
-                        <View className="flex-row items-center">
-                          <Copy size={16} color="#fff" />
-                          <Text className="text-white font-semibold ml-2">Copy</Text>
-                        </View>
-                        <Text className="text-white/80 text-[10px]">Copier</Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => handleShareUrl(location.name, getLocationUrl(location.id))}
-                        className="flex-1 items-center justify-center py-3 rounded-lg"
-                        style={{ backgroundColor: COLORS.slate600 }}
-                      >
-                        <View className="flex-row items-center">
-                          <ExternalLink size={16} color="#fff" />
-                          <Text className="text-white font-semibold ml-2">Share</Text>
-                        </View>
-                        <Text className="text-white/80 text-[10px]">Partager</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-
                   {/* Universal Staff PIN - Managed here - Owner only */}
                   {canPerformAction('canEditSettings') && (
                   <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: COLORS.amberLight, borderWidth: 1, borderColor: '#fcd34d' }}>
