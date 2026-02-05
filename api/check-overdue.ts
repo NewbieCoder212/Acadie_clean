@@ -43,10 +43,21 @@ interface Washroom {
   is_active: boolean;
 }
 
+interface DaySchedule {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+type AlertSchedule = {
+  [day: string]: DaySchedule | undefined;
+};
+
 interface Business {
   name: string;
   global_alert_emails: string[] | null;
   use_global_alerts: boolean;
+  alert_schedule: AlertSchedule | null;
 }
 
 // Check if current time is within business hours
@@ -100,6 +111,45 @@ function isAlertDay(alertDays: string[], timezone: string): boolean {
   }
 }
 
+// Check business-level per-day schedule
+// Returns { isActiveDay, isWithinHours } based on the business alert_schedule
+// Falls back to washroom-level alert_days/business_hours if no business schedule exists
+function checkBusinessSchedule(
+  alertSchedule: AlertSchedule | null,
+  washroom: Washroom,
+  timezone: string
+): { isActiveDay: boolean; isWithinHours: boolean } {
+  const tz = timezone || 'America/Moncton';
+
+  // Get today's day name in the timezone
+  const now = new Date();
+  const dayName = now.toLocaleDateString('en-US', {
+    timeZone: tz,
+    weekday: 'long',
+  }).toLowerCase();
+
+  // If business has a per-day schedule, use it
+  if (alertSchedule && alertSchedule[dayName]) {
+    const dayConfig = alertSchedule[dayName]!;
+    if (!dayConfig.enabled) {
+      return { isActiveDay: false, isWithinHours: false };
+    }
+    return {
+      isActiveDay: true,
+      isWithinHours: isWithinBusinessHours(dayConfig.start, dayConfig.end, tz),
+    };
+  }
+
+  // Fallback to legacy washroom-level settings
+  const activeDay = isAlertDay(washroom.alert_days || [], tz);
+  const withinHours = isWithinBusinessHours(
+    washroom.business_hours_start || '08:00',
+    washroom.business_hours_end || '17:00',
+    tz
+  );
+  return { isActiveDay: activeDay, isWithinHours: withinHours };
+}
+
 // Check if washroom is overdue for cleaning
 function isOverdue(lastCleaned: string | null, thresholdHours: number): boolean {
   if (!lastCleaned) return true; // Never cleaned = overdue
@@ -135,7 +185,7 @@ async function getAlertRecipients(washroom: Washroom): Promise<string[]> {
   if (washroom.business_name) {
     const { data: business } = await supabase
       .from('businesses')
-      .select('global_alert_emails, use_global_alerts')
+      .select('global_alert_emails, use_global_alerts, alert_schedule')
       .eq('name', washroom.business_name)
       .single();
 
@@ -150,6 +200,25 @@ async function getAlertRecipients(washroom: Washroom): Promise<string[]> {
   }
 
   return emails;
+}
+
+// Cache for business alert schedules (keyed by business_name)
+const businessScheduleCache: Map<string, AlertSchedule | null> = new Map();
+
+async function getBusinessSchedule(businessName: string): Promise<AlertSchedule | null> {
+  if (businessScheduleCache.has(businessName)) {
+    return businessScheduleCache.get(businessName) ?? null;
+  }
+
+  const { data: business } = await supabase
+    .from('businesses')
+    .select('alert_schedule')
+    .eq('name', businessName)
+    .single();
+
+  const schedule = business?.alert_schedule ?? null;
+  businessScheduleCache.set(businessName, schedule);
+  return schedule;
 }
 
 // Generate overdue alert email HTML
@@ -456,18 +525,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     for (const washroom of washrooms as Washroom[]) {
       const washroomName = `${washroom.business_name} - ${washroom.room_name}`;
 
-      // Check if today is an alert day
-      if (!isAlertDay(washroom.alert_days || [], washroom.timezone || 'America/Moncton')) {
+      // Get business-level schedule (cached per business)
+      const businessSchedule = await getBusinessSchedule(washroom.business_name);
+      const { isActiveDay, isWithinHours } = checkBusinessSchedule(
+        businessSchedule,
+        washroom,
+        washroom.timezone || 'America/Moncton'
+      );
+
+      // Check if today is an active alert day
+      if (!isActiveDay) {
         results.push({ washroom: washroomName, status: 'not_alert_day' });
         continue;
       }
 
-      // Check if within business hours
-      if (!isWithinBusinessHours(
-        washroom.business_hours_start || '08:00',
-        washroom.business_hours_end || '17:00',
-        washroom.timezone || 'America/Moncton'
-      )) {
+      // Check if within business hours for today
+      if (!isWithinHours) {
         results.push({ washroom: washroomName, status: 'outside_business_hours' });
         continue;
       }

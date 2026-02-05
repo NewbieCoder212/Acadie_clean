@@ -6,10 +6,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Mail, ChevronRight, Save, Plus, X, ClipboardList, FileText,
-  Calendar, Users, UserPlus, Shield, Eye, Crown, Trash2,
+  Calendar, Users, UserPlus, Shield, Eye, Crown, Trash2, Clock,
 } from 'lucide-react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { useManagerContext, SafeManagerRow, ManagerPermissions, ManagerRole } from './ManagerContext';
+import { useManagerContext, SafeManagerRow, ManagerPermissions, ManagerRole, AlertSchedule } from './ManagerContext';
+import { DEFAULT_ALERT_SCHEDULE } from '@/lib/supabase';
 import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
 
 type TeamMember = SafeManagerRow & { role: ManagerRole; permissions: ManagerPermissions };
@@ -22,6 +23,10 @@ export function ManagerSettingsTab() {
   const [localUseGlobal, setLocalUseGlobal] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [isSavingAlerts, setIsSavingAlerts] = useState(false);
+
+  // Per-day schedule
+  const [localSchedule, setLocalSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
   // Inspector / Audit
   const [showInspector, setShowInspector] = useState(false);
@@ -48,7 +53,8 @@ export function ManagerSettingsTab() {
     setLocalUseGlobal(ctx.useGlobalAlerts);
     setLocalBusinessName(ctx.businessName);
     setLocalBusinessAddress(ctx.businessAddress);
-  }, [ctx.globalAlertEmails, ctx.useGlobalAlerts, ctx.businessName, ctx.businessAddress]);
+    setLocalSchedule(ctx.alertSchedule);
+  }, [ctx.globalAlertEmails, ctx.useGlobalAlerts, ctx.businessName, ctx.businessAddress, ctx.alertSchedule]);
 
   const handleAddEmail = () => {
     const email = newEmail.trim().toLowerCase();
@@ -72,6 +78,36 @@ export function ManagerSettingsTab() {
     setIsSavingAlerts(true);
     await ctx.handleSaveGlobalAlertSettings(localGlobalEmails, localUseGlobal);
     setIsSavingAlerts(false);
+  };
+
+  const handleSaveSchedule = async () => {
+    setIsSavingSchedule(true);
+    await ctx.handleSaveAlertSchedule(localSchedule);
+    setIsSavingSchedule(false);
+  };
+
+  const ALL_DAYS: { key: string; label: string }[] = [
+    { key: 'monday', label: 'Monday' },
+    { key: 'tuesday', label: 'Tuesday' },
+    { key: 'wednesday', label: 'Wednesday' },
+    { key: 'thursday', label: 'Thursday' },
+    { key: 'friday', label: 'Friday' },
+    { key: 'saturday', label: 'Saturday' },
+    { key: 'sunday', label: 'Sunday' },
+  ];
+
+  const toggleDayEnabled = (dayKey: string) => {
+    setLocalSchedule(prev => {
+      const current = prev[dayKey as keyof AlertSchedule] || { enabled: false, start: '08:00', end: '18:00' };
+      return { ...prev, [dayKey]: { ...current, enabled: !current.enabled } };
+    });
+  };
+
+  const updateDayTime = (dayKey: string, field: 'start' | 'end', value: string) => {
+    setLocalSchedule(prev => {
+      const current = prev[dayKey as keyof AlertSchedule] || { enabled: true, start: '08:00', end: '18:00' };
+      return { ...prev, [dayKey]: { ...current, [field]: value } };
+    });
   };
 
   const handleSaveAddress = async () => {
@@ -214,6 +250,87 @@ export function ManagerSettingsTab() {
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <><Save size={16} color="#fff" /><Text className="text-white font-bold ml-2">Save Alert Settings</Text></>
+                )}
+              </Pressable>
+            </View>
+          </Animated.View>
+        )}
+
+        {/* Business Hours Schedule - Owner/Supervisor */}
+        {ctx.canPerformAction('canEditSettings') && (
+          <Animated.View entering={FadeIn.delay(150).duration(400)}>
+            <View className="rounded-2xl p-4 mb-3" style={{ backgroundColor: C.white, ...D.shadow.sm }}>
+              <View className="flex-row items-center mb-3">
+                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: '#fef3c7' }}>
+                  <Clock size={20} color="#d97706" />
+                </View>
+                <View className="ml-3 flex-1">
+                  <Text className="text-sm font-bold" style={{ color: C.textPrimary }}>Business Hours Schedule</Text>
+                  <Text className="text-xs" style={{ color: C.textMuted }}>Horaire d'ouverture (alerts only during these hours)</Text>
+                </View>
+              </View>
+
+              {ALL_DAYS.map((day) => {
+                const daySchedule = localSchedule[day.key as keyof AlertSchedule];
+                const isEnabled = daySchedule?.enabled ?? false;
+                const startTime = daySchedule?.start ?? '08:00';
+                const endTime = daySchedule?.end ?? '18:00';
+
+                return (
+                  <View
+                    key={day.key}
+                    className="rounded-xl p-3 mb-2"
+                    style={{ backgroundColor: isEnabled ? '#f0fdf4' : '#f8fafc', borderWidth: 1, borderColor: isEnabled ? '#bbf7d0' : '#e2e8f0' }}
+                  >
+                    <View className="flex-row items-center justify-between mb-1">
+                      <Text className="text-sm font-semibold" style={{ color: isEnabled ? C.textPrimary : C.textMuted }}>
+                        {day.label}
+                      </Text>
+                      <Switch
+                        value={isEnabled}
+                        onValueChange={() => toggleDayEnabled(day.key)}
+                        trackColor={{ false: '#d1d5db', true: '#86efac' }}
+                        thumbColor={isEnabled ? C.actionGreen : '#f4f3f4'}
+                      />
+                    </View>
+                    {isEnabled && (
+                      <View className="flex-row items-center gap-2 mt-1">
+                        <TextInput
+                          value={startTime}
+                          onChangeText={(text) => updateDayTime(day.key, 'start', text)}
+                          placeholder="08:00"
+                          placeholderTextColor={C.textMuted}
+                          className="flex-1 rounded-lg px-3 py-2 text-center text-sm"
+                          style={{ backgroundColor: C.white, borderWidth: 1, borderColor: '#e2e8f0', color: C.textPrimary }}
+                        />
+                        <Text className="text-xs font-medium" style={{ color: C.textMuted }}>to</Text>
+                        <TextInput
+                          value={endTime}
+                          onChangeText={(text) => updateDayTime(day.key, 'end', text)}
+                          placeholder="18:00"
+                          placeholderTextColor={C.textMuted}
+                          className="flex-1 rounded-lg px-3 py-2 text-center text-sm"
+                          style={{ backgroundColor: C.white, borderWidth: 1, borderColor: '#e2e8f0', color: C.textPrimary }}
+                        />
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+
+              <Text className="text-[10px] mb-3 mt-1" style={{ color: C.textMuted }}>
+                Use 24-hour format (e.g., 08:00, 18:00). Alerts are only sent during enabled days and hours.
+              </Text>
+
+              <Pressable
+                onPress={handleSaveSchedule} disabled={isSavingSchedule}
+                className="flex-row items-center justify-center py-3 rounded-lg"
+                style={{ backgroundColor: isSavingSchedule ? C.textMuted : '#d97706' }}
+              >
+                {isSavingSchedule ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <><Save size={16} color="#fff" /><Text className="text-white font-bold ml-2">Save Schedule</Text></>
                 )}
               </Pressable>
             </View>

@@ -79,6 +79,9 @@ import {
   SubscriptionStatus,
   updateWashroomAlertSettings,
   updateWashroomAlertEmail,
+  updateBusinessAlertSchedule,
+  AlertSchedule,
+  DEFAULT_ALERT_SCHEDULE,
 } from '@/lib/supabase';
 
 const COLORS = {
@@ -149,6 +152,10 @@ export default function BusinessDetailScreen() {
   });
   const [alertEmail, setAlertEmail] = useState('');
   const [isSavingAlertSettings, setIsSavingAlertSettings] = useState(false);
+
+  // Business-level per-day schedule
+  const [businessSchedule, setBusinessSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
   // Day options for alert settings
   const ALL_DAYS = [
@@ -249,6 +256,38 @@ export default function BusinessDetailScreen() {
     });
   };
 
+  // Business-level schedule helpers
+  const toggleScheduleDay = (dayKey: string) => {
+    setBusinessSchedule(prev => {
+      const current = prev[dayKey as keyof AlertSchedule] || { enabled: false, start: '08:00', end: '18:00' };
+      return { ...prev, [dayKey]: { ...current, enabled: !current.enabled } };
+    });
+  };
+
+  const updateScheduleTime = (dayKey: string, field: 'start' | 'end', value: string) => {
+    setBusinessSchedule(prev => {
+      const current = prev[dayKey as keyof AlertSchedule] || { enabled: true, start: '08:00', end: '18:00' };
+      return { ...prev, [dayKey]: { ...current, [field]: value } };
+    });
+  };
+
+  const handleSaveBusinessSchedule = async () => {
+    if (!business?.id) return;
+    setIsSavingSchedule(true);
+    try {
+      const result = await updateBusinessAlertSchedule(business.id, businessSchedule);
+      if (result.success) {
+        Alert.alert('Success', 'Business hours schedule saved!');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to save schedule');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  };
+
   useEffect(() => {
     if (id) {
       loadData();
@@ -265,6 +304,7 @@ export default function BusinessDetailScreen() {
         if (foundBusiness) {
           setBusiness(foundBusiness);
           setBusinessAddress(foundBusiness.address || '');
+          setBusinessSchedule(foundBusiness.alert_schedule as AlertSchedule ?? DEFAULT_ALERT_SCHEDULE);
 
           // Get washrooms for this business using business name
           const washroomsResult = await getWashroomsForBusiness(foundBusiness.name);
@@ -1612,67 +1652,83 @@ export default function BusinessDetailScreen() {
                           </View>
                         </View>
 
-                        {/* Business Hours */}
+                        {/* Business Hours Schedule (per-day) */}
                         <View className="mb-4">
                           <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
-                            Business Hours (alerts only during these hours)
+                            Business Hours Schedule (per day)
                           </Text>
-                          <View className="flex-row items-center gap-2">
-                            <TextInput
-                              value={alertSettings.business_hours_start}
-                              onChangeText={(text) => setAlertSettings(prev => ({ ...prev, business_hours_start: text }))}
-                              placeholder="08:00"
-                              placeholderTextColor={COLORS.textMuted}
-                              className="flex-1 rounded-lg px-3 py-2 text-center"
-                              style={{
-                                backgroundColor: '#f1f5f9',
-                                fontSize: 14,
-                                color: COLORS.textDark,
-                              }}
-                            />
-                            <Text style={{ color: COLORS.textMuted }}>to</Text>
-                            <TextInput
-                              value={alertSettings.business_hours_end}
-                              onChangeText={(text) => setAlertSettings(prev => ({ ...prev, business_hours_end: text }))}
-                              placeholder="18:00"
-                              placeholderTextColor={COLORS.textMuted}
-                              className="flex-1 rounded-lg px-3 py-2 text-center"
-                              style={{
-                                backgroundColor: '#f1f5f9',
-                                fontSize: 14,
-                                color: COLORS.textDark,
-                              }}
-                            />
-                          </View>
-                          <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
-                            Use 24-hour format (e.g., 08:00, 18:00)
+                          <Text className="text-xs mb-3" style={{ color: COLORS.textMuted }}>
+                            Set different hours for each day. Alerts only sent during enabled days/hours.
                           </Text>
-                        </View>
+                          {ALL_DAYS.map((day) => {
+                            const daySchedule = businessSchedule[day.key as keyof AlertSchedule];
+                            const isEnabled = daySchedule?.enabled ?? false;
+                            const startTime = daySchedule?.start ?? '08:00';
+                            const endTime = daySchedule?.end ?? '18:00';
 
-                        {/* Alert Days */}
-                        <View className="mb-4">
-                          <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
-                            Alert Days
-                          </Text>
-                          <View className="flex-row gap-1 flex-wrap">
-                            {ALL_DAYS.map((day) => (
-                              <Pressable
+                            return (
+                              <View
                                 key={day.key}
-                                onPress={() => toggleAlertDay(day.key)}
-                                className="px-3 py-2 rounded-lg"
-                                style={{
-                                  backgroundColor: alertSettings.alert_days.includes(day.key) ? '#d97706' : '#f1f5f9',
-                                }}
+                                className="rounded-xl p-3 mb-2"
+                                style={{ backgroundColor: isEnabled ? '#fffbeb' : '#f8fafc', borderWidth: 1, borderColor: isEnabled ? '#fcd34d' : '#e2e8f0' }}
                               >
-                                <Text
-                                  className="text-xs font-semibold"
-                                  style={{ color: alertSettings.alert_days.includes(day.key) ? '#ffffff' : '#64748b' }}
-                                >
-                                  {day.label}
+                                <View className="flex-row items-center justify-between mb-1">
+                                  <Text className="text-sm font-semibold" style={{ color: isEnabled ? COLORS.textDark : COLORS.textMuted }}>
+                                    {day.label === 'Mon' ? 'Monday' : day.label === 'Tue' ? 'Tuesday' : day.label === 'Wed' ? 'Wednesday' : day.label === 'Thu' ? 'Thursday' : day.label === 'Fri' ? 'Friday' : day.label === 'Sat' ? 'Saturday' : 'Sunday'}
+                                  </Text>
+                                  <Switch
+                                    value={isEnabled}
+                                    onValueChange={() => toggleScheduleDay(day.key)}
+                                    trackColor={{ false: '#d1d5db', true: '#fcd34d' }}
+                                    thumbColor={isEnabled ? '#d97706' : '#f4f3f4'}
+                                  />
+                                </View>
+                                {isEnabled && (
+                                  <View className="flex-row items-center gap-2 mt-1">
+                                    <TextInput
+                                      value={startTime}
+                                      onChangeText={(text) => updateScheduleTime(day.key, 'start', text)}
+                                      placeholder="08:00"
+                                      placeholderTextColor={COLORS.textMuted}
+                                      className="flex-1 rounded-lg px-3 py-2 text-center"
+                                      style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', fontSize: 14, color: COLORS.textDark }}
+                                    />
+                                    <Text style={{ color: COLORS.textMuted }}>to</Text>
+                                    <TextInput
+                                      value={endTime}
+                                      onChangeText={(text) => updateScheduleTime(day.key, 'end', text)}
+                                      placeholder="18:00"
+                                      placeholderTextColor={COLORS.textMuted}
+                                      className="flex-1 rounded-lg px-3 py-2 text-center"
+                                      style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', fontSize: 14, color: COLORS.textDark }}
+                                    />
+                                  </View>
+                                )}
+                              </View>
+                            );
+                          })}
+                          <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                            Use 24-hour format (e.g., 08:00, 18:00). Applies to all washrooms in this business.
+                          </Text>
+
+                          {/* Save Schedule Button */}
+                          <Pressable
+                            onPress={handleSaveBusinessSchedule}
+                            disabled={isSavingSchedule}
+                            className="rounded-xl py-3 items-center active:opacity-80 mt-3"
+                            style={{ backgroundColor: isSavingSchedule ? '#94a3b8' : '#d97706' }}
+                          >
+                            {isSavingSchedule ? (
+                              <ActivityIndicator color={COLORS.white} />
+                            ) : (
+                              <View className="flex-row items-center">
+                                <Save size={16} color={COLORS.white} />
+                                <Text className="text-sm font-bold ml-2" style={{ color: COLORS.white }}>
+                                  Save Schedule
                                 </Text>
-                              </Pressable>
-                            ))}
-                          </View>
+                              </View>
+                            )}
+                          </Pressable>
                         </View>
 
                         {/* Timezone */}

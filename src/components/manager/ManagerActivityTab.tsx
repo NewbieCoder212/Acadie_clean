@@ -103,21 +103,7 @@ export function ManagerActivityTab() {
                 <Text className="text-xs mt-1" style={{ color: C.textMuted }}>Aucun journal de nettoyage</Text>
               </Animated.View>
             ) : (
-              <View className="rounded-xl overflow-hidden mt-2" style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.borderLight, ...D.shadow.sm }}>
-                {/* Table Header */}
-                <View className="flex-row items-center px-4 py-3" style={{ backgroundColor: C.emeraldDark }}>
-                  <View className="flex-1">
-                    <Text className="text-xs font-bold text-white">Location</Text>
-                  </View>
-                  <View className="flex-1 items-center">
-                    <Text className="text-xs font-bold text-white">Staff</Text>
-                  </View>
-                  <View style={{ width: 80 }} className="items-end">
-                    <Text className="text-xs font-bold text-white">Status</Text>
-                  </View>
-                </View>
-
-                {/* Rows */}
+              <View className="mt-2">
                 {ctx.recentLogs.map((log, index) => {
                   const isCompliant = log.status === 'complete';
 
@@ -125,30 +111,44 @@ export function ManagerActivityTab() {
                     <Pressable
                       key={log.id}
                       onPress={() => handleView14Days(log.location_id)}
-                      className="flex-row items-center px-4 py-3 active:opacity-80"
+                      className="rounded-xl mb-3 p-4 active:opacity-80"
                       style={{
-                        borderBottomWidth: index < ctx.recentLogs.length - 1 ? 1 : 0,
-                        borderBottomColor: C.borderLight,
-                        backgroundColor: isCompliant ? C.successBg : C.warningBg,
+                        backgroundColor: C.white,
+                        borderWidth: 1.5,
+                        borderColor: isCompliant ? '#86efac' : '#fcd34d',
+                        borderLeftWidth: 5,
+                        borderLeftColor: isCompliant ? C.actionGreen : C.warning,
+                        ...D.shadow.sm,
                       }}
                     >
-                      <View className="flex-1">
-                        <Text className="text-sm font-semibold" style={{ color: C.textPrimary }} numberOfLines={1}>
+                      {/* Top row: Location name + Status badge */}
+                      <View className="flex-row items-center justify-between mb-2">
+                        <Text className="text-base font-bold flex-1 mr-3" style={{ color: C.textPrimary }} numberOfLines={1}>
                           {log.location_name}
                         </Text>
-                        <Text className="text-[10px]" style={{ color: C.textMuted }}>
-                          {ctx.formatDateTime(log.timestamp)}
-                        </Text>
-                      </View>
-                      <View className="flex-1 items-center">
-                        <Text className="text-xs font-medium" style={{ color: C.textPrimary }} numberOfLines={1}>
-                          {log.staff_name}
-                        </Text>
-                      </View>
-                      <View style={{ width: 80 }} className="items-end">
-                        <View className="px-2 py-1 rounded-full" style={{ backgroundColor: isCompliant ? C.actionGreen : C.warning }}>
-                          <Text className="text-[10px] font-bold text-white">
+                        <View className="px-3 py-1.5 rounded-full" style={{ backgroundColor: isCompliant ? C.actionGreen : C.warning }}>
+                          <Text className="text-xs font-bold text-white">
                             {isCompliant ? 'COMPLIANT' : 'ATTENTION'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Bottom row: Staff + Date/Time */}
+                      <View className="flex-row items-center justify-between mt-1">
+                        <View className="flex-row items-center">
+                          <View className="w-6 h-6 rounded-full items-center justify-center mr-2" style={{ backgroundColor: '#f1f5f9' }}>
+                            <Text className="text-[10px] font-bold" style={{ color: C.textMuted }}>
+                              {log.staff_name?.charAt(0)?.toUpperCase() ?? '?'}
+                            </Text>
+                          </View>
+                          <Text className="text-sm font-medium" style={{ color: C.textPrimary }} numberOfLines={1}>
+                            {log.staff_name}
+                          </Text>
+                        </View>
+                        <View className="flex-row items-center">
+                          <Clock size={12} color={C.textMuted} />
+                          <Text className="text-xs ml-1" style={{ color: C.textMuted }}>
+                            {ctx.formatDateTime(log.timestamp)}
                           </Text>
                         </View>
                       </View>

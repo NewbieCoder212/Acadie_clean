@@ -905,6 +905,28 @@ export async function getLogsForDateRange(
   }
 }
 
+// Per-day alert schedule type (business-level)
+export interface DaySchedule {
+  enabled: boolean;
+  start: string; // "HH:MM" 24-hour format
+  end: string;   // "HH:MM" 24-hour format
+}
+
+export type AlertSchedule = {
+  [day in 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday']?: DaySchedule;
+};
+
+// Default alert schedule (Mon-Fri 08:00-18:00)
+export const DEFAULT_ALERT_SCHEDULE: AlertSchedule = {
+  monday: { enabled: true, start: '08:00', end: '18:00' },
+  tuesday: { enabled: true, start: '08:00', end: '18:00' },
+  wednesday: { enabled: true, start: '08:00', end: '18:00' },
+  thursday: { enabled: true, start: '08:00', end: '18:00' },
+  friday: { enabled: true, start: '08:00', end: '18:00' },
+  saturday: { enabled: false, start: '09:00', end: '17:00' },
+  sunday: { enabled: false, start: '09:00', end: '17:00' },
+};
+
 // Business table types
 export type SubscriptionTier = 'standard' | 'premium';
 export type SubscriptionStatus = 'trial' | 'active' | 'expired' | 'cancelled';
@@ -930,6 +952,8 @@ export interface BusinessRow {
   // Global alert settings
   global_alert_emails: string[] | null; // Array of email addresses for all location alerts
   use_global_alerts: boolean; // Toggle: if true, use global emails for all locations
+  // Per-day alert schedule (business-level, applies to all washrooms)
+  alert_schedule: AlertSchedule | null;
   created_at: string;
 }
 
@@ -950,6 +974,8 @@ export interface SafeBusinessRow {
   // Global alert settings
   global_alert_emails: string[] | null;
   use_global_alerts: boolean;
+  // Per-day alert schedule
+  alert_schedule: AlertSchedule | null;
   created_at: string;
 }
 
@@ -1088,6 +1114,7 @@ export async function loginBusiness(email: string, password: string): Promise<{ 
         staff_pin_display: legacyData.staff_pin_display ?? null,
         global_alert_emails: legacyData.global_alert_emails ?? null,
         use_global_alerts: legacyData.use_global_alerts ?? false,
+        alert_schedule: legacyData.alert_schedule ?? null,
         created_at: legacyData.created_at,
       };
 
@@ -1116,6 +1143,7 @@ export async function loginBusiness(email: string, password: string): Promise<{ 
       staff_pin_display: data.staff_pin_display ?? null,
       global_alert_emails: data.global_alert_emails ?? null,
       use_global_alerts: data.use_global_alerts ?? false,
+      alert_schedule: data.alert_schedule ?? null,
       created_at: data.created_at,
     };
 
@@ -1179,6 +1207,7 @@ export async function loginBusinessLegacy(email: string, password: string): Prom
       staff_pin_display: data.staff_pin_display ?? null,
       global_alert_emails: data.global_alert_emails ?? null,
       use_global_alerts: data.use_global_alerts ?? false,
+      alert_schedule: data.alert_schedule ?? null,
       created_at: data.created_at,
     };
 
@@ -1238,6 +1267,7 @@ export async function getCurrentSession(): Promise<{ success: boolean; data?: Sa
       staff_pin_display: data.staff_pin_display ?? null,
       global_alert_emails: data.global_alert_emails ?? null,
       use_global_alerts: data.use_global_alerts ?? false,
+      alert_schedule: data.alert_schedule ?? null,
       created_at: data.created_at,
     };
 
@@ -1280,6 +1310,7 @@ export async function getBusinessById(businessId: string): Promise<{ success: bo
       staff_pin_display: data.staff_pin_display ?? null,
       global_alert_emails: data.global_alert_emails ?? null,
       use_global_alerts: data.use_global_alerts ?? false,
+      alert_schedule: data.alert_schedule ?? null,
       created_at: data.created_at,
     };
 
@@ -1337,6 +1368,27 @@ export async function updateBusinessGlobalAlertSettings(
         global_alert_emails: settings.global_alert_emails,
         use_global_alerts: settings.use_global_alerts,
       })
+      .eq('id', businessId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+// Update business per-day alert schedule
+export async function updateBusinessAlertSchedule(
+  businessId: string,
+  schedule: AlertSchedule
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('businesses')
+      .update({ alert_schedule: schedule })
       .eq('id', businessId);
 
     if (error) {
@@ -2975,6 +3027,7 @@ export async function getManagerBusinesses(managerId: string): Promise<{ success
           staff_pin_display: business.staff_pin_display ?? null,
           global_alert_emails: business.global_alert_emails ?? null,
           use_global_alerts: business.use_global_alerts ?? false,
+          alert_schedule: business.alert_schedule ?? null,
           created_at: business.created_at,
         };
 
@@ -3533,6 +3586,7 @@ export async function validateBusinessSession(businessId: string): Promise<{
         staff_pin_display: business.staff_pin_display ?? null,
         global_alert_emails: business.global_alert_emails ?? null,
         use_global_alerts: business.use_global_alerts ?? false,
+        alert_schedule: business.alert_schedule ?? null,
         created_at: business.created_at,
       },
     };
@@ -3597,6 +3651,7 @@ export async function validateManagerBusinessAccess(
           staff_pin_display: access.business.staff_pin_display ?? null,
           global_alert_emails: access.business.global_alert_emails ?? null,
           use_global_alerts: access.business.use_global_alerts ?? false,
+          alert_schedule: access.business.alert_schedule ?? null,
           created_at: access.business.created_at,
         },
         role: access.role,

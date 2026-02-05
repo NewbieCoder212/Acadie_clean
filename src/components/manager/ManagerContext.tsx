@@ -18,6 +18,7 @@ import {
   toggleWashroomActive,
   updateBusinessAddress,
   updateBusinessGlobalAlertSettings,
+  updateBusinessAlertSchedule,
   updateWashroomPin,
   getBusinessManagers,
   inviteUserToBusiness,
@@ -34,6 +35,8 @@ import {
   ManagerPermissions,
   ManagerRole,
   SubscriptionTier,
+  AlertSchedule,
+  DEFAULT_ALERT_SCHEDULE,
 } from '@/lib/supabase';
 import { generatePDFHTML, getCheckIcon, getStatusBadge, truncateText, openPDFInNewWindow, generateIncidentReportsPDF } from '@/lib/pdf-template';
 import * as Print from 'expo-print';
@@ -53,6 +56,7 @@ export type {
   ManagerPermissions,
   ManagerRole,
   SubscriptionTier,
+  AlertSchedule,
 };
 
 export interface ManagerContextType {
@@ -82,6 +86,9 @@ export interface ManagerContextType {
   globalAlertEmails: string[];
   useGlobalAlerts: boolean;
 
+  // Per-day alert schedule
+  alertSchedule: AlertSchedule;
+
   // Helpers
   canPerformAction: (action: keyof ManagerPermissions) => boolean;
   getLocationStatus: (locationId: string) => 'clean' | 'attention' | 'unknown';
@@ -99,6 +106,7 @@ export interface ManagerContextType {
   handleDeleteLocation: (location: WashroomLocation) => void;
   handleSaveBusinessAddress: (address: string) => Promise<void>;
   handleSaveGlobalAlertSettings: (emails: string[], useGlobal: boolean) => Promise<void>;
+  handleSaveAlertSchedule: (schedule: AlertSchedule) => Promise<void>;
   handleSaveStaffPin: (locationId: string, pin: string) => Promise<void>;
   handleExport: (locationId: string) => Promise<void>;
   handlePremiumExport: (locationId: string, locationName: string, startDate: Date, endDate: Date) => Promise<void>;
@@ -156,6 +164,7 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
   // Global Alert Settings state
   const [globalAlertEmails, setGlobalAlertEmails] = useState<string[]>([]);
   const [useGlobalAlerts, setUseGlobalAlerts] = useState(false);
+  const [alertSchedule, setAlertSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
 
   // Business info
   const [businessName, setBusinessName] = useState('Acadia Facilities');
@@ -281,6 +290,7 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
             setBusinessAddress(refreshedBusiness.address || '');
             setGlobalAlertEmails(refreshedBusiness.global_alert_emails || []);
             setUseGlobalAlerts(refreshedBusiness.use_global_alerts || false);
+            setAlertSchedule(refreshedBusiness.alert_schedule || DEFAULT_ALERT_SCHEDULE);
             const washroomsResult = await getWashroomsForBusiness(refreshedBusiness.name);
             if (washroomsResult.success && washroomsResult.data) {
               setBusinessLocations(washroomsResult.data);
@@ -354,6 +364,7 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
       setBusinessAddress(businessAccess.business.address || '');
       setGlobalAlertEmails(businessAccess.business.global_alert_emails || []);
       setUseGlobalAlerts(businessAccess.business.use_global_alerts || false);
+      setAlertSchedule(businessAccess.business.alert_schedule || DEFAULT_ALERT_SCHEDULE);
       const washroomsResult = await getWashroomsForBusiness(businessAccess.business.name);
       if (washroomsResult.success && washroomsResult.data) {
         setBusinessLocations(washroomsResult.data);
@@ -482,6 +493,20 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
       Alert.alert('Success', 'Alert settings saved!\nParamètres d\'alerte enregistrés!');
     } else {
       Alert.alert('Error', result.error || 'Failed to save alert settings');
+    }
+  }, [currentBusiness]);
+
+  const handleSaveAlertSchedule = useCallback(async (schedule: AlertSchedule) => {
+    if (!currentBusiness?.id) return;
+    const result = await updateBusinessAlertSchedule(currentBusiness.id, schedule);
+    if (result.success) {
+      const updatedBusiness = { ...currentBusiness, alert_schedule: schedule };
+      await AsyncStorage.setItem('currentBusiness', JSON.stringify(updatedBusiness));
+      setCurrentBusiness(updatedBusiness);
+      setAlertSchedule(schedule);
+      Alert.alert('Success', 'Business hours schedule saved!\nHoraire enregistré!');
+    } else {
+      Alert.alert('Error', result.error || 'Failed to save schedule');
     }
   }, [currentBusiness]);
 
@@ -724,10 +749,11 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
     businessLocations, displayLocations, allLogs, recentLogs, reportedIssues, openIssues, isLoadingLogs,
     businessName, businessAddress, subscriptionTier, isPremium,
     globalAlertEmails, useGlobalAlerts,
+    alertSchedule,
     canPerformAction, getLocationStatus, getLocationUrl, formatDateTime, formatTimeAgo,
     handleRefreshData, handleLogout, handleSwitchBusiness, handleResolveIssue,
     handleSaveAlertEmail, handleToggleLocationActive, handleDeleteLocation,
-    handleSaveBusinessAddress, handleSaveGlobalAlertSettings, handleSaveStaffPin,
+    handleSaveBusinessAddress, handleSaveGlobalAlertSettings, handleSaveAlertSchedule, handleSaveStaffPin,
     handleExport, handlePremiumExport, handleExportIncidentReports, generateAuditReportPDF,
     handleView14Days, handleViewPublicPage, handleCopyUrl,
     handleInviteUser, handleRemoveUser, loadTeamMembers,

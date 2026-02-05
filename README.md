@@ -75,6 +75,7 @@ The database supports subscription tiers for future premium features. Currently 
 - **Customizable Trial Length**: Admins can set the free trial period (7, 14, 30, 60, or 90 days) when creating a new business
 - **Trial Extension**: Admins can extend a business's trial period directly from the dashboard by tapping the "Extend" button next to the trial status. Options: +7, +14, +30, +60, or +90 days
 - **Alert Threshold Options**: Alert settings support 1, 2, 4, 6, 8, 12, or 24 hour thresholds for overdue cleaning notifications
+- **Per-Day Business Hours Schedule**: Business-level alert scheduling with different start/end times for each day of the week. All washrooms inherit the business hours. Editable by managers, supervisors, and admin from both the Manager Dashboard (Settings tab) and Admin Dashboard. Changes sync bidirectionally via the `alert_schedule` JSONB column on the businesses table.
 - **Admin Dashboard Visibility**:
   - Staff PINs are displayed under business emails for quick reference (updates automatically when managers change their PIN)
   - Trial status shows days remaining and expiration date
