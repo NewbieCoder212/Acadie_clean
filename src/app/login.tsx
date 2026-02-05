@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -26,7 +26,11 @@ const STORAGE_KEYS = {
   currentBusiness: 'currentBusiness',
   selectedBusinessAccess: 'selectedBusinessAccess',
   managerBusinesses: 'managerBusinesses',
+  sessionTimestamp: 'sessionTimestamp',
 };
+
+// Session expires after 30 days (in milliseconds)
+const SESSION_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -34,10 +38,53 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
 
   // Multi-business selection state
   const [loginResult, setLoginResult] = useState<ManagerLoginResult | null>(null);
   const [showBusinessPicker, setShowBusinessPicker] = useState(false);
+
+  // Check for existing valid session on mount
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      try {
+        const [managerData, businessData, timestampStr] = await Promise.all([
+          AsyncStorage.getItem(STORAGE_KEYS.currentManager),
+          AsyncStorage.getItem(STORAGE_KEYS.currentBusiness),
+          AsyncStorage.getItem(STORAGE_KEYS.sessionTimestamp),
+        ]);
+
+        // Check if we have session data
+        if (managerData && businessData && timestampStr) {
+          const sessionTimestamp = parseInt(timestampStr, 10);
+          const now = Date.now();
+
+          // Check if session is still valid (within 30 days)
+          if (now - sessionTimestamp < SESSION_EXPIRY_MS) {
+            console.log('[Login] Valid session found, redirecting to manager dashboard');
+            router.replace('/manager');
+            return;
+          } else {
+            // Session expired - clear storage
+            console.log('[Login] Session expired, clearing storage');
+            await AsyncStorage.multiRemove([
+              STORAGE_KEYS.currentManager,
+              STORAGE_KEYS.currentBusiness,
+              STORAGE_KEYS.selectedBusinessAccess,
+              STORAGE_KEYS.managerBusinesses,
+              STORAGE_KEYS.sessionTimestamp,
+            ]);
+          }
+        }
+      } catch (err) {
+        console.error('[Login] Error checking session:', err);
+      } finally {
+        setCheckingSession(false);
+      }
+    };
+
+    checkExistingSession();
+  }, [router]);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -55,9 +102,10 @@ export default function LoginScreen() {
       if (managerResult.success && managerResult.data) {
         const { manager, businesses } = managerResult.data;
 
-        // Store manager info
+        // Store manager info and session timestamp
         await AsyncStorage.setItem(STORAGE_KEYS.currentManager, JSON.stringify(manager));
         await AsyncStorage.setItem(STORAGE_KEYS.managerBusinesses, JSON.stringify(businesses));
+        await AsyncStorage.setItem(STORAGE_KEYS.sessionTimestamp, Date.now().toString());
 
         if (businesses.length === 0) {
           // No businesses - show error
@@ -84,8 +132,9 @@ export default function LoginScreen() {
       const businessResult = await loginBusiness(email.trim(), password);
 
       if (businessResult.success && businessResult.data) {
-        // Store as legacy business session
+        // Store as legacy business session with timestamp
         await AsyncStorage.setItem(STORAGE_KEYS.currentBusiness, JSON.stringify(businessResult.data));
+        await AsyncStorage.setItem(STORAGE_KEYS.sessionTimestamp, Date.now().toString());
         router.replace('/manager');
       } else {
         setError(businessResult.error || managerResult.error || 'Login failed / Échec de connexion');
@@ -100,9 +149,10 @@ export default function LoginScreen() {
 
   const selectBusiness = async (businessAccess: ManagerBusinessAccess) => {
     try {
-      // Store selected business and permissions
+      // Store selected business, permissions, and session timestamp
       await AsyncStorage.setItem(STORAGE_KEYS.currentBusiness, JSON.stringify(businessAccess.business));
       await AsyncStorage.setItem(STORAGE_KEYS.selectedBusinessAccess, JSON.stringify(businessAccess));
+      await AsyncStorage.setItem(STORAGE_KEYS.sessionTimestamp, Date.now().toString());
 
       // Navigate to manager dashboard
       router.replace('/manager');
@@ -120,6 +170,23 @@ export default function LoginScreen() {
         managerName={loginResult.manager.name}
         onSelectBusiness={selectBusiness}
       />
+    );
+  }
+
+  // Show loading state while checking for existing session
+  if (checkingSession) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.mintBackground }}>
+        <LinearGradient
+          colors={[C.mintGradientStart, C.mintGradientEnd]}
+          style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+        >
+          <AcadiaLogo size={100} />
+          <ActivityIndicator size="large" color={C.emeraldDark} style={{ marginTop: 24 }} />
+        </LinearGradient>
+      </View>
     );
   }
 
