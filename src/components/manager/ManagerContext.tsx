@@ -435,10 +435,10 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
           )
         );
 
-        // If a cleaning log was created, refresh the logs
-        if (action?.createsLog) {
+        // If a cleaning log was created, refresh the logs to show in dashboard
+        if (action?.createsLog && currentBusiness?.name) {
           // Refresh logs to show the new entry
-          const logsResult = await getLogsForBusinessByName(businessName);
+          const logsResult = await getLogsForBusinessByName(currentBusiness.name);
           if (logsResult.success && logsResult.data) {
             setAllLogs(logsResult.data);
           }

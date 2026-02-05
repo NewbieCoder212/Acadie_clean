@@ -15,7 +15,7 @@ import {
   MapPin, ClipboardList, Settings, LogOut, RefreshCw,
   Shield, Lock, Eye, EyeOff,
 } from 'lucide-react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, cancelAnimation } from 'react-native-reanimated';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { BusinessSwitcher } from '@/components/BusinessPicker';
@@ -89,7 +89,30 @@ function TabBar({ activeTab, onTabPress, openIssueCount }: { activeTab: Dashboar
 function ManagerDashboardContent() {
   const ctx = useManagerContext();
   const [activeTab, setActiveTab] = useState<DashboardTab>('locations');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const isAuthenticated = useStore((s) => s.isManagerAuthenticated);
+
+  // Spinning animation for refresh button
+  const rotation = useSharedValue(0);
+  const animatedRefreshStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    // Start spinning animation
+    rotation.value = withRepeat(
+      withTiming(360, { duration: 1000, easing: Easing.linear }),
+      -1,
+      false
+    );
+    await ctx.handleRefreshData();
+    // Stop spinning
+    cancelAnimation(rotation);
+    rotation.value = 0;
+    setIsRefreshing(false);
+  };
 
   if (ctx.isCheckingAuth) {
     return (
@@ -136,11 +159,14 @@ function ManagerDashboardContent() {
 
             <View className="flex-row items-center gap-2">
               <Pressable
-                onPress={ctx.handleRefreshData}
+                onPress={handleRefresh}
+                disabled={isRefreshing}
                 className="p-2 rounded-lg active:opacity-70"
                 style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
               >
-                <RefreshCw size={16} color="#fff" />
+                <Animated.View style={animatedRefreshStyle}>
+                  <RefreshCw size={16} color="#fff" />
+                </Animated.View>
               </Pressable>
               <Pressable
                 onPress={ctx.handleLogout}
