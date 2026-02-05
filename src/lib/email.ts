@@ -3,44 +3,48 @@
 // Base URL for email links and API calls
 const BASE_URL = process.env.EXPO_PUBLIC_APP_URL || 'https://app.acadiacleaniq.ca';
 
+// API secret for authenticating with the email endpoint
+const API_SECRET = process.env.EXPO_PUBLIC_API_SECRET || '';
+
 // Send email via the secure API endpoint
 async function sendEmailViaAPI(params: { to: string; subject: string; html: string; text?: string }): Promise<{ success: boolean; error?: string }> {
   try {
     const apiUrl = `${BASE_URL}/api/send-email`;
-    console.log('[Email] Sending to:', params.to);
-    console.log('[Email] Subject:', params.subject);
-    console.log('[Email] API URL:', apiUrl);
+
+    if (!API_SECRET) {
+      if (__DEV__) {
+        console.warn('[Email] API_SECRET not configured - emails will fail');
+      }
+      return { success: false, error: 'Email service not configured' };
+    }
 
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-API-Secret': API_SECRET,
       },
       body: JSON.stringify(params),
     });
 
-    console.log('[Email] Response status:', response.status);
-
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({})) as { error?: string };
-      console.log('[Email] Error response:', errorData);
       return {
         success: false,
         error: errorData.error || `Failed to send email (${response.status})`
       };
     }
 
-    const successData = await response.json().catch(() => ({})) as { id?: string };
-    console.log('[Email] Success! Email ID:', successData.id);
     return { success: true };
   } catch (error) {
-    console.error('[Email] Exception:', error);
     return {
       success: false,
       error: 'Failed to connect to email service'
     };
   }
 }
+
+import { escapeHtml } from './sanitize';
 
 interface EmailParams {
   to: string | string[]; // Support single email or array of emails
@@ -54,9 +58,15 @@ interface EmailParams {
 
 /**
  * Generate HTML email template for attention required alerts
+ * All user inputs are sanitized to prevent XSS
  */
 function generateEmailHTML(params: EmailParams): string {
-  const { locationName, locationId, staffName, notes, uncheckedItems, timestamp } = params;
+  // Sanitize all user-provided inputs
+  const locationName = escapeHtml(params.locationName);
+  const locationId = escapeHtml(params.locationId);
+  const staffName = escapeHtml(params.staffName);
+  const notes = escapeHtml(params.notes);
+  const { timestamp } = params;
 
   const formattedDate = timestamp.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -71,8 +81,9 @@ function generateEmailHTML(params: EmailParams): string {
     hour12: true,
   });
 
-  const uncheckedItemsHTML = uncheckedItems
-    .map(item => `<li style="color: #d97706; margin-bottom: 4px;">${item}</li>`)
+  // Sanitize each checklist item
+  const uncheckedItemsHTML = params.uncheckedItems
+    .map(item => `<li style="color: #d97706; margin-bottom: 4px;">${escapeHtml(item)}</li>`)
     .join('');
 
   return `
@@ -359,11 +370,17 @@ interface IssueReportParams {
 
 /**
  * Generate HTML email template for urgent issue reports
+ * All user inputs are sanitized to prevent XSS
  */
 function generateIssueReportHTML(params: IssueReportParams): string {
-  const { locationName, locationId, issueType, comment, timestamp } = params;
+  // Sanitize all user-provided inputs
+  const locationName = escapeHtml(params.locationName);
+  const locationId = escapeHtml(params.locationId);
+  const issueType = escapeHtml(params.issueType);
+  const comment = escapeHtml(params.comment);
+  const { timestamp } = params;
 
-  const issueLabel = ISSUE_TYPES.find(t => t.value === issueType)?.label || issueType;
+  const issueLabel = ISSUE_TYPES.find(t => t.value === params.issueType)?.label || issueType;
 
   const formattedDate = timestamp.toLocaleDateString('en-US', {
     weekday: 'long',

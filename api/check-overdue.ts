@@ -408,12 +408,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log('[check-overdue] Starting overdue check...');
 
   try {
-    // Get all active washrooms with alerts enabled
+    // Calculate the threshold time for rate limiting (2 hours ago)
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+
+    // OPTIMIZED QUERY: Filter at database level to reduce data transfer
+    // - Only active washrooms with alerts enabled
+    // - Exclude washrooms that received alerts in the last 2 hours
+    // - Only fetch necessary columns
     const { data: washrooms, error } = await supabase
       .from('washrooms')
-      .select('*')
+      .select(`
+        id,
+        business_name,
+        room_name,
+        alert_email,
+        alert_enabled,
+        alert_threshold_hours,
+        business_hours_start,
+        business_hours_end,
+        alert_days,
+        timezone,
+        last_cleaned,
+        last_alert_sent_at,
+        is_active
+      `)
       .eq('is_active', true)
-      .eq('alert_enabled', true);
+      .eq('alert_enabled', true)
+      .or(`last_alert_sent_at.is.null,last_alert_sent_at.lt.${twoHoursAgo}`);
 
     if (error) {
       console.error('[check-overdue] Database error:', error);
@@ -422,12 +443,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (!washrooms || washrooms.length === 0) {
-      console.log('[check-overdue] No washrooms with alerts enabled');
+      console.log('[check-overdue] No washrooms to check (all recently alerted or none enabled)');
       res.status(200).json({ message: 'No washrooms to check', checked: 0, alerts: 0 });
       return;
     }
 
-    console.log(`[check-overdue] Checking ${washrooms.length} washrooms...`);
+    console.log(`[check-overdue] Checking ${washrooms.length} eligible washrooms...`);
 
     let alertsSent = 0;
     const results: Array<{ washroom: string; status: string }> = [];

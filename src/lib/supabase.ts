@@ -3447,3 +3447,171 @@ export async function insertWashroomWithBusinessId(
     return { success: false, error: String(error) };
   }
 }
+
+// ============================================
+// SESSION VALIDATION
+// Server-side validation of manager/business sessions
+// ============================================
+
+/**
+ * Validate a manager session by checking if the manager exists and is active.
+ * Call this on critical operations to ensure terminated users can't act.
+ */
+export async function validateManagerSession(managerId: string): Promise<{
+  valid: boolean;
+  manager?: SafeManagerRow;
+  error?: string;
+}> {
+  try {
+    const { data: manager, error } = await supabase
+      .from('managers')
+      .select('id, email, name, phone, is_active, created_at')
+      .eq('id', managerId)
+      .single();
+
+    if (error || !manager) {
+      return { valid: false, error: 'Session invalid. Please log in again.' };
+    }
+
+    if (!manager.is_active) {
+      return { valid: false, error: 'Your account has been deactivated. Please contact support.' };
+    }
+
+    return {
+      valid: true,
+      manager: {
+        id: manager.id,
+        email: manager.email,
+        name: manager.name,
+        phone: manager.phone,
+        is_active: manager.is_active,
+        created_at: manager.created_at,
+      },
+    };
+  } catch (error) {
+    return { valid: false, error: 'Failed to validate session' };
+  }
+}
+
+/**
+ * Validate a business session and check if it's still active.
+ */
+export async function validateBusinessSession(businessId: string): Promise<{
+  valid: boolean;
+  business?: SafeBusinessRow;
+  error?: string;
+}> {
+  try {
+    const { data: business, error } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('id', businessId)
+      .single();
+
+    if (error || !business) {
+      return { valid: false, error: 'Session invalid. Please log in again.' };
+    }
+
+    if (!business.is_active) {
+      return { valid: false, error: 'Your business account has been deactivated. Please contact support.' };
+    }
+
+    return {
+      valid: true,
+      business: {
+        id: business.id,
+        name: business.name,
+        email: business.email,
+        address: business.address ?? null,
+        is_admin: business.is_admin,
+        is_active: business.is_active,
+        subscription_tier: business.subscription_tier ?? 'standard',
+        subscription_status: business.subscription_status ?? 'trial',
+        trial_start_date: business.trial_start_date ?? null,
+        trial_ends_at: business.trial_ends_at ?? null,
+        subscription_expires_at: business.subscription_expires_at ?? null,
+        staff_pin_display: business.staff_pin_display ?? null,
+        global_alert_emails: business.global_alert_emails ?? null,
+        use_global_alerts: business.use_global_alerts ?? false,
+        created_at: business.created_at,
+      },
+    };
+  } catch (error) {
+    return { valid: false, error: 'Failed to validate session' };
+  }
+}
+
+/**
+ * Validate that a manager has access to a specific business
+ */
+export async function validateManagerBusinessAccess(
+  managerId: string,
+  businessId: string
+): Promise<{
+  valid: boolean;
+  access?: ManagerBusinessAccess;
+  error?: string;
+}> {
+  try {
+    // First validate the manager session
+    const managerValidation = await validateManagerSession(managerId);
+    if (!managerValidation.valid) {
+      return { valid: false, error: managerValidation.error };
+    }
+
+    // Then check business access
+    const { data: access, error } = await supabase
+      .from('manager_businesses')
+      .select(`
+        *,
+        business:businesses(*)
+      `)
+      .eq('manager_id', managerId)
+      .eq('business_id', businessId)
+      .single();
+
+    if (error || !access) {
+      return { valid: false, error: 'You no longer have access to this business.' };
+    }
+
+    // Check if business is active
+    if (!access.business?.is_active) {
+      return { valid: false, error: 'This business account has been deactivated.' };
+    }
+
+    return {
+      valid: true,
+      access: {
+        business: {
+          id: access.business.id,
+          name: access.business.name,
+          email: access.business.email,
+          address: access.business.address ?? null,
+          is_admin: access.business.is_admin,
+          is_active: access.business.is_active,
+          subscription_tier: access.business.subscription_tier ?? 'standard',
+          subscription_status: access.business.subscription_status ?? 'trial',
+          trial_start_date: access.business.trial_start_date ?? null,
+          trial_ends_at: access.business.trial_ends_at ?? null,
+          subscription_expires_at: access.business.subscription_expires_at ?? null,
+          staff_pin_display: access.business.staff_pin_display ?? null,
+          global_alert_emails: access.business.global_alert_emails ?? null,
+          use_global_alerts: access.business.use_global_alerts ?? false,
+          created_at: access.business.created_at,
+        },
+        role: access.role,
+        permissions: {
+          role: access.role,
+          canEditLocations: access.can_edit_locations,
+          canEditSettings: access.can_edit_settings,
+          canInviteUsers: access.can_invite_users,
+          canViewBilling: access.can_view_billing,
+          canExportReports: access.can_export_reports,
+          canResolveIssues: access.can_resolve_issues,
+        },
+      },
+    };
+  } catch (error) {
+    return { valid: false, error: 'Failed to validate access' };
+  }
+}
