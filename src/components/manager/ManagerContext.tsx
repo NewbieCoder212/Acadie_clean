@@ -352,9 +352,27 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
   // ============================
   // Actions
   // ============================
-  const handleRefreshData = useCallback(() => {
-    fetchAllData();
-  }, [currentBusiness, isAuthenticated]);
+  const handleRefreshData = useCallback(async () => {
+    setIsLoadingLogs(true);
+    try {
+      if (currentBusiness && !currentBusiness.is_admin) {
+        const [logsResult, issuesResult, washroomsResult] = await Promise.all([
+          getLogsForBusinessByName(currentBusiness.name),
+          getIssuesForBusinessByName(currentBusiness.name),
+          getWashroomsForBusiness(currentBusiness.name),
+        ]);
+        if (logsResult.success && logsResult.data) setAllLogs(logsResult.data);
+        if (issuesResult.success && issuesResult.data) setReportedIssues(issuesResult.data);
+        if (washroomsResult.success && washroomsResult.data) setBusinessLocations(washroomsResult.data);
+      } else {
+        const logsResult = await getSupabase6MonthLogs('');
+        if (logsResult.success && logsResult.data) setAllLogs(logsResult.data);
+      }
+    } catch (error) {
+      console.error('[Manager] Error refreshing data:', error);
+    }
+    setIsLoadingLogs(false);
+  }, [currentBusiness]);
 
   const handleLogout = useCallback(async () => {
     await logoutBusiness();
@@ -703,6 +721,9 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
       id: issue.id, location_name: issue.location_name, issue_type: issue.issue_type,
       description: issue.description, status: issue.status,
       created_at: issue.created_at, resolved_at: issue.resolved_at,
+      resolution_action: issue.resolution_action,
+      resolution_action_label: issue.resolution_action_label,
+      resolved_by: issue.resolved_by,
     }));
     if (issues.length === 0) {
       Alert.alert('No Data', 'No incident reports found for this business.');

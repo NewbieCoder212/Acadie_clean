@@ -17,7 +17,7 @@ The app uses a consistent color palette across all screens:
 ## Features
 
 - **Location Management**: Business owners can create and manage multiple washroom locations
-- **Alert Email Persistence**: The alert email entered during location creation is saved to Supabase and pre-filled when viewing location settings
+- **Alert Email Persistence**: The alert email entered during location creation is saved to Supabase and pre-filled when viewing location settings. Saving an alert email automatically enables overdue cleaning alerts for that location.
 - **Staff PIN Protection**: Each location has a 4-5 digit PIN that staff must enter before logging a cleaning (prevents fake log submissions)
 - **Unique Public URLs**: Each location has a unique URL (`/washroom/[location_id]`) for staff to log cleanings via QR code
 - **Bilingual Checklist**: Staff complete a 12-item checklist organized in 3 sections (English/French):
@@ -58,7 +58,7 @@ The app uses a consistent color palette across all screens:
   - **Maintenance Required**: "Fixed", "Scheduled for Repair", or "Not an Issue"
   - **Safety Concern**: "Resolved", "Area Secured", or "Not an Issue"
   - **Other**: "Addressed", "Cleaned" (creates cleaning log), or "Not an Issue"
-  - Options that create a cleaning log automatically update the location status to CLEAN
+  - Options that create a cleaning log automatically update the location status to CLEAN and update the `last_cleaned` timestamp on both the manager dashboard and public status card
   - All labels are bilingual (English/French)
 - **Compliance Record**: Displays the 2 most recent cleaning entries with date, time, staff name, and status
 - **Password-Protected Access**: Manager Dashboard requires password authentication from the main page

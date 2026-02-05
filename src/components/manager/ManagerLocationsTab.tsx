@@ -91,11 +91,16 @@ export function ManagerLocationsTab() {
     setShowExportModal(false);
   };
 
-  // Get last cleaned time for a location
-  const getLastCleanedTime = (locationId: string) => {
+  // Get last two cleaning times for a location
+  const getRecentCleaningTimes = (locationId: string) => {
     const locationLogs = ctx.allLogs.filter(log => log.location_id === locationId);
-    if (locationLogs.length === 0) return null;
-    return ctx.formatDateTime(locationLogs[0].timestamp);
+    if (locationLogs.length === 0) return { first: null, second: null, firstStaff: null, secondStaff: null };
+    return {
+      first: ctx.formatDateTime(locationLogs[0].timestamp),
+      firstStaff: locationLogs[0].staff_name,
+      second: locationLogs[1] ? ctx.formatDateTime(locationLogs[1].timestamp) : null,
+      secondStaff: locationLogs[1]?.staff_name || null,
+    };
   };
 
   if (ctx.displayLocations.length === 0) {
@@ -127,7 +132,7 @@ export function ManagerLocationsTab() {
           const isInactive = location.isActive === false;
           const status = ctx.getLocationStatus(location.id);
           const isNew = status === 'unknown' && !isInactive;
-          const lastCleaned = getLastCleanedTime(location.id);
+          const recentCleanings = getRecentCleaningTimes(location.id);
 
           const statusConfig = isInactive
             ? { color: '#94a3b8', bg: '#f1f5f9', text: 'INACTIVE', textFr: 'Inactif', icon: Power, borderColor: '#e2e8f0' }
@@ -189,16 +194,39 @@ export function ManagerLocationsTab() {
                       {location.name}
                     </Text>
 
-                    {/* Last cleaned info */}
-                    {lastCleaned ? (
-                      <View className="flex-row items-center py-2.5 px-3 rounded-xl" style={{ backgroundColor: '#f8fafc' }}>
-                        <Clock size={16} color={C.textMuted} />
-                        <View className="ml-2.5">
-                          <Text className="text-xs font-medium" style={{ color: C.textMuted }}>Last Cleaned / Dernier nettoyage</Text>
-                          <Text className="text-sm font-semibold mt-0.5" style={{ color: C.textPrimary }}>
-                            {lastCleaned}
+                    {/* Recent Cleanings - shows last two timestamps like public page */}
+                    {recentCleanings.first ? (
+                      <View className="py-2.5 px-3 rounded-xl" style={{ backgroundColor: '#f8fafc' }}>
+                        <View className="flex-row items-center mb-2">
+                          <Clock size={14} color={C.textMuted} />
+                          <Text className="text-xs font-medium ml-1.5" style={{ color: C.textMuted }}>
+                            Recent Cleanings / Nettoyages récents
                           </Text>
                         </View>
+                        {/* Most recent cleaning */}
+                        <View className="flex-row items-center justify-between">
+                          <Text className="text-sm font-semibold" style={{ color: C.textPrimary }}>
+                            {recentCleanings.first}
+                          </Text>
+                          {recentCleanings.firstStaff && (
+                            <Text className="text-xs" style={{ color: C.textMuted }}>
+                              {recentCleanings.firstStaff}
+                            </Text>
+                          )}
+                        </View>
+                        {/* Second most recent cleaning */}
+                        {recentCleanings.second && (
+                          <View className="flex-row items-center justify-between mt-2 pt-2" style={{ borderTopWidth: 1, borderTopColor: '#e2e8f0' }}>
+                            <Text className="text-sm" style={{ color: C.textMuted }}>
+                              {recentCleanings.second}
+                            </Text>
+                            {recentCleanings.secondStaff && (
+                              <Text className="text-xs" style={{ color: C.textMuted }}>
+                                {recentCleanings.secondStaff}
+                              </Text>
+                            )}
+                          </View>
+                        )}
                       </View>
                     ) : (
                       <View className="flex-row items-center py-2.5 px-3 rounded-xl" style={{ backgroundColor: statusConfig.bg }}>
