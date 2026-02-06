@@ -12,11 +12,12 @@ async function sendEmailViaAPI(params: { to: string; subject: string; html: stri
     const apiUrl = `${BASE_URL}/api/send-email`;
 
     if (!API_SECRET) {
-      if (__DEV__) {
-        console.warn('[Email] API_SECRET not configured - emails will fail');
-      }
+      console.error('[Email] EXPO_PUBLIC_API_SECRET not configured - emails will fail');
       return { success: false, error: 'Email service not configured' };
     }
+
+    console.log('[Email] Sending email to:', params.to);
+    console.log('[Email] API URL:', apiUrl);
 
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -27,16 +28,21 @@ async function sendEmailViaAPI(params: { to: string; subject: string; html: stri
       body: JSON.stringify(params),
     });
 
+    console.log('[Email] Response status:', response.status);
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({})) as { error?: string };
+      console.error('[Email] API error:', response.status, errorData);
       return {
         success: false,
         error: errorData.error || `Failed to send email (${response.status})`
       };
     }
 
+    console.log('[Email] Email sent successfully');
     return { success: true };
   } catch (error) {
+    console.error('[Email] Exception:', error);
     return {
       success: false,
       error: 'Failed to connect to email service'

@@ -469,10 +469,19 @@ export default function WashroomPublicScreen() {
 
       // Try to send email notification (non-blocking - issue is already saved)
       const insertedIssueId = supabaseResult.data?.id;
+      console.log('[Issue] Issue saved, attempting to send email notification...');
 
       // Get all alert recipients (global + location-specific)
       getAlertRecipientsForWashroom(id || '').then(recipientsResult => {
+        console.log('[Issue] Alert recipients result:', recipientsResult);
         const recipientEmails = recipientsResult.emails;
+
+        if (!recipientEmails || recipientEmails.length === 0) {
+          console.log('[Issue] No alert recipients found!');
+          return;
+        }
+
+        console.log('[Issue] Sending email to:', recipientEmails);
 
         sendIssueReportEmail({
           to: recipientEmails,
@@ -484,9 +493,15 @@ export default function WashroomPublicScreen() {
           issueId: insertedIssueId,
         }).then(result => {
           if (!result.success) {
-            console.log('[Issue] Email notification failed (issue still saved):', result.error);
+            console.error('[Issue] Email notification FAILED:', result.error);
+          } else {
+            console.log('[Issue] Email notification sent successfully!');
           }
+        }).catch(err => {
+          console.error('[Issue] Email send exception:', err);
         });
+      }).catch(err => {
+        console.error('[Issue] Failed to get alert recipients:', err);
       });
 
     } catch (error) {

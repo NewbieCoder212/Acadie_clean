@@ -6,11 +6,16 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY ?? '';
 const API_SECRET = process.env.API_SECRET ?? '';
 const DEFAULT_FROM_EMAIL = 'Acadia Clean <alerts@acadiacleaniq.ca>';
 
-// Allowed origins for CORS (production only)
+// Allowed origins for CORS
 const ALLOWED_ORIGINS = [
   'https://app.acadiacleaniq.ca',
   'https://acadiacleaniq.vercel.app',
 ];
+
+// Check if origin is from Vibecode dev environment
+function isVibecodeOrigin(origin: string): boolean {
+  return origin.includes('.dev.vibecode.run') || origin.includes('.vibecode.run');
+}
 
 interface VercelRequest {
   method: string;
@@ -37,8 +42,8 @@ interface VercelResponse {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const origin = req.headers.origin || '';
 
-  // Set CORS headers - only allow our domains
-  if (ALLOWED_ORIGINS.includes(origin)) {
+  // Set CORS headers - allow our domains and Vibecode dev environments
+  if (ALLOWED_ORIGINS.includes(origin) || isVibecodeOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else if (process.env.NODE_ENV === 'development') {
     // Allow localhost in development

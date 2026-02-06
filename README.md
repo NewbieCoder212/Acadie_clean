@@ -406,6 +406,20 @@ Email alerts are sent automatically when staff submit cleaning logs with "Attent
 
 **Auto-Resolve Feature:** When a cleaner comes back and logs a "Complete" cleaning, any previous "Attention Required" entries for that location are automatically marked as resolved. This eliminates the need for supervisors to manually resolve issues - the next cleaning naturally resolves them.
 
+### Email Alert Troubleshooting
+
+If email alerts are not being sent, check the following:
+
+1. **Vercel Environment Variables**: In your Vercel project settings, ensure these are configured:
+   - `API_SECRET` - Must match `EXPO_PUBLIC_API_SECRET` in `.env` EXACTLY
+   - `RESEND_API_KEY` - Your Resend API key for sending emails
+
+2. **Check Vercel Logs**: If you see 401 errors on `/api/send-email`, the `API_SECRET` doesn't match between client and server
+
+3. **Check Browser Console**: Open developer tools (F12) and look for `[Email]` or `[Issue]` log messages when submitting an issue
+
+4. **Alert Email Configuration**: Make sure the alert email is set in the Location Settings (visible on the screenshot with "Alert Email" field)
+
 ## System Readiness (v1.0 - Soft Launch Ready)
 
 All critical flows verified:
