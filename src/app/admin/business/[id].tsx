@@ -1346,7 +1346,11 @@ export default function BusinessDetailScreen() {
                     onChangeText={setNewPassword}
                     placeholder="Enter new password"
                     placeholderTextColor={COLORS.textMuted}
-                    secureTextEntry
+                    autoComplete="off"
+                    autoCorrect={false}
+                    spellCheck={false}
+                    blurOnSubmit={false}
+                    onSubmitEditing={(e) => e.preventDefault?.()}
                     className="flex-1 rounded-lg px-3 py-2"
                     style={{
                       backgroundColor: COLORS.primaryLight,
