@@ -6,7 +6,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
-  TextInput,
   Alert,
   Switch,
   Platform,
@@ -39,6 +38,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { WebSafeInput } from '@/components/WebSafeInput';
 import {
   BusinessRow,
   getAllBusinesses,
@@ -1201,12 +1201,12 @@ export default function AdminDashboardScreen() {
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                   Business Name
                 </Text>
-                <TextInput
+                <WebSafeInput
                   value={newBusinessName}
                   onChangeText={setNewBusinessName}
                   placeholder="e.g., Hotel Marais"
                   placeholderTextColor={COLORS.textMuted}
-                  className="rounded-xl px-4 py-3"
+                  inputType="text"
                   style={{
                     backgroundColor: COLORS.primaryLight,
                     fontSize: 16,
@@ -1219,14 +1219,12 @@ export default function AdminDashboardScreen() {
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                   Manager Email
                 </Text>
-                <TextInput
+                <WebSafeInput
                   value={newBusinessEmail}
                   onChangeText={setNewBusinessEmail}
                   placeholder="manager@business.com"
                   placeholderTextColor={COLORS.textMuted}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  className="rounded-xl px-4 py-3"
+                  inputType="text"
                   style={{
                     backgroundColor: COLORS.primaryLight,
                     fontSize: 16,
@@ -1239,12 +1237,12 @@ export default function AdminDashboardScreen() {
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                   Password
                 </Text>
-                <TextInput
+                <WebSafeInput
                   value={newBusinessPassword}
                   onChangeText={setNewBusinessPassword}
                   placeholder="Create password"
                   placeholderTextColor={COLORS.textMuted}
-                  className="rounded-xl px-4 py-3"
+                  inputType="text"
                   style={{
                     backgroundColor: COLORS.primaryLight,
                     fontSize: 16,
@@ -1260,12 +1258,12 @@ export default function AdminDashboardScreen() {
                 <Text className="text-xs mb-1" style={{ color: COLORS.textMuted }}>
                   Adresse de l'entreprise (optional)
                 </Text>
-                <TextInput
+                <WebSafeInput
                   value={newBusinessAddress}
                   onChangeText={setNewBusinessAddress}
                   placeholder="Enter business address"
                   placeholderTextColor={COLORS.textMuted}
-                  className="rounded-xl px-4 py-3"
+                  inputType="text"
                   style={{
                     backgroundColor: COLORS.primaryLight,
                     fontSize: 16,
