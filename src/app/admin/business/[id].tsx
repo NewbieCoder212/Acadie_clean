@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -104,6 +104,14 @@ const COLORS = {
 export default function BusinessDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+
+  // Stabilize id to prevent re-renders on web when typing in inputs
+  const stableIdRef = useRef(id);
+  if (id && id !== stableIdRef.current) {
+    stableIdRef.current = id;
+  }
+  const stableId = stableIdRef.current;
+
   const [business, setBusiness] = useState<BusinessRow | null>(null);
   const [washrooms, setWashrooms] = useState<WashroomRow[]>([]);
   const [allLogs, setAllLogs] = useState<CleaningLogRow[]>([]);
@@ -297,26 +305,26 @@ export default function BusinessDetailScreen() {
   };
 
   useEffect(() => {
-    if (id) {
+    if (stableId) {
       loadData();
     }
 
     // Auto-refresh every 30 seconds to keep data current
     const refreshInterval = setInterval(() => {
-      if (id && !isLoading) {
+      if (stableId && !isLoading) {
         loadDataSilent();
       }
     }, 30000);
 
     return () => clearInterval(refreshInterval);
-  }, [id]);
+  }, [stableId]);
 
   // Silent data load for auto-refresh (no loading spinner)
   const loadDataSilent = async () => {
     try {
       const businessesResult = await getAllBusinesses();
       if (businessesResult.success && businessesResult.data) {
-        const foundBusiness = businessesResult.data.find(b => b.id === id);
+        const foundBusiness = businessesResult.data.find(b => b.id === stableId);
         if (foundBusiness) {
           setBusiness(foundBusiness);
           setBusinessSchedule(foundBusiness.alert_schedule as AlertSchedule ?? DEFAULT_ALERT_SCHEDULE);
@@ -360,7 +368,7 @@ export default function BusinessDetailScreen() {
     setIsRefreshing(true);
     await loadDataSilent();
     setIsRefreshing(false);
-  }, [id]);
+  }, [stableId]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -368,7 +376,7 @@ export default function BusinessDetailScreen() {
       // Get business details from all businesses
       const businessesResult = await getAllBusinesses();
       if (businessesResult.success && businessesResult.data) {
-        const foundBusiness = businessesResult.data.find(b => b.id === id);
+        const foundBusiness = businessesResult.data.find(b => b.id === stableId);
         if (foundBusiness) {
           setBusiness(foundBusiness);
           setBusinessAddress(foundBusiness.address || '');
@@ -1402,6 +1410,9 @@ export default function BusinessDetailScreen() {
                     placeholderTextColor={COLORS.textMuted}
                     keyboardType="number-pad"
                     maxLength={5}
+                    autoComplete="off"
+                    autoCorrect={false}
+                    blurOnSubmit={false}
                     className="flex-1 rounded-lg px-3 py-2"
                     style={{
                       backgroundColor: COLORS.primaryLight,
