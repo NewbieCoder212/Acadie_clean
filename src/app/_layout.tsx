@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, Component, ReactNode } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -245,22 +245,33 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
-  // Start offline sync listener on app mount
+  // Start offline sync listener on app mount - only on native (causes issues on web)
   useEffect(() => {
-    startOfflineSync();
-    return () => {
-      stopOfflineSync();
-    };
+    if (Platform.OS !== 'web') {
+      startOfflineSync();
+      return () => {
+        stopOfflineSync();
+      };
+    }
   }, []);
+
+  // KeyboardProvider causes issues on web - only use on native
+  const content = (
+    <>
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+      <RootLayoutNav colorScheme={colorScheme} />
+    </>
+  );
 
   return (
     <GlobalErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView style={{ flex: 1 }}>
-          <KeyboardProvider>
-            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-            <RootLayoutNav colorScheme={colorScheme} />
-          </KeyboardProvider>
+          {Platform.OS === 'web' ? content : (
+            <KeyboardProvider>
+              {content}
+            </KeyboardProvider>
+          )}
         </GestureHandlerRootView>
       </QueryClientProvider>
     </GlobalErrorBoundary>

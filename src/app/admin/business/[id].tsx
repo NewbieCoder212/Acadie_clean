@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -103,14 +103,10 @@ const COLORS = {
 
 export default function BusinessDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string }>();
 
-  // Stabilize id to prevent re-renders on web when typing in inputs
-  const stableIdRef = useRef(id);
-  if (id && id !== stableIdRef.current) {
-    stableIdRef.current = id;
-  }
-  const stableId = stableIdRef.current;
+  // Stabilize id using useMemo to prevent re-renders on web
+  const stableId = useMemo(() => params.id, [params.id]);
 
   const [business, setBusiness] = useState<BusinessRow | null>(null);
   const [washrooms, setWashrooms] = useState<WashroomRow[]>([]);
@@ -1354,11 +1350,6 @@ export default function BusinessDetailScreen() {
                     onChangeText={setNewPassword}
                     placeholder="Enter new password"
                     placeholderTextColor={COLORS.textMuted}
-                    autoComplete="off"
-                    autoCorrect={false}
-                    spellCheck={false}
-                    blurOnSubmit={false}
-                    onSubmitEditing={(e) => e.preventDefault?.()}
                     className="flex-1 rounded-lg px-3 py-2"
                     style={{
                       backgroundColor: COLORS.primaryLight,
@@ -1408,11 +1399,6 @@ export default function BusinessDetailScreen() {
                     onChangeText={(text) => setNewUniversalPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
                     placeholder="New PIN (4-5 digits)"
                     placeholderTextColor={COLORS.textMuted}
-                    keyboardType="number-pad"
-                    maxLength={5}
-                    autoComplete="off"
-                    autoCorrect={false}
-                    blurOnSubmit={false}
                     className="flex-1 rounded-lg px-3 py-2"
                     style={{
                       backgroundColor: COLORS.primaryLight,
