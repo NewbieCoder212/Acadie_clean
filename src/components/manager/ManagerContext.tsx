@@ -3,6 +3,7 @@ import { Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useStore, WashroomLocation } from '@/lib/store';
+import { formatDateTimeAtlantic, isTodayAtlantic } from '@/lib/timezone';
 import {
   getLogs6Months as getSupabase6MonthLogs,
   getLogs1Month as getSupabase1MonthLogs,
@@ -235,19 +236,11 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const formatDateTime = useCallback((timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric',
-      hour: 'numeric', minute: '2-digit', hour12: true,
-    });
+    return formatDateTimeAtlantic(timestamp);
   }, []);
 
   const formatTimeAgo = useCallback((timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric',
-      hour: 'numeric', minute: '2-digit', hour12: true,
-    });
+    return formatDateTimeAtlantic(timestamp);
   }, []);
 
   // ============================

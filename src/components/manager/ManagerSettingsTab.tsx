@@ -6,12 +6,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Mail, ChevronRight, Save, Plus, X, ClipboardList, FileText,
-  Calendar, Users, UserPlus, Shield, Eye, Crown, Trash2, Clock,
+  Calendar, Users, UserPlus, Shield, Eye, Crown, Trash2, Clock, Key,
 } from 'lucide-react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useManagerContext, SafeManagerRow, ManagerPermissions, ManagerRole, AlertSchedule } from './ManagerContext';
-import { DEFAULT_ALERT_SCHEDULE } from '@/lib/supabase';
+import { DEFAULT_ALERT_SCHEDULE, updateAllWashroomPinsForBusiness } from '@/lib/supabase';
 import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
+import { TimePickerModal } from '@/components/TimePickerModal';
+import { parseTimeString } from '@/lib/timezone';
 
 type TeamMember = SafeManagerRow & { role: ManagerRole; permissions: ManagerPermissions };
 
@@ -26,7 +28,21 @@ export function ManagerSettingsTab() {
 
   // Per-day schedule
   const [localSchedule, setLocalSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
-  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+
+  // Combined saving state for alerts + schedule
+  const [isSavingAllSettings, setIsSavingAllSettings] = useState(false);
+
+  // PIN Management
+  const [showPinSection, setShowPinSection] = useState(false);
+  const [newUniversalPin, setNewUniversalPin] = useState('');
+  const [confirmUniversalPin, setConfirmUniversalPin] = useState('');
+  const [isSavingPin, setIsSavingPin] = useState(false);
+
+  // Time Picker Modal
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [timePickerDay, setTimePickerDay] = useState<string>('');
+  const [timePickerField, setTimePickerField] = useState<'start' | 'end'>('start');
+  const [timePickerInitial, setTimePickerInitial] = useState('08:00');
 
   // Inspector / Audit
   const [showInspector, setShowInspector] = useState(false);
@@ -80,10 +96,41 @@ export function ManagerSettingsTab() {
     setIsSavingAlerts(false);
   };
 
-  const handleSaveSchedule = async () => {
-    setIsSavingSchedule(true);
+  // Combined save for alert emails + schedule
+  const handleSaveAllAlertSettings = async () => {
+    setIsSavingAllSettings(true);
+    await ctx.handleSaveGlobalAlertSettings(localGlobalEmails, localUseGlobal);
     await ctx.handleSaveAlertSchedule(localSchedule);
-    setIsSavingSchedule(false);
+    setIsSavingAllSettings(false);
+    Alert.alert('Success', 'Alert settings and schedule saved!\nParamètres d\'alerte et horaire enregistrés!');
+  };
+
+  // Save universal PIN for all washrooms
+  const handleSaveUniversalPin = async () => {
+    if (!newUniversalPin || newUniversalPin.length < 4 || newUniversalPin.length > 5 || !/^\d{4,5}$/.test(newUniversalPin)) {
+      Alert.alert('Error', 'Please enter a valid 4 or 5-digit PIN');
+      return;
+    }
+    if (newUniversalPin !== confirmUniversalPin) {
+      Alert.alert('Error', 'PINs do not match');
+      return;
+    }
+    if (!ctx.currentBusiness?.name) {
+      Alert.alert('Error', 'Business not found');
+      return;
+    }
+    setIsSavingPin(true);
+    const result = await updateAllWashroomPinsForBusiness(ctx.currentBusiness.name, newUniversalPin);
+    setIsSavingPin(false);
+    if (result.success) {
+      Alert.alert('Success', `PIN updated for ${result.updatedCount} locations!\nNIP mis à jour pour ${result.updatedCount} emplacements!`);
+      setNewUniversalPin('');
+      setConfirmUniversalPin('');
+      setShowPinSection(false);
+      ctx.handleRefreshData();
+    } else {
+      Alert.alert('Error', result.error || 'Failed to update PIN');
+    }
   };
 
   const ALL_DAYS: { key: string; label: string }[] = [
@@ -108,6 +155,29 @@ export function ManagerSettingsTab() {
       const current = prev[dayKey as keyof AlertSchedule] || { enabled: true, start: '08:00', end: '18:00' };
       return { ...prev, [dayKey]: { ...current, [field]: value } };
     });
+  };
+
+  const openTimePicker = (dayKey: string, field: 'start' | 'end', currentValue: string) => {
+    setTimePickerDay(dayKey);
+    setTimePickerField(field);
+    setTimePickerInitial(currentValue);
+    setShowTimePicker(true);
+  };
+
+  const handleTimeSelect = (time: string) => {
+    if (timePickerDay) {
+      updateDayTime(timePickerDay, timePickerField, time);
+    }
+  };
+
+  // Format 24h time to 12h display
+  const formatTimeDisplay = (time24: string): string => {
+    const { hours, minutes } = parseTimeString(time24);
+    const m = minutes.toString().padStart(2, '0');
+    if (hours === 0) return `12:${m} AM`;
+    if (hours < 12) return `${hours}:${m} AM`;
+    if (hours === 12) return `12:${m} PM`;
+    return `${hours - 12}:${m} PM`;
   };
 
   const handleSaveAddress = async () => {
@@ -219,17 +289,6 @@ export function ManagerSettingsTab() {
                 </Pressable>
               </View>
 
-              <Pressable
-                onPress={handleSaveAlertSettings} disabled={isSavingAlerts}
-                className="flex-row items-center justify-center py-3 rounded-lg"
-                style={{ backgroundColor: isSavingAlerts ? C.textMuted : C.actionGreen }}
-              >
-                {isSavingAlerts ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <><Save size={16} color="#fff" /><Text className="text-white font-bold ml-2">Save Alert Settings</Text></>
-                )}
-              </Pressable>
             </View>
           </Animated.View>
         )}
@@ -273,23 +332,25 @@ export function ManagerSettingsTab() {
                     </View>
                     {isEnabled && (
                       <View className="flex-row items-center gap-2 mt-1">
-                        <TextInput
-                          value={startTime}
-                          onChangeText={(text) => updateDayTime(day.key, 'start', text)}
-                          placeholder="08:00"
-                          placeholderTextColor={C.textMuted}
-                          className="flex-1 rounded-lg px-3 py-2 text-center text-sm"
-                          style={{ backgroundColor: C.white, borderWidth: 1, borderColor: '#e2e8f0', color: C.textPrimary }}
-                        />
+                        <Pressable
+                          onPress={() => openTimePicker(day.key, 'start', startTime)}
+                          className="flex-1 rounded-lg px-3 py-2.5 items-center active:opacity-70"
+                          style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.actionGreen }}
+                        >
+                          <Text className="text-sm font-medium" style={{ color: C.emeraldDark }}>
+                            {formatTimeDisplay(startTime)}
+                          </Text>
+                        </Pressable>
                         <Text className="text-xs font-medium" style={{ color: C.textMuted }}>to</Text>
-                        <TextInput
-                          value={endTime}
-                          onChangeText={(text) => updateDayTime(day.key, 'end', text)}
-                          placeholder="18:00"
-                          placeholderTextColor={C.textMuted}
-                          className="flex-1 rounded-lg px-3 py-2 text-center text-sm"
-                          style={{ backgroundColor: C.white, borderWidth: 1, borderColor: '#e2e8f0', color: C.textPrimary }}
-                        />
+                        <Pressable
+                          onPress={() => openTimePicker(day.key, 'end', endTime)}
+                          className="flex-1 rounded-lg px-3 py-2.5 items-center active:opacity-70"
+                          style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.actionGreen }}
+                        >
+                          <Text className="text-sm font-medium" style={{ color: C.emeraldDark }}>
+                            {formatTimeDisplay(endTime)}
+                          </Text>
+                        </Pressable>
                       </View>
                     )}
                   </View>
@@ -297,20 +358,97 @@ export function ManagerSettingsTab() {
               })}
 
               <Text className="text-[10px] mb-3 mt-1" style={{ color: C.textMuted }}>
-                Use 24-hour format (e.g., 08:00, 18:00). Alerts are only sent during enabled days and hours.
+                Tap times to change. All times in Atlantic timezone (Moncton/Dieppe).
               </Text>
 
               <Pressable
-                onPress={handleSaveSchedule} disabled={isSavingSchedule}
+                onPress={handleSaveAllAlertSettings} disabled={isSavingAllSettings}
                 className="flex-row items-center justify-center py-3 rounded-lg"
-                style={{ backgroundColor: isSavingSchedule ? C.textMuted : '#d97706' }}
+                style={{ backgroundColor: isSavingAllSettings ? C.textMuted : C.actionGreen }}
               >
-                {isSavingSchedule ? (
+                {isSavingAllSettings ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <><Save size={16} color="#fff" /><Text className="text-white font-bold ml-2">Save Schedule</Text></>
+                  <><Save size={16} color="#fff" /><Text className="text-white font-bold ml-2">Save Alert & Schedule Settings</Text></>
                 )}
               </Pressable>
+            </View>
+          </Animated.View>
+        )}
+
+        {/* PIN for All Washrooms - Owner only */}
+        {ctx.canPerformAction('canEditSettings') && (
+          <Animated.View entering={FadeIn.delay(175).duration(400)}>
+            <View className="rounded-2xl p-4 mb-3" style={{ backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fcd34d', ...D.shadow.sm }}>
+              <Pressable onPress={() => setShowPinSection(!showPinSection)}>
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-row items-center">
+                    <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: '#fde68a' }}>
+                      <Key size={20} color="#92400e" />
+                    </View>
+                    <View className="ml-3 flex-1">
+                      <Text className="text-sm font-bold" style={{ color: '#92400e' }}>PIN for All Washrooms</Text>
+                      <Text className="text-xs" style={{ color: '#b45309' }}>NIP pour tous les emplacements</Text>
+                    </View>
+                  </View>
+                  <ChevronRight
+                    size={18} color="#92400e"
+                    style={{ transform: [{ rotate: showPinSection ? '90deg' : '0deg' }] }}
+                  />
+                </View>
+              </Pressable>
+
+              {/* Current PIN Display */}
+              {ctx.currentBusiness?.staff_pin_display && (
+                <View className="mt-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: '#fcd34d' }}>
+                  <Text className="text-xs font-medium" style={{ color: '#b45309' }}>Current PIN / NIP actuel</Text>
+                  <Text className="text-3xl font-black tracking-widest mt-1" style={{ color: '#92400e' }}>
+                    {ctx.currentBusiness.staff_pin_display}
+                  </Text>
+                </View>
+              )}
+
+              {showPinSection && (
+                <View className="mt-4 pt-4" style={{ borderTopWidth: 1, borderTopColor: '#fcd34d' }}>
+                  <Text className="text-xs mb-3" style={{ color: '#b45309' }}>
+                    Update the staff PIN for all washroom locations at once.
+                  </Text>
+
+                  <View className="mb-3">
+                    <Text className="text-xs font-medium mb-1.5" style={{ color: '#92400e' }}>New PIN (4-5 digits)</Text>
+                    <TextInput
+                      value={newUniversalPin} onChangeText={setNewUniversalPin}
+                      placeholder="Enter new PIN" placeholderTextColor="#d97706"
+                      keyboardType="numeric" maxLength={5} secureTextEntry
+                      className="rounded-lg px-4 py-3 text-base"
+                      style={{ backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fcd34d', color: '#92400e' }}
+                    />
+                  </View>
+
+                  <View className="mb-4">
+                    <Text className="text-xs font-medium mb-1.5" style={{ color: '#92400e' }}>Confirm PIN / Confirmer le NIP</Text>
+                    <TextInput
+                      value={confirmUniversalPin} onChangeText={setConfirmUniversalPin}
+                      placeholder="Confirm new PIN" placeholderTextColor="#d97706"
+                      keyboardType="numeric" maxLength={5} secureTextEntry
+                      className="rounded-lg px-4 py-3 text-base"
+                      style={{ backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fcd34d', color: '#92400e' }}
+                    />
+                  </View>
+
+                  <Pressable
+                    onPress={handleSaveUniversalPin} disabled={isSavingPin}
+                    className="flex-row items-center justify-center py-3 rounded-lg"
+                    style={{ backgroundColor: isSavingPin ? '#d97706' : '#92400e' }}
+                  >
+                    {isSavingPin ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <><Save size={16} color="#fff" /><Text className="text-white font-bold ml-2">Update PIN for All Locations</Text></>
+                    )}
+                  </Pressable>
+                </View>
+              )}
             </View>
           </Animated.View>
         )}
@@ -557,6 +695,16 @@ export function ManagerSettingsTab() {
           </View>
         </View>
       </Modal>
+
+      {/* Time Picker Modal */}
+      <TimePickerModal
+        visible={showTimePicker}
+        onClose={() => setShowTimePicker(false)}
+        onSelect={handleTimeSelect}
+        initialTime={timePickerInitial}
+        title={timePickerField === 'start' ? 'Start Time' : 'End Time'}
+        titleFr={timePickerField === 'start' ? 'Heure de début' : 'Heure de fin'}
+      />
     </>
   );
 }

@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   View, Text, Pressable, ScrollView, Modal, ActivityIndicator, Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   CheckCircle2, AlertOctagon, MapPin, Clock, Download, X,
-  Calendar, ClipboardList,
+  Calendar, ClipboardList, History,
 } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useManagerContext, CleaningLogRow, ReportedIssueRow, ResolutionAction, RESOLUTION_ACTIONS } from './ManagerContext';
@@ -16,6 +16,9 @@ export function ManagerActivityTab() {
 
   // Sub-tab: 'logs' or 'issues'
   const [activeSubTab, setActiveSubTab] = useState<'logs' | 'issues'>('logs');
+
+  // Show resolved issues section
+  const [showResolvedIssues, setShowResolvedIssues] = useState(false);
 
   // 14 Days modal
   const [show14DaysModal, setShow14DaysModal] = useState(false);
@@ -86,6 +89,23 @@ export function ManagerActivityTab() {
   const resolutionOptions = selectedIssue
     ? RESOLUTION_ACTIONS[selectedIssue.issue_type] || RESOLUTION_ACTIONS['other']
     : [];
+
+  // Resolved issues from the last 30 days
+  const resolvedIssues30Days = useMemo(() => {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    return ctx.reportedIssues
+      .filter(issue => {
+        if (issue.status !== 'resolved') return false;
+        const resolvedAt = issue.resolved_at ? new Date(issue.resolved_at) : null;
+        return resolvedAt && resolvedAt >= thirtyDaysAgo;
+      })
+      .sort((a, b) => {
+        const dateA = a.resolved_at ? new Date(a.resolved_at).getTime() : 0;
+        const dateB = b.resolved_at ? new Date(b.resolved_at).getTime() : 0;
+        return dateB - dateA; // Most recent first
+      });
+  }, [ctx.reportedIssues]);
 
   return (
     <>
@@ -269,6 +289,88 @@ export function ManagerActivityTab() {
                 ))}
               </View>
             )}
+
+            {/* Resolved Issues Section - Past 30 Days */}
+            <View className="mt-4">
+              <Pressable
+                onPress={() => setShowResolvedIssues(!showResolvedIssues)}
+                className="flex-row items-center justify-between py-3 px-4 rounded-xl mb-2"
+                style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#86efac' }}
+              >
+                <View className="flex-row items-center">
+                  <History size={16} color={C.actionGreen} />
+                  <Text className="text-sm font-semibold ml-2" style={{ color: C.emeraldDark }}>
+                    Resolved Issues (30 Days)
+                  </Text>
+                  <View className="ml-2 px-2 py-0.5 rounded-full" style={{ backgroundColor: C.actionGreen }}>
+                    <Text className="text-[10px] font-bold text-white">{resolvedIssues30Days.length}</Text>
+                  </View>
+                </View>
+                <Text className="text-xs" style={{ color: C.textMuted }}>
+                  {showResolvedIssues ? 'Hide' : 'Show'}
+                </Text>
+              </Pressable>
+
+              {showResolvedIssues && (
+                <Animated.View entering={FadeIn.duration(300)}>
+                  {resolvedIssues30Days.length === 0 ? (
+                    <View className="rounded-xl p-6 items-center" style={{ backgroundColor: '#f8fafc', borderWidth: 1, borderColor: C.borderLight }}>
+                      <Text className="text-sm" style={{ color: C.textMuted }}>No resolved issues in the past 30 days</Text>
+                      <Text className="text-xs mt-1" style={{ color: C.textMuted }}>Aucun problème résolu au cours des 30 derniers jours</Text>
+                    </View>
+                  ) : (
+                    <View className="rounded-xl overflow-hidden" style={{ backgroundColor: C.white, borderWidth: 1, borderColor: '#86efac' }}>
+                      {resolvedIssues30Days.map((issue, index) => (
+                        <View
+                          key={issue.id}
+                          className="p-3"
+                          style={{
+                            borderBottomWidth: index < resolvedIssues30Days.length - 1 ? 1 : 0,
+                            borderBottomColor: C.borderLight,
+                            backgroundColor: '#f0fdf4',
+                          }}
+                        >
+                          <View className="flex-row items-start justify-between mb-1">
+                            <View className="flex-row items-center flex-1">
+                              <CheckCircle2 size={14} color={C.actionGreen} />
+                              <Text className="text-sm font-semibold ml-1.5" style={{ color: C.emeraldDark }} numberOfLines={1}>
+                                {issueTypeLabels[issue.issue_type] || issue.issue_type}
+                              </Text>
+                            </View>
+                            <View className="px-2 py-0.5 rounded-full" style={{ backgroundColor: '#dcfce7' }}>
+                              <Text className="text-[10px] font-semibold" style={{ color: '#166534' }}>RESOLVED</Text>
+                            </View>
+                          </View>
+
+                          <View className="flex-row items-center mb-1">
+                            <MapPin size={10} color={C.textMuted} />
+                            <Text className="text-xs ml-1" style={{ color: C.textMuted }}>{issue.location_name}</Text>
+                          </View>
+
+                          {issue.resolution_action_label && (
+                            <Text className="text-xs mb-1" style={{ color: C.emeraldDark }}>
+                              Action: {issue.resolution_action_label}
+                            </Text>
+                          )}
+
+                          <View className="flex-row items-center justify-between mt-1">
+                            <Text className="text-[10px]" style={{ color: C.textMuted }}>
+                              {issue.resolved_by ? `By: ${issue.resolved_by}` : ''}
+                            </Text>
+                            <View className="flex-row items-center">
+                              <Clock size={10} color={C.textMuted} />
+                              <Text className="text-[10px] ml-1" style={{ color: C.textMuted }}>
+                                {issue.resolved_at ? ctx.formatDateTime(issue.resolved_at) : 'Unknown'}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </Animated.View>
+              )}
+            </View>
           </ScrollView>
         )}
       </View>
