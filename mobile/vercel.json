@@ -1,0 +1,26 @@
+{
+  "crons": [
+    {
+      "path": "/api/check-overdue",
+      "schedule": "*/30 * * * *"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    },
+    {
+      "source": "/washroom/:id",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/scan/:id",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

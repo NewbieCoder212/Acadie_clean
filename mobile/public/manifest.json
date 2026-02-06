@@ -1,0 +1,27 @@
+{
+  "short_name": "AcadiaClean",
+  "name": "Acadia Clean - Washroom Management",
+  "description": "Professional washroom cleaning verification and management system",
+  "icons": [
+    {
+      "src": "/acadia-icon-v2.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/acadia-icon-v2.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/login",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#22c55e",
+  "background_color": "#f0fdf4",
+  "scope": "/",
+  "lang": "en",
+  "categories": ["business", "productivity"]
+}
