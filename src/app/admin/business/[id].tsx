@@ -422,9 +422,25 @@ export default function BusinessDetailScreen() {
       return;
     }
 
-    if (!newLocationPin || newLocationPin.length < 4 || newLocationPin.length > 5 || !/^\d{4,5}$/.test(newLocationPin)) {
-      Alert.alert('Error', 'Please enter a valid 4 or 5-digit PIN');
-      return;
+    // Determine PIN to use
+    const isFirstWashroom = washrooms.length === 0;
+    let pinToUse: string;
+
+    if (isFirstWashroom) {
+      // First washroom - require PIN entry
+      if (!newLocationPin || newLocationPin.length < 4 || newLocationPin.length > 5 || !/^\d{4,5}$/.test(newLocationPin)) {
+        Alert.alert('Error', 'Please enter a valid 4 or 5-digit PIN');
+        return;
+      }
+      pinToUse = newLocationPin;
+    } else {
+      // Subsequent washroom - inherit PIN from existing washroom
+      const existingPin = washrooms[0]?.pin_display || business?.staff_pin_display;
+      if (!existingPin) {
+        Alert.alert('Error', 'No existing PIN found. Please contact support.');
+        return;
+      }
+      pinToUse = existingPin;
     }
 
     setIsCreating(true);
@@ -434,7 +450,7 @@ export default function BusinessDetailScreen() {
         id: generateId(),
         business_name: business.name,
         room_name: newLocationName.trim(),
-        pin_code: newLocationPin,
+        pin_code: pinToUse,
         alert_email: newLocationAlertEmail.trim() || undefined,
       });
 
@@ -444,7 +460,7 @@ export default function BusinessDetailScreen() {
         setNewLocationPin('');
         setNewLocationAlertEmail('');
         loadData();
-        Alert.alert('Success', `Washroom "${newLocationName.trim()}" created with PIN: ${newLocationPin}`);
+        Alert.alert('Success', `Washroom "${newLocationName.trim()}" created with PIN: ${pinToUse}`);
       } else {
         Alert.alert('Error', result.error || 'Failed to create location');
       }
@@ -1535,29 +1551,47 @@ export default function BusinessDetailScreen() {
                 />
               </View>
 
-              <View className="mb-4">
-                <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
-                  Staff PIN (4-5 digits)
-                </Text>
-                <TextInput
-                  value={newLocationPin}
-                  onChangeText={(text) => setNewLocationPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
-                  placeholder="e.g., 1234 or 12345"
-                  placeholderTextColor={COLORS.textMuted}
-                  keyboardType="number-pad"
-                  maxLength={5}
-                  className="rounded-xl px-4 py-3"
-                  style={{
-                    backgroundColor: COLORS.primaryLight,
-                    fontSize: 16,
-                    color: COLORS.textDark,
-                    letterSpacing: 8,
-                  }}
-                />
-                <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
-                  Staff will use this PIN to submit cleaning logs
-                </Text>
-              </View>
+              {/* PIN Field - only show for first washroom, subsequent inherit from business */}
+              {washrooms.length === 0 ? (
+                <View className="mb-4">
+                  <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
+                    Staff PIN (4-5 digits)
+                  </Text>
+                  <TextInput
+                    value={newLocationPin}
+                    onChangeText={(text) => setNewLocationPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
+                    placeholder="e.g., 1234 or 12345"
+                    placeholderTextColor={COLORS.textMuted}
+                    keyboardType="number-pad"
+                    maxLength={5}
+                    className="rounded-xl px-4 py-3"
+                    style={{
+                      backgroundColor: COLORS.primaryLight,
+                      fontSize: 16,
+                      color: COLORS.textDark,
+                      letterSpacing: 8,
+                    }}
+                  />
+                  <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                    This PIN will be used for all washroom locations
+                  </Text>
+                </View>
+              ) : (
+                <View className="mb-4 p-3 rounded-xl" style={{ backgroundColor: '#fef3c7' }}>
+                  <View className="flex-row items-center">
+                    <Key size={18} color="#d97706" />
+                    <Text className="text-sm font-semibold ml-2" style={{ color: '#92400e' }}>
+                      Staff PIN
+                    </Text>
+                  </View>
+                  <Text className="text-lg font-mono font-bold mt-1" style={{ color: '#d97706' }}>
+                    {washrooms[0]?.pin_display || business?.staff_pin_display || 'Not set'}
+                  </Text>
+                  <Text className="text-xs mt-1" style={{ color: '#92400e' }}>
+                    New location will use the same PIN as existing washrooms
+                  </Text>
+                </View>
+              )}
 
               <View className="mb-6">
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
