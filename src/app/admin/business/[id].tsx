@@ -1346,7 +1346,9 @@ export default function BusinessDetailScreen() {
                     onChangeText={setNewPassword}
                     placeholder="Enter new password"
                     placeholderTextColor={COLORS.textMuted}
-                    secureTextEntry
+                    secureTextEntry={Platform.OS !== 'web'}
+                    autoCapitalize="none"
+                    autoCorrect={false}
                     className="flex-1 rounded-lg px-3 py-2"
                     style={{
                       backgroundColor: COLORS.primaryLight,
@@ -1396,8 +1398,9 @@ export default function BusinessDetailScreen() {
                     onChangeText={(text) => setNewUniversalPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
                     placeholder="New PIN (4-5 digits)"
                     placeholderTextColor={COLORS.textMuted}
-                    keyboardType="number-pad"
-                    maxLength={5}
+                    keyboardType={Platform.OS === 'web' ? 'default' : 'number-pad'}
+                    autoCapitalize="none"
+                    autoCorrect={false}
                     className="flex-1 rounded-lg px-3 py-2"
                     style={{
                       backgroundColor: COLORS.primaryLight,
