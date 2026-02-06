@@ -9,7 +9,15 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.warn('[Supabase] Missing credentials. Please add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your environment variables.');
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Configure Supabase client with auth disabled to prevent auto-refresh issues on web
+// This app uses a custom auth system (AsyncStorage) not Supabase Auth
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
+});
 
 // Re-export password utilities for use in other files
 export { hashPassword, verifyPassword, isBcryptHash, hashPin, verifyPin };

@@ -115,6 +115,7 @@ The database supports subscription tiers for future premium features. Currently 
 - **Environment Variables**: Supabase credentials are stored in environment variables (`EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`), not hardcoded
 - **Safe Session Data**: Login sessions only store non-sensitive business data (no password hashes in AsyncStorage)
 - **Automatic Password Migration**: Legacy plain-text passwords are automatically upgraded to bcrypt hashes on successful login
+- **Supabase Auth Disabled**: The Supabase client is configured with `persistSession: false` and `autoRefreshToken: false` to prevent auth token refresh issues on Safari/web. This app uses a custom auth system via AsyncStorage, not Supabase Auth.
 
 ### Secure Manager Access (Hidden URL)
 
