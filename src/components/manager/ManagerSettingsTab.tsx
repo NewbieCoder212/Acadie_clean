@@ -24,7 +24,6 @@ export function ManagerSettingsTab() {
   const [localGlobalEmails, setLocalGlobalEmails] = useState<string[]>([]);
   const [localUseGlobal, setLocalUseGlobal] = useState(false);
   const [newEmail, setNewEmail] = useState('');
-  const [isSavingAlerts, setIsSavingAlerts] = useState(false);
 
   // Per-day schedule
   const [localSchedule, setLocalSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
@@ -80,7 +79,7 @@ export function ManagerSettingsTab() {
     }
   }, [ctx.globalAlertEmails, ctx.useGlobalAlerts, ctx.businessName, ctx.businessAddress, ctx.alertSchedule, ctx.businessLocations]);
 
-  const handleAddEmail = () => {
+  const handleAddEmail = async () => {
     const email = newEmail.trim().toLowerCase();
     if (!email || !/\S+@\S+\.\S+/.test(email)) {
       Alert.alert('Error', 'Please enter a valid email address');
@@ -90,27 +89,31 @@ export function ManagerSettingsTab() {
       Alert.alert('Error', 'This email is already in the list');
       return;
     }
-    setLocalGlobalEmails(prev => [...prev, email]);
+    const updatedEmails = [...localGlobalEmails, email];
+    setLocalGlobalEmails(updatedEmails);
     setNewEmail('');
+    // Auto-save immediately (silent - no alert)
+    await ctx.handleSaveGlobalAlertSettings(updatedEmails, localUseGlobal, false);
   };
 
-  const handleRemoveEmail = (email: string) => {
-    setLocalGlobalEmails(prev => prev.filter(e => e !== email));
+  const handleRemoveEmail = async (email: string) => {
+    const updatedEmails = localGlobalEmails.filter(e => e !== email);
+    setLocalGlobalEmails(updatedEmails);
+    // Auto-save immediately (silent - no alert)
+    await ctx.handleSaveGlobalAlertSettings(updatedEmails, localUseGlobal, false);
   };
 
-  const handleSaveAlertSettings = async () => {
-    setIsSavingAlerts(true);
-    await ctx.handleSaveGlobalAlertSettings(localGlobalEmails, localUseGlobal);
-    setIsSavingAlerts(false);
+  const handleToggleUseGlobal = async (value: boolean) => {
+    setLocalUseGlobal(value);
+    // Auto-save immediately (silent - no alert)
+    await ctx.handleSaveGlobalAlertSettings(localGlobalEmails, value, false);
   };
 
-  // Combined save for alert emails + schedule
-  const handleSaveAllAlertSettings = async () => {
+  // Save only the schedule (emails are auto-saved)
+  const handleSaveScheduleSettings = async () => {
     setIsSavingAllSettings(true);
-    await ctx.handleSaveGlobalAlertSettings(localGlobalEmails, localUseGlobal);
-    await ctx.handleSaveAlertSchedule(localSchedule);
+    await ctx.handleSaveAlertSchedule(localSchedule, true);
     setIsSavingAllSettings(false);
-    Alert.alert('Success', 'Alert settings and schedule saved!\nParamètres d\'alerte et horaire enregistrés!');
   };
 
   // Save universal PIN for all washrooms
@@ -274,7 +277,7 @@ export function ManagerSettingsTab() {
                     </Text>
                   </View>
                   <Switch
-                    value={localUseGlobal} onValueChange={setLocalUseGlobal}
+                    value={localUseGlobal} onValueChange={handleToggleUseGlobal}
                     trackColor={{ false: '#d1d5db', true: '#86efac' }}
                     thumbColor={localUseGlobal ? C.actionGreen : '#f4f3f4'}
                   />
@@ -388,14 +391,14 @@ export function ManagerSettingsTab() {
               </Text>
 
               <Pressable
-                onPress={handleSaveAllAlertSettings} disabled={isSavingAllSettings}
+                onPress={handleSaveScheduleSettings} disabled={isSavingAllSettings}
                 className="flex-row items-center justify-center py-3 rounded-lg"
                 style={{ backgroundColor: isSavingAllSettings ? C.textMuted : C.actionGreen }}
               >
                 {isSavingAllSettings ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <><Save size={16} color="#fff" /><Text className="text-white font-bold ml-2">Save Alert & Schedule Settings</Text></>
+                  <><Save size={16} color="#fff" /><Text className="text-white font-bold ml-2">Save Schedule Settings</Text></>
                 )}
               </Pressable>
             </View>
@@ -472,11 +475,11 @@ export function ManagerSettingsTab() {
               </Pressable>
 
               {/* Current PIN Display */}
-              {ctx.currentBusiness?.staff_pin_display && (
+              {(ctx.currentBusiness?.staff_pin_display || (ctx.businessLocations.length > 0 && ctx.businessLocations[0]?.pin_display)) && (
                 <View className="mt-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: '#fcd34d' }}>
                   <Text className="text-xs font-medium" style={{ color: '#b45309' }}>Current PIN / NIP actuel</Text>
                   <Text className="text-3xl font-black tracking-widest mt-1" style={{ color: '#92400e' }}>
-                    {ctx.currentBusiness.staff_pin_display}
+                    {ctx.currentBusiness?.staff_pin_display || ctx.businessLocations[0]?.pin_display}
                   </Text>
                 </View>
               )}

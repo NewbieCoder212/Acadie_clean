@@ -110,8 +110,8 @@ export interface ManagerContextType {
   handleToggleLocationActive: (location: WashroomLocation) => void;
   handleDeleteLocation: (location: WashroomLocation) => void;
   handleSaveBusinessAddress: (address: string) => Promise<void>;
-  handleSaveGlobalAlertSettings: (emails: string[], useGlobal: boolean) => Promise<void>;
-  handleSaveAlertSchedule: (schedule: AlertSchedule) => Promise<void>;
+  handleSaveGlobalAlertSettings: (emails: string[], useGlobal: boolean, showAlert?: boolean) => Promise<void>;
+  handleSaveAlertSchedule: (schedule: AlertSchedule, showAlert?: boolean) => Promise<void>;
   handleSaveStaffPin: (locationId: string, pin: string) => Promise<void>;
   handleExport: (locationId: string) => Promise<void>;
   handlePremiumExport: (locationId: string, locationName: string, startDate: Date, endDate: Date) => Promise<void>;
@@ -524,7 +524,7 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
     }
   }, [currentBusiness]);
 
-  const handleSaveGlobalAlertSettings = useCallback(async (emails: string[], useGlobal: boolean) => {
+  const handleSaveGlobalAlertSettings = useCallback(async (emails: string[], useGlobal: boolean, showAlert: boolean = true) => {
     if (!currentBusiness?.id) return;
     const result = await updateBusinessGlobalAlertSettings(currentBusiness.id, {
       global_alert_emails: emails,
@@ -540,13 +540,15 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
       setCurrentBusiness(updatedBusiness);
       setGlobalAlertEmails(emails);
       setUseGlobalAlerts(useGlobal);
-      Alert.alert('Success', 'Alert settings saved!\nParamètres d\'alerte enregistrés!');
+      if (showAlert) {
+        Alert.alert('Success', 'Alert settings saved!\nParamètres d\'alerte enregistrés!');
+      }
     } else {
       Alert.alert('Error', result.error || 'Failed to save alert settings');
     }
   }, [currentBusiness]);
 
-  const handleSaveAlertSchedule = useCallback(async (schedule: AlertSchedule) => {
+  const handleSaveAlertSchedule = useCallback(async (schedule: AlertSchedule, showAlert: boolean = true) => {
     if (!currentBusiness?.id) return;
     const result = await updateBusinessAlertSchedule(currentBusiness.id, schedule);
     if (result.success) {
@@ -554,7 +556,9 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem('currentBusiness', JSON.stringify(updatedBusiness));
       setCurrentBusiness(updatedBusiness);
       setAlertSchedule(schedule);
-      Alert.alert('Success', 'Business hours schedule saved!\nHoraire enregistré!');
+      if (showAlert) {
+        Alert.alert('Success', 'Business hours schedule saved!\nHoraire enregistré!');
+      }
     } else {
       Alert.alert('Error', result.error || 'Failed to save schedule');
     }
