@@ -50,7 +50,6 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { generatePDFHTML, openPDFInNewWindow } from '@/lib/pdf-template';
-import { WebTextInput } from '@/components/WebTextInput';
 import {
   BusinessRow,
   LocationRow,
@@ -139,6 +138,10 @@ export default function BusinessDetailScreen() {
   // Universal PIN for all locations
   const [newUniversalPin, setNewUniversalPin] = useState('');
   const [isSavingUniversalPin, setIsSavingUniversalPin] = useState(false);
+
+  // Memoize trimmed values to prevent inline computations causing page refresh on web
+  const hasPassword = useMemo(() => newPassword.trim().length > 0, [newPassword]);
+  const hasUniversalPin = useMemo(() => newUniversalPin.trim().length > 0, [newUniversalPin]);
 
   // QR Code modal
   const [showQrModal, setShowQrModal] = useState(false);
@@ -1346,32 +1349,23 @@ export default function BusinessDetailScreen() {
               <View className="mb-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
                 <Text className="text-xs font-medium mb-1" style={{ color: COLORS.textMuted }}>Manager Password</Text>
                 <View className="flex-row items-center gap-2">
-                  <View className="flex-1 rounded-lg px-3 py-2" style={{ backgroundColor: COLORS.primaryLight }}>
-                    <WebTextInput
-                      value={newPassword}
-                      onChangeText={setNewPassword}
-                      placeholder="Enter new password"
-                      placeholderTextColor={COLORS.textMuted}
-                      style={{
-                        backgroundColor: COLORS.primaryLight,
-                        fontSize: 14,
-                        color: COLORS.textDark,
-                        flex: 1,
-                      }}
-                      webStyle={{
-                        backgroundColor: COLORS.primaryLight,
-                        fontSize: 14,
-                        color: COLORS.textDark,
-                        width: '100%',
-                        padding: 0,
-                      }}
-                    />
-                  </View>
+                  <TextInput
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    placeholder="Enter new password"
+                    placeholderTextColor={COLORS.textMuted}
+                    className="flex-1 rounded-lg px-3 py-2"
+                    style={{
+                      backgroundColor: COLORS.primaryLight,
+                      fontSize: 14,
+                      color: COLORS.textDark,
+                    }}
+                  />
                   <Pressable
                     onPress={handleSavePassword}
-                    disabled={isSavingPassword || !newPassword.trim()}
+                    disabled={isSavingPassword || !hasPassword}
                     className="px-3 py-2 rounded-lg active:opacity-70"
-                    style={{ backgroundColor: newPassword.trim() ? COLORS.primary : COLORS.textMuted }}
+                    style={{ backgroundColor: hasPassword ? COLORS.primary : COLORS.textMuted }}
                   >
                     {isSavingPassword ? (
                       <ActivityIndicator size="small" color={COLORS.white} />
@@ -1404,34 +1398,24 @@ export default function BusinessDetailScreen() {
 
                 {/* Update PIN Input */}
                 <View className="flex-row items-center gap-2">
-                  <View className="flex-1 rounded-lg px-3 py-2" style={{ backgroundColor: COLORS.primaryLight }}>
-                    <WebTextInput
-                      value={newUniversalPin}
-                      onChangeText={(text) => setNewUniversalPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
-                      placeholder="New PIN (4-5 digits)"
-                      placeholderTextColor={COLORS.textMuted}
-                      style={{
-                        backgroundColor: COLORS.primaryLight,
-                        fontSize: 14,
-                        color: COLORS.textDark,
-                        letterSpacing: 4,
-                        flex: 1,
-                      }}
-                      webStyle={{
-                        backgroundColor: COLORS.primaryLight,
-                        fontSize: 14,
-                        color: COLORS.textDark,
-                        letterSpacing: 4,
-                        width: '100%',
-                        padding: 0,
-                      }}
-                    />
-                  </View>
+                  <TextInput
+                    value={newUniversalPin}
+                    onChangeText={(text) => setNewUniversalPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
+                    placeholder="New PIN (4-5 digits)"
+                    placeholderTextColor={COLORS.textMuted}
+                    className="flex-1 rounded-lg px-3 py-2"
+                    style={{
+                      backgroundColor: COLORS.primaryLight,
+                      fontSize: 14,
+                      color: COLORS.textDark,
+                      letterSpacing: 4,
+                    }}
+                  />
                   <Pressable
                     onPress={handleUpdateAllPins}
-                    disabled={isSavingUniversalPin || !newUniversalPin.trim() || washrooms.length === 0}
+                    disabled={isSavingUniversalPin || !hasUniversalPin || washrooms.length === 0}
                     className="px-3 py-2 rounded-lg active:opacity-70"
-                    style={{ backgroundColor: (newUniversalPin.trim() && washrooms.length > 0) ? '#d97706' : COLORS.textMuted }}
+                    style={{ backgroundColor: (hasUniversalPin && washrooms.length > 0) ? '#d97706' : COLORS.textMuted }}
                   >
                     {isSavingUniversalPin ? (
                       <ActivityIndicator size="small" color={COLORS.white} />
