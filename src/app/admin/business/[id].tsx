@@ -10,6 +10,7 @@ import {
   Alert,
   Switch,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -47,8 +48,8 @@ import * as Linking from 'expo-linking';
 import * as Clipboard from 'expo-clipboard';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { Platform } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { WebSafeInput } from '@/components/WebSafeInput';
 import { generatePDFHTML, openPDFInNewWindow } from '@/lib/pdf-template';
 import {
   BusinessRow,
@@ -1341,15 +1342,12 @@ export default function BusinessDetailScreen() {
               <View className="mb-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
                 <Text className="text-xs font-medium mb-1" style={{ color: COLORS.textMuted }}>Manager Password</Text>
                 <View className="flex-row items-center gap-2">
-                  <TextInput
+                  <WebSafeInput
                     value={newPassword}
                     onChangeText={setNewPassword}
                     placeholder="Enter new password"
                     placeholderTextColor={COLORS.textMuted}
-                    secureTextEntry={Platform.OS !== 'web'}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    className="flex-1 rounded-lg px-3 py-2"
+                    inputType="text"
                     style={{
                       backgroundColor: COLORS.primaryLight,
                       fontSize: 14,
@@ -1393,15 +1391,12 @@ export default function BusinessDetailScreen() {
 
                 {/* Update PIN Input */}
                 <View className="flex-row items-center gap-2">
-                  <TextInput
+                  <WebSafeInput
                     value={newUniversalPin}
                     onChangeText={(text) => setNewUniversalPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
                     placeholder="New PIN (4-5 digits)"
                     placeholderTextColor={COLORS.textMuted}
-                    keyboardType={Platform.OS === 'web' ? 'default' : 'number-pad'}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    className="flex-1 rounded-lg px-3 py-2"
+                    inputType="number"
                     style={{
                       backgroundColor: COLORS.primaryLight,
                       fontSize: 14,
