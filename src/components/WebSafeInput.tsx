@@ -1,5 +1,5 @@
-import { Platform, TextInput, TextInputProps, View } from 'react-native';
-import { useRef, useEffect } from 'react';
+import { Platform, TextInput, TextInputProps } from 'react-native';
+import { useRef, useEffect, useCallback } from 'react';
 
 interface WebSafeInputProps extends Omit<TextInputProps, 'onChange'> {
   value: string;
@@ -9,7 +9,8 @@ interface WebSafeInputProps extends Omit<TextInputProps, 'onChange'> {
 
 /**
  * A TextInput wrapper that uses native HTML input on web to prevent
- * page refresh issues with React Native Web's TextInput
+ * page refresh issues with React Native Web's TextInput.
+ * Uses uncontrolled input pattern on web to avoid React re-renders.
  */
 export function WebSafeInput({
   value,
@@ -22,8 +23,36 @@ export function WebSafeInput({
   ...rest
 }: WebSafeInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const lastValueRef = useRef(value);
 
-  // On web, use native HTML input
+  // Handle input changes using native event listener (avoids React synthetic events)
+  const handleInput = useCallback((e: Event) => {
+    const target = e.target as HTMLInputElement;
+    const newValue = target.value;
+    lastValueRef.current = newValue;
+    onChangeText(newValue);
+  }, [onChangeText]);
+
+  // Sync value to input only when it changes externally (not from typing)
+  useEffect(() => {
+    if (inputRef.current && value !== lastValueRef.current) {
+      inputRef.current.value = value || '';
+      lastValueRef.current = value;
+    }
+  }, [value]);
+
+  // Set up native event listener on mount
+  useEffect(() => {
+    const input = inputRef.current;
+    if (input) {
+      input.addEventListener('input', handleInput);
+      return () => {
+        input.removeEventListener('input', handleInput);
+      };
+    }
+  }, [handleInput]);
+
+  // On web, use native HTML input with uncontrolled pattern
   if (Platform.OS === 'web') {
     // Flatten style if it's an array
     const flatStyle = Array.isArray(style)
@@ -33,15 +62,22 @@ export function WebSafeInput({
     return (
       <input
         ref={inputRef}
-        type={inputType === 'number' ? 'text' : inputType}
+        type={inputType === 'password' ? 'password' : 'text'}
         inputMode={inputType === 'number' ? 'numeric' : undefined}
-        value={value}
-        onChange={(e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          onChangeText(e.target.value);
-        }}
+        defaultValue={value || ''}
         placeholder={placeholder}
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        data-form-type="other"
+        data-lpignore="true"
+        onKeyDown={(e) => {
+          // Prevent form submission on Enter
+          if (e.key === 'Enter') {
+            e.preventDefault();
+          }
+        }}
         style={{
           flex: 1,
           borderRadius: 8,
@@ -49,12 +85,13 @@ export function WebSafeInput({
           paddingRight: 12,
           paddingTop: 8,
           paddingBottom: 8,
-          fontSize: 14,
+          fontSize: flatStyle.fontSize as number || 14,
           outline: 'none',
           border: 'none',
           backgroundColor: flatStyle.backgroundColor as string || '#e0f2fe',
           color: flatStyle.color as string || '#1e293b',
           letterSpacing: flatStyle.letterSpacing as number || 0,
+          textAlign: flatStyle.textAlign as 'left' | 'center' | 'right' || 'left',
           fontFamily: 'system-ui, -apple-system, sans-serif',
         }}
       />
@@ -70,6 +107,8 @@ export function WebSafeInput({
       placeholderTextColor={placeholderTextColor}
       style={style}
       className={className}
+      secureTextEntry={inputType === 'password'}
+      keyboardType={inputType === 'number' ? 'numeric' : 'default'}
       {...rest}
     />
   );
