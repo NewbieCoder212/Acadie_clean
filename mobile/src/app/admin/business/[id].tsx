@@ -10,7 +10,6 @@ import {
   Alert,
   Switch,
   RefreshControl,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -48,6 +47,7 @@ import * as Linking from 'expo-linking';
 import * as Clipboard from 'expo-clipboard';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { Platform } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { generatePDFHTML, openPDFInNewWindow } from '@/lib/pdf-template';
 import {
@@ -924,16 +924,13 @@ export default function BusinessDetailScreen() {
         <ScrollView
           className="flex-1"
           contentContainerStyle={{ padding: 16 }}
-          keyboardShouldPersistTaps="handled"
           refreshControl={
-            Platform.OS !== 'web' ? (
-              <RefreshControl
-                refreshing={isRefreshing}
-                onRefresh={onRefresh}
-                colors={[COLORS.primary]}
-                tintColor={COLORS.primary}
-              />
-            ) : undefined
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={onRefresh}
+              colors={[COLORS.primary]}
+              tintColor={COLORS.primary}
+            />
           }
         >
           {/* Stats Overview */}
@@ -1315,9 +1312,6 @@ export default function BusinessDetailScreen() {
                     onChangeText={setBusinessAddress}
                     placeholder="Enter business address"
                     placeholderTextColor={COLORS.textMuted}
-                    autoComplete="off"
-                    autoCorrect={false}
-                    blurOnSubmit={false}
                     className="flex-1 rounded-lg px-3 py-2"
                     style={{
                       backgroundColor: COLORS.primaryLight,
@@ -1353,9 +1347,6 @@ export default function BusinessDetailScreen() {
                     placeholder="Enter new password"
                     placeholderTextColor={COLORS.textMuted}
                     secureTextEntry
-                    autoComplete="off"
-                    autoCorrect={false}
-                    blurOnSubmit={false}
                     className="flex-1 rounded-lg px-3 py-2"
                     style={{
                       backgroundColor: COLORS.primaryLight,
@@ -1407,9 +1398,6 @@ export default function BusinessDetailScreen() {
                     placeholderTextColor={COLORS.textMuted}
                     keyboardType="number-pad"
                     maxLength={5}
-                    autoComplete="off"
-                    autoCorrect={false}
-                    blurOnSubmit={false}
                     className="flex-1 rounded-lg px-3 py-2"
                     style={{
                       backgroundColor: COLORS.primaryLight,
@@ -1763,7 +1751,6 @@ export default function BusinessDetailScreen() {
             <ScrollView
               contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 16 }}
               showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
             >
               <View
                 className="w-full max-w-sm rounded-3xl p-5"
@@ -1821,9 +1808,6 @@ export default function BusinessDetailScreen() {
                             placeholderTextColor={COLORS.textMuted}
                             keyboardType="email-address"
                             autoCapitalize="none"
-                            autoComplete="off"
-                            autoCorrect={false}
-                            blurOnSubmit={false}
                             className="rounded-xl px-4 py-3"
                             style={{
                               backgroundColor: '#f1f5f9',
@@ -1897,9 +1881,6 @@ export default function BusinessDetailScreen() {
                                       onChangeText={(text) => updateScheduleTime(day.key, 'start', text)}
                                       placeholder="08:00"
                                       placeholderTextColor={COLORS.textMuted}
-                                      autoComplete="off"
-                                      autoCorrect={false}
-                                      blurOnSubmit={false}
                                       className="flex-1 rounded-lg px-3 py-2 text-center"
                                       style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', fontSize: 14, color: COLORS.textDark }}
                                     />
@@ -1909,9 +1890,6 @@ export default function BusinessDetailScreen() {
                                       onChangeText={(text) => updateScheduleTime(day.key, 'end', text)}
                                       placeholder="18:00"
                                       placeholderTextColor={COLORS.textMuted}
-                                      autoComplete="off"
-                                      autoCorrect={false}
-                                      blurOnSubmit={false}
                                       className="flex-1 rounded-lg px-3 py-2 text-center"
                                       style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', fontSize: 14, color: COLORS.textDark }}
                                     />
