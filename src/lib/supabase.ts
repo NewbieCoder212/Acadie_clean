@@ -2237,6 +2237,44 @@ export async function updateAllWashroomPinsForBusiness(
   }
 }
 
+// Update alert threshold hours for all washrooms of a business
+export async function updateAlertThresholdForBusiness(
+  businessName: string,
+  thresholdHours: number
+): Promise<{ success: boolean; updatedCount?: number; error?: string }> {
+  try {
+    // Get all active washrooms for this business
+    const { data: washrooms, error: fetchError } = await supabase
+      .from('washrooms')
+      .select('id')
+      .eq('business_name', businessName)
+      .eq('is_active', true);
+
+    if (fetchError) {
+      return { success: false, error: fetchError.message };
+    }
+
+    if (!washrooms || washrooms.length === 0) {
+      return { success: true, updatedCount: 0 };
+    }
+
+    // Update all washrooms with the new threshold
+    const washroomIds = washrooms.map(w => w.id);
+    const { error: updateError } = await supabase
+      .from('washrooms')
+      .update({ alert_threshold_hours: thresholdHours })
+      .in('id', washroomIds);
+
+    if (updateError) {
+      return { success: false, error: updateError.message };
+    }
+
+    return { success: true, updatedCount: washrooms.length };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
 // ============ QR SCAN TRACKING (efficient counter-based) ============
 
 export interface QrScanStatRow {

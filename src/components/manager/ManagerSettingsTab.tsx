@@ -10,7 +10,7 @@ import {
 } from 'lucide-react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useManagerContext, SafeManagerRow, ManagerPermissions, ManagerRole, AlertSchedule } from './ManagerContext';
-import { DEFAULT_ALERT_SCHEDULE, updateAllWashroomPinsForBusiness } from '@/lib/supabase';
+import { DEFAULT_ALERT_SCHEDULE, updateAllWashroomPinsForBusiness, updateAlertThresholdForBusiness } from '@/lib/supabase';
 import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
 import { TimePickerModal } from '@/components/TimePickerModal';
 import { parseTimeString } from '@/lib/timezone';
@@ -28,6 +28,10 @@ export function ManagerSettingsTab() {
 
   // Per-day schedule
   const [localSchedule, setLocalSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
+
+  // Alert threshold hours (applies to all washrooms)
+  const [alertThresholdHours, setAlertThresholdHours] = useState<number>(8);
+  const [isSavingThreshold, setIsSavingThreshold] = useState(false);
 
   // Combined saving state for alerts + schedule
   const [isSavingAllSettings, setIsSavingAllSettings] = useState(false);
@@ -70,7 +74,11 @@ export function ManagerSettingsTab() {
     setLocalBusinessName(ctx.businessName);
     setLocalBusinessAddress(ctx.businessAddress);
     setLocalSchedule(ctx.alertSchedule);
-  }, [ctx.globalAlertEmails, ctx.useGlobalAlerts, ctx.businessName, ctx.businessAddress, ctx.alertSchedule]);
+    // Get alert threshold from first washroom (they should all be the same)
+    if (ctx.businessLocations.length > 0) {
+      setAlertThresholdHours(ctx.businessLocations[0].alert_threshold_hours ?? 8);
+    }
+  }, [ctx.globalAlertEmails, ctx.useGlobalAlerts, ctx.businessName, ctx.businessAddress, ctx.alertSchedule, ctx.businessLocations]);
 
   const handleAddEmail = () => {
     const email = newEmail.trim().toLowerCase();
@@ -130,6 +138,24 @@ export function ManagerSettingsTab() {
       ctx.handleRefreshData();
     } else {
       Alert.alert('Error', result.error || 'Failed to update PIN');
+    }
+  };
+
+  // Save alert threshold hours for all washrooms
+  const handleSaveAlertThreshold = async (hours: number) => {
+    if (!ctx.currentBusiness?.name) {
+      Alert.alert('Error', 'Business not found');
+      return;
+    }
+    setIsSavingThreshold(true);
+    const result = await updateAlertThresholdForBusiness(ctx.currentBusiness.name, hours);
+    setIsSavingThreshold(false);
+    if (result.success) {
+      setAlertThresholdHours(hours);
+      Alert.alert('Success', `Alert threshold set to ${hours} hours for ${result.updatedCount} location(s)!\nSeuil d'alerte défini à ${hours} heures!`);
+      ctx.handleRefreshData();
+    } else {
+      Alert.alert('Error', result.error || 'Failed to update alert threshold');
     }
   };
 
@@ -372,6 +398,53 @@ export function ManagerSettingsTab() {
                   <><Save size={16} color="#fff" /><Text className="text-white font-bold ml-2">Save Alert & Schedule Settings</Text></>
                 )}
               </Pressable>
+            </View>
+          </Animated.View>
+        )}
+
+        {/* Alert Threshold Hours - Owner only */}
+        {ctx.canPerformAction('canEditSettings') && (
+          <Animated.View entering={FadeIn.delay(160).duration(400)}>
+            <View className="rounded-2xl p-4 mb-3" style={{ backgroundColor: C.white, ...D.shadow.sm }}>
+              <View className="flex-row items-center mb-3">
+                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: '#fee2e2' }}>
+                  <Clock size={20} color="#dc2626" />
+                </View>
+                <View className="ml-3 flex-1">
+                  <Text className="text-sm font-bold" style={{ color: C.textPrimary }}>Alert Threshold</Text>
+                  <Text className="text-xs" style={{ color: C.textMuted }}>Seuil d'alerte (heures sans nettoyage)</Text>
+                </View>
+              </View>
+
+              <Text className="text-xs mb-3" style={{ color: C.textMuted }}>
+                Send alert when no cleaning is logged after this many hours during business hours.
+              </Text>
+
+              <View className="flex-row flex-wrap gap-2">
+                {[1, 2, 4, 6, 8, 12, 24].map((hours) => (
+                  <Pressable
+                    key={hours}
+                    onPress={() => handleSaveAlertThreshold(hours)}
+                    disabled={isSavingThreshold}
+                    className="px-4 py-2.5 rounded-xl"
+                    style={{
+                      backgroundColor: alertThresholdHours === hours ? '#dc2626' : '#f1f5f9',
+                      opacity: isSavingThreshold ? 0.6 : 1,
+                    }}
+                  >
+                    <Text
+                      className="font-bold text-sm"
+                      style={{ color: alertThresholdHours === hours ? '#ffffff' : '#64748b' }}
+                    >
+                      {hours}h
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text className="text-[10px] mt-3" style={{ color: C.textMuted }}>
+                Currently set to {alertThresholdHours} hour{alertThresholdHours !== 1 ? 's' : ''}. Tap to change for all locations.
+              </Text>
             </View>
           </Animated.View>
         )}

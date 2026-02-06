@@ -105,7 +105,7 @@ export interface ManagerContextType {
   handleRefreshData: () => void;
   handleLogout: () => Promise<void>;
   handleSwitchBusiness: (businessAccess: ManagerBusinessAccess) => Promise<void>;
-  handleResolveIssue: (issueId: string, action?: ResolutionAction, issue?: ReportedIssueRow) => Promise<void>;
+  handleResolveIssue: (issueId: string, action?: ResolutionAction, issue?: ReportedIssueRow, resolvedByLabel?: string) => Promise<void>;
   handleSaveAlertEmail: (locationId: string, email: string) => Promise<void>;
   handleToggleLocationActive: (location: WashroomLocation) => void;
   handleDeleteLocation: (location: WashroomLocation) => void;
@@ -405,12 +405,13 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
   const handleResolveIssue = useCallback(async (
     issueId: string,
     action?: ResolutionAction,
-    issue?: ReportedIssueRow
+    issue?: ReportedIssueRow,
+    resolvedByLabel?: string
   ) => {
     setResolvingIssueId(issueId);
     try {
-      // Get the manager/business name for the log
-      const resolvedBy = currentManager?.name || currentBusiness?.name || 'Manager';
+      // Use the provided label, or fall back to manager/business name
+      const resolvedBy = resolvedByLabel || currentManager?.name || currentBusiness?.name || 'Manager';
 
       const result = await resolveReportedIssue(issueId, {
         action,

@@ -5,11 +5,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   CheckCircle2, AlertOctagon, MapPin, Clock, Download, X,
-  Calendar, ClipboardList, History,
+  Calendar, ClipboardList, History, User,
 } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useManagerContext, CleaningLogRow, ReportedIssueRow, ResolutionAction, RESOLUTION_ACTIONS } from './ManagerContext';
 import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
+
+// Resolved by options
+const RESOLVED_BY_OPTIONS = [
+  { value: 'owner', label: 'Owner', labelFr: 'Propriétaire' },
+  { value: 'manager_supervisor', label: 'Manager / Supervisor', labelFr: 'Gestionnaire / Superviseur' },
+  { value: 'contractor', label: 'Contractor', labelFr: 'Entrepreneur' },
+] as const;
 
 export function ManagerActivityTab() {
   const ctx = useManagerContext();
@@ -29,6 +36,7 @@ export function ManagerActivityTab() {
   // Resolution modal
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<ReportedIssueRow | null>(null);
+  const [selectedResolvedBy, setSelectedResolvedBy] = useState<string>('manager_supervisor');
 
   // Incident export
   const [showIncidentExport, setShowIncidentExport] = useState(false);
@@ -59,13 +67,17 @@ export function ManagerActivityTab() {
 
   const handleOpenResolveModal = (issue: ReportedIssueRow) => {
     setSelectedIssue(issue);
+    setSelectedResolvedBy('manager_supervisor'); // Reset to default
     setShowResolveModal(true);
   };
 
   const handleSelectResolution = async (action: ResolutionAction) => {
     if (!selectedIssue) return;
     setShowResolveModal(false);
-    await ctx.handleResolveIssue(selectedIssue.id, action, selectedIssue);
+    // Get the label for the selected "resolved by" option
+    const resolvedByOption = RESOLVED_BY_OPTIONS.find(opt => opt.value === selectedResolvedBy);
+    const resolvedByLabel = resolvedByOption?.label || 'Manager';
+    await ctx.handleResolveIssue(selectedIssue.id, action, selectedIssue, resolvedByLabel);
     setSelectedIssue(null);
   };
 
@@ -601,6 +613,34 @@ export function ManagerActivityTab() {
             )}
 
             {/* Resolution Options */}
+            <Text className="text-sm font-semibold mb-1" style={{ color: C.textPrimary }}>
+              Resolved by / Résolu par
+            </Text>
+            <View className="flex-row gap-2 mb-4 flex-wrap">
+              {RESOLVED_BY_OPTIONS.map((option) => (
+                <Pressable
+                  key={option.value}
+                  onPress={() => setSelectedResolvedBy(option.value)}
+                  className="px-4 py-2.5 rounded-xl"
+                  style={{
+                    backgroundColor: selectedResolvedBy === option.value ? '#dbeafe' : '#f1f5f9',
+                    borderWidth: 2,
+                    borderColor: selectedResolvedBy === option.value ? '#2563eb' : '#e2e8f0',
+                  }}
+                >
+                  <View className="flex-row items-center">
+                    <User size={14} color={selectedResolvedBy === option.value ? '#2563eb' : C.textMuted} />
+                    <Text
+                      className="text-sm font-medium ml-1.5"
+                      style={{ color: selectedResolvedBy === option.value ? '#2563eb' : C.textMuted }}
+                    >
+                      {option.label}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+
             <Text className="text-sm font-semibold mb-1" style={{ color: C.textPrimary }}>
               How was this resolved?
             </Text>
