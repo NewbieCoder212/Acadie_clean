@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,6 @@ import {
   Alert,
   Switch,
   RefreshControl,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -48,6 +47,7 @@ import * as Linking from 'expo-linking';
 import * as Clipboard from 'expo-clipboard';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { Platform } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { generatePDFHTML, openPDFInNewWindow } from '@/lib/pdf-template';
 import {
@@ -103,11 +103,7 @@ const COLORS = {
 
 export default function BusinessDetailScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id: string }>();
-
-  // Stabilize id using useMemo to prevent re-renders on web
-  const stableId = useMemo(() => params.id, [params.id]);
-
+  const { id } = useLocalSearchParams<{ id: string }>();
   const [business, setBusiness] = useState<BusinessRow | null>(null);
   const [washrooms, setWashrooms] = useState<WashroomRow[]>([]);
   const [allLogs, setAllLogs] = useState<CleaningLogRow[]>([]);
@@ -138,10 +134,6 @@ export default function BusinessDetailScreen() {
   // Universal PIN for all locations
   const [newUniversalPin, setNewUniversalPin] = useState('');
   const [isSavingUniversalPin, setIsSavingUniversalPin] = useState(false);
-
-  // Memoize trimmed values to prevent inline computations causing page refresh on web
-  const hasPassword = useMemo(() => newPassword.trim().length > 0, [newPassword]);
-  const hasUniversalPin = useMemo(() => newUniversalPin.trim().length > 0, [newUniversalPin]);
 
   // QR Code modal
   const [showQrModal, setShowQrModal] = useState(false);
@@ -305,26 +297,26 @@ export default function BusinessDetailScreen() {
   };
 
   useEffect(() => {
-    if (stableId) {
+    if (id) {
       loadData();
     }
 
     // Auto-refresh every 30 seconds to keep data current
     const refreshInterval = setInterval(() => {
-      if (stableId && !isLoading) {
+      if (id && !isLoading) {
         loadDataSilent();
       }
     }, 30000);
 
     return () => clearInterval(refreshInterval);
-  }, [stableId]);
+  }, [id]);
 
   // Silent data load for auto-refresh (no loading spinner)
   const loadDataSilent = async () => {
     try {
       const businessesResult = await getAllBusinesses();
       if (businessesResult.success && businessesResult.data) {
-        const foundBusiness = businessesResult.data.find(b => b.id === stableId);
+        const foundBusiness = businessesResult.data.find(b => b.id === id);
         if (foundBusiness) {
           setBusiness(foundBusiness);
           setBusinessSchedule(foundBusiness.alert_schedule as AlertSchedule ?? DEFAULT_ALERT_SCHEDULE);
@@ -368,7 +360,7 @@ export default function BusinessDetailScreen() {
     setIsRefreshing(true);
     await loadDataSilent();
     setIsRefreshing(false);
-  }, [stableId]);
+  }, [id]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -376,7 +368,7 @@ export default function BusinessDetailScreen() {
       // Get business details from all businesses
       const businessesResult = await getAllBusinesses();
       if (businessesResult.success && businessesResult.data) {
-        const foundBusiness = businessesResult.data.find(b => b.id === stableId);
+        const foundBusiness = businessesResult.data.find(b => b.id === id);
         if (foundBusiness) {
           setBusiness(foundBusiness);
           setBusinessAddress(foundBusiness.address || '');
@@ -1354,6 +1346,7 @@ export default function BusinessDetailScreen() {
                     onChangeText={setNewPassword}
                     placeholder="Enter new password"
                     placeholderTextColor={COLORS.textMuted}
+                    secureTextEntry
                     className="flex-1 rounded-lg px-3 py-2"
                     style={{
                       backgroundColor: COLORS.primaryLight,
@@ -1363,9 +1356,9 @@ export default function BusinessDetailScreen() {
                   />
                   <Pressable
                     onPress={handleSavePassword}
-                    disabled={isSavingPassword || !hasPassword}
+                    disabled={isSavingPassword || !newPassword.trim()}
                     className="px-3 py-2 rounded-lg active:opacity-70"
-                    style={{ backgroundColor: hasPassword ? COLORS.primary : COLORS.textMuted }}
+                    style={{ backgroundColor: newPassword.trim() ? COLORS.primary : COLORS.textMuted }}
                   >
                     {isSavingPassword ? (
                       <ActivityIndicator size="small" color={COLORS.white} />
@@ -1403,6 +1396,8 @@ export default function BusinessDetailScreen() {
                     onChangeText={(text) => setNewUniversalPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
                     placeholder="New PIN (4-5 digits)"
                     placeholderTextColor={COLORS.textMuted}
+                    keyboardType="number-pad"
+                    maxLength={5}
                     className="flex-1 rounded-lg px-3 py-2"
                     style={{
                       backgroundColor: COLORS.primaryLight,
@@ -1413,9 +1408,9 @@ export default function BusinessDetailScreen() {
                   />
                   <Pressable
                     onPress={handleUpdateAllPins}
-                    disabled={isSavingUniversalPin || !hasUniversalPin || washrooms.length === 0}
+                    disabled={isSavingUniversalPin || !newUniversalPin.trim() || washrooms.length === 0}
                     className="px-3 py-2 rounded-lg active:opacity-70"
-                    style={{ backgroundColor: (hasUniversalPin && washrooms.length > 0) ? '#d97706' : COLORS.textMuted }}
+                    style={{ backgroundColor: (newUniversalPin.trim() && washrooms.length > 0) ? '#d97706' : COLORS.textMuted }}
                   >
                     {isSavingUniversalPin ? (
                       <ActivityIndicator size="small" color={COLORS.white} />
