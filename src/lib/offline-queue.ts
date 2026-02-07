@@ -156,12 +156,6 @@ export const useOfflineQueue = create<OfflineQueueState>()(
 let unsubscribeNetInfo: (() => void) | null = null;
 
 export function startOfflineSync() {
-  // Skip on web - NetInfo causes constant re-renders and page refreshes on PWA
-  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-    console.log('[Offline] Skipping auto-sync on web (PWA)');
-    return;
-  }
-
   if (unsubscribeNetInfo) return; // Already started
 
   unsubscribeNetInfo = NetInfo.addEventListener((state) => {

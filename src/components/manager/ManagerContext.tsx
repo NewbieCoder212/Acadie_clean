@@ -3,7 +3,6 @@ import { Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useStore, WashroomLocation } from '@/lib/store';
-import { formatDateTimeAtlantic, isTodayAtlantic } from '@/lib/timezone';
 import {
   getLogs6Months as getSupabase6MonthLogs,
   getLogs1Month as getSupabase1MonthLogs,
@@ -105,13 +104,13 @@ export interface ManagerContextType {
   handleRefreshData: () => void;
   handleLogout: () => Promise<void>;
   handleSwitchBusiness: (businessAccess: ManagerBusinessAccess) => Promise<void>;
-  handleResolveIssue: (issueId: string, action?: ResolutionAction, issue?: ReportedIssueRow, resolvedByLabel?: string) => Promise<void>;
+  handleResolveIssue: (issueId: string, action?: ResolutionAction, issue?: ReportedIssueRow) => Promise<void>;
   handleSaveAlertEmail: (locationId: string, email: string) => Promise<void>;
   handleToggleLocationActive: (location: WashroomLocation) => void;
   handleDeleteLocation: (location: WashroomLocation) => void;
   handleSaveBusinessAddress: (address: string) => Promise<void>;
-  handleSaveGlobalAlertSettings: (emails: string[], useGlobal: boolean, showAlert?: boolean) => Promise<void>;
-  handleSaveAlertSchedule: (schedule: AlertSchedule, showAlert?: boolean) => Promise<void>;
+  handleSaveGlobalAlertSettings: (emails: string[], useGlobal: boolean) => Promise<void>;
+  handleSaveAlertSchedule: (schedule: AlertSchedule) => Promise<void>;
   handleSaveStaffPin: (locationId: string, pin: string) => Promise<void>;
   handleExport: (locationId: string) => Promise<void>;
   handlePremiumExport: (locationId: string, locationName: string, startDate: Date, endDate: Date) => Promise<void>;
@@ -236,11 +235,19 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const formatDateTime = useCallback((timestamp: string) => {
-    return formatDateTimeAtlantic(timestamp);
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true,
+    });
   }, []);
 
   const formatTimeAgo = useCallback((timestamp: string) => {
-    return formatDateTimeAtlantic(timestamp);
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true,
+    });
   }, []);
 
   // ============================
@@ -405,13 +412,12 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
   const handleResolveIssue = useCallback(async (
     issueId: string,
     action?: ResolutionAction,
-    issue?: ReportedIssueRow,
-    resolvedByLabel?: string
+    issue?: ReportedIssueRow
   ) => {
     setResolvingIssueId(issueId);
     try {
-      // Use the provided label, or fall back to manager/business name
-      const resolvedBy = resolvedByLabel || currentManager?.name || currentBusiness?.name || 'Manager';
+      // Get the manager/business name for the log
+      const resolvedBy = currentManager?.name || currentBusiness?.name || 'Manager';
 
       const result = await resolveReportedIssue(issueId, {
         action,
@@ -524,7 +530,7 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
     }
   }, [currentBusiness]);
 
-  const handleSaveGlobalAlertSettings = useCallback(async (emails: string[], useGlobal: boolean, showAlert: boolean = true) => {
+  const handleSaveGlobalAlertSettings = useCallback(async (emails: string[], useGlobal: boolean) => {
     if (!currentBusiness?.id) return;
     const result = await updateBusinessGlobalAlertSettings(currentBusiness.id, {
       global_alert_emails: emails,
@@ -540,15 +546,13 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
       setCurrentBusiness(updatedBusiness);
       setGlobalAlertEmails(emails);
       setUseGlobalAlerts(useGlobal);
-      if (showAlert) {
-        Alert.alert('Success', 'Alert settings saved!\nParamètres d\'alerte enregistrés!');
-      }
+      Alert.alert('Success', 'Alert settings saved!\nParamètres d\'alerte enregistrés!');
     } else {
       Alert.alert('Error', result.error || 'Failed to save alert settings');
     }
   }, [currentBusiness]);
 
-  const handleSaveAlertSchedule = useCallback(async (schedule: AlertSchedule, showAlert: boolean = true) => {
+  const handleSaveAlertSchedule = useCallback(async (schedule: AlertSchedule) => {
     if (!currentBusiness?.id) return;
     const result = await updateBusinessAlertSchedule(currentBusiness.id, schedule);
     if (result.success) {
@@ -556,9 +560,7 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem('currentBusiness', JSON.stringify(updatedBusiness));
       setCurrentBusiness(updatedBusiness);
       setAlertSchedule(schedule);
-      if (showAlert) {
-        Alert.alert('Success', 'Business hours schedule saved!\nHoraire enregistré!');
-      }
+      Alert.alert('Success', 'Business hours schedule saved!\nHoraire enregistré!');
     } else {
       Alert.alert('Error', result.error || 'Failed to save schedule');
     }

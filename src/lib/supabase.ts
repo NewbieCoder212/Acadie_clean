@@ -788,41 +788,10 @@ export async function hardDeleteWashroom(washroomId: string): Promise<{ success:
 }
 
 // Insert a new washroom with hashed PIN
-// If this is the first washroom for a business, the provided PIN becomes the default
-// If other washrooms exist, new washrooms use the first washroom's PIN (global PIN logic)
 export async function insertWashroom(washroom: InsertWashroom): Promise<{ success: boolean; data?: WashroomRow; error?: string }> {
   try {
-    let pinToUse = washroom.pin_code;
-
-    // Check if business has a universal staff PIN set
-    const { data: business } = await supabase
-      .from('businesses')
-      .select('staff_pin_display')
-      .eq('name', washroom.business_name)
-      .single();
-
-    if (business?.staff_pin_display) {
-      // Use business universal PIN
-      pinToUse = business.staff_pin_display;
-    } else {
-      // Check if there are existing washrooms for this business
-      const { data: existingWashrooms } = await supabase
-        .from('washrooms')
-        .select('pin_display')
-        .eq('business_name', washroom.business_name)
-        .eq('is_active', true)
-        .order('created_at', { ascending: true })
-        .limit(1);
-
-      if (existingWashrooms && existingWashrooms.length > 0 && existingWashrooms[0].pin_display) {
-        // Use the first washroom's PIN as the default for consistency
-        pinToUse = existingWashrooms[0].pin_display;
-      }
-      // Otherwise use the provided PIN (this is the first washroom)
-    }
-
     // Hash the PIN before storing
-    const hashedPin = await hashPin(pinToUse);
+    const hashedPin = await hashPin(washroom.pin_code);
 
     const { data, error } = await supabase
       .from('washrooms')
@@ -831,7 +800,7 @@ export async function insertWashroom(washroom: InsertWashroom): Promise<{ succes
         business_name: washroom.business_name,
         room_name: washroom.room_name,
         pin_code: hashedPin,
-        pin_display: pinToUse, // Store plain PIN for manager display
+        pin_display: washroom.pin_code, // Store plain PIN for manager display
         alert_email: washroom.alert_email || null,
         is_active: washroom.is_active ?? true,
         created_at: new Date().toISOString(),
@@ -1034,7 +1003,6 @@ export interface BusinessRow {
   name: string;
   email: string;
   password_hash: string;
-  password_display: string | null; // Plain password for admin display (set when password is updated)
   address: string | null;
   is_admin: boolean;
   is_active: boolean;
@@ -1060,7 +1028,6 @@ export interface SafeBusinessRow {
   id: string;
   name: string;
   email: string;
-  password_display: string | null; // Plain password for admin display
   address: string | null;
   is_admin: boolean;
   is_active: boolean;
@@ -1202,7 +1169,6 @@ export async function loginBusiness(email: string, password: string): Promise<{ 
         id: legacyData.id,
         name: legacyData.name,
         email: legacyData.email,
-        password_display: legacyData.password_display ?? null,
         address: legacyData.address ?? null,
         is_admin: legacyData.is_admin,
         is_active: legacyData.is_active,
@@ -1232,7 +1198,6 @@ export async function loginBusiness(email: string, password: string): Promise<{ 
       id: data.id,
       name: data.name,
       email: data.email,
-      password_display: data.password_display ?? null,
       address: data.address ?? null,
       is_admin: data.is_admin,
       is_active: data.is_active,
@@ -1297,7 +1262,6 @@ export async function loginBusinessLegacy(email: string, password: string): Prom
       id: data.id,
       name: data.name,
       email: data.email,
-      password_display: data.password_display ?? null,
       address: data.address ?? null,
       is_admin: data.is_admin,
       is_active: data.is_active,
@@ -1358,7 +1322,6 @@ export async function getCurrentSession(): Promise<{ success: boolean; data?: Sa
       id: data.id,
       name: data.name,
       email: data.email,
-      password_display: data.password_display ?? null,
       address: data.address ?? null,
       is_admin: data.is_admin,
       is_active: data.is_active,
@@ -1402,7 +1365,6 @@ export async function getBusinessById(businessId: string): Promise<{ success: bo
       id: data.id,
       name: data.name,
       email: data.email,
-      password_display: data.password_display ?? null,
       address: data.address ?? null,
       is_admin: data.is_admin,
       is_active: data.is_active,
@@ -1505,18 +1467,12 @@ export async function updateBusinessAlertSchedule(
   }
 }
 
-// Update business password (stores hashed password and plain password for admin display)
+// Update business password
 export async function updateBusinessPassword(businessId: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
   try {
-    // Hash the password before storing
-    const hashedPassword = await hashPassword(newPassword);
-
     const { error } = await supabase
       .from('businesses')
-      .update({
-        password_hash: hashedPassword,
-        password_display: newPassword, // Store plain password for admin display
-      })
+      .update({ password: newPassword })
       .eq('id', businessId);
 
     if (error) {
@@ -2187,89 +2143,6 @@ export async function updateWashroomPin(washroomId: string, newPin: string): Pro
     }
 
     return { success: true };
-  } catch (error) {
-    return { success: false, error: String(error) };
-  }
-}
-
-// Update ALL washroom PINs for a business (used by "Update PIN for All Locations" button)
-export async function updateAllWashroomPinsForBusiness(
-  businessName: string,
-  newPin: string
-): Promise<{ success: boolean; updatedCount?: number; error?: string }> {
-  try {
-    // Hash the PIN before storing
-    const hashedPin = await hashPin(newPin);
-
-    // Get all active washrooms for this business
-    const { data: washrooms, error: fetchError } = await supabase
-      .from('washrooms')
-      .select('id')
-      .eq('business_name', businessName)
-      .eq('is_active', true);
-
-    if (fetchError) {
-      return { success: false, error: fetchError.message };
-    }
-
-    if (!washrooms || washrooms.length === 0) {
-      return { success: true, updatedCount: 0 };
-    }
-
-    // Update all washrooms with the new PIN
-    const { error: updateError } = await supabase
-      .from('washrooms')
-      .update({
-        pin_code: hashedPin,
-        pin_display: newPin,
-        pin_changed_at: new Date().toISOString(),
-      })
-      .eq('business_name', businessName)
-      .eq('is_active', true);
-
-    if (updateError) {
-      return { success: false, error: updateError.message };
-    }
-
-    return { success: true, updatedCount: washrooms.length };
-  } catch (error) {
-    return { success: false, error: String(error) };
-  }
-}
-
-// Update alert threshold hours for all washrooms of a business
-export async function updateAlertThresholdForBusiness(
-  businessName: string,
-  thresholdHours: number
-): Promise<{ success: boolean; updatedCount?: number; error?: string }> {
-  try {
-    // Get all active washrooms for this business
-    const { data: washrooms, error: fetchError } = await supabase
-      .from('washrooms')
-      .select('id')
-      .eq('business_name', businessName)
-      .eq('is_active', true);
-
-    if (fetchError) {
-      return { success: false, error: fetchError.message };
-    }
-
-    if (!washrooms || washrooms.length === 0) {
-      return { success: true, updatedCount: 0 };
-    }
-
-    // Update all washrooms with the new threshold
-    const washroomIds = washrooms.map(w => w.id);
-    const { error: updateError } = await supabase
-      .from('washrooms')
-      .update({ alert_threshold_hours: thresholdHours })
-      .in('id', washroomIds);
-
-    if (updateError) {
-      return { success: false, error: updateError.message };
-    }
-
-    return { success: true, updatedCount: washrooms.length };
   } catch (error) {
     return { success: false, error: String(error) };
   }
@@ -3292,7 +3165,6 @@ export async function getManagerBusinesses(managerId: string): Promise<{ success
           id: business.id,
           name: business.name,
           email: business.email,
-          password_display: business.password_display ?? null,
           address: business.address ?? null,
           is_admin: business.is_admin,
           is_active: business.is_active,
@@ -3852,7 +3724,6 @@ export async function validateBusinessSession(businessId: string): Promise<{
         id: business.id,
         name: business.name,
         email: business.email,
-        password_display: business.password_display ?? null,
         address: business.address ?? null,
         is_admin: business.is_admin,
         is_active: business.is_active,
@@ -3918,7 +3789,6 @@ export async function validateManagerBusinessAccess(
           id: access.business.id,
           name: access.business.name,
           email: access.business.email,
-          password_display: access.business.password_display ?? null,
           address: access.business.address ?? null,
           is_admin: access.business.is_admin,
           is_active: access.business.is_active,

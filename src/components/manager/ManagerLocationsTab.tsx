@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   MapPin, CheckCircle2, AlertTriangle, AlertOctagon, ExternalLink, Power,
-  Sparkles, Download, Mail, Save, X, Clock, ChevronRight,
+  Sparkles, Download, Mail, Key, ChevronRight, Save, X, Clock,
 } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useManagerContext } from './ManagerContext';
@@ -20,6 +20,12 @@ export function ManagerLocationsTab() {
   const [editAlertEmail, setEditAlertEmail] = useState('');
   const [isSavingEmail, setIsSavingEmail] = useState(false);
 
+  // PIN management
+  const [showPinManagement, setShowPinManagement] = useState(false);
+  const [newStaffPin, setNewStaffPin] = useState('');
+  const [confirmStaffPin, setConfirmStaffPin] = useState('');
+  const [isSavingPin, setIsSavingPin] = useState(false);
+
   // Export modal
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportLocationId, setExportLocationId] = useState<string | null>(null);
@@ -32,6 +38,9 @@ export function ManagerLocationsTab() {
     const loc = ctx.displayLocations.find(l => l.id === locationId);
     setSelectedLocationId(locationId);
     setEditAlertEmail(loc?.supervisorEmail || '');
+    setShowPinManagement(false);
+    setNewStaffPin('');
+    setConfirmStaffPin('');
   };
 
   const handleSaveEmail = async () => {
@@ -39,6 +48,24 @@ export function ManagerLocationsTab() {
     setIsSavingEmail(true);
     await ctx.handleSaveAlertEmail(selectedLocationId, editAlertEmail.trim());
     setIsSavingEmail(false);
+  };
+
+  const handleSavePin = async () => {
+    if (!selectedLocationId) return;
+    if (!newStaffPin || newStaffPin.length < 4 || newStaffPin.length > 5 || !/^\d{4,5}$/.test(newStaffPin)) {
+      Alert.alert('Error', 'Please enter a valid 4 or 5-digit PIN');
+      return;
+    }
+    if (newStaffPin !== confirmStaffPin) {
+      Alert.alert('Error', 'PINs do not match');
+      return;
+    }
+    setIsSavingPin(true);
+    await ctx.handleSaveStaffPin(selectedLocationId, newStaffPin);
+    setIsSavingPin(false);
+    setNewStaffPin('');
+    setConfirmStaffPin('');
+    setShowPinManagement(false);
   };
 
   const openExportModal = (locationId: string) => {
@@ -275,6 +302,68 @@ export function ManagerLocationsTab() {
                       <Text className="text-xs text-white/80">Exporter l'historique</Text>
                     </View>
                   </Pressable>
+
+                  {/* Staff PIN - Owner only */}
+                  {ctx.canPerformAction('canEditSettings') && (
+                    <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fcd34d' }}>
+                      <Pressable onPress={() => setShowPinManagement(!showPinManagement)}>
+                        <View className="flex-row items-center justify-between">
+                          <View className="flex-row items-center">
+                            <Key size={16} color="#92400e" />
+                            <Text className="text-sm font-semibold ml-2" style={{ color: '#92400e' }}>Staff PIN</Text>
+                          </View>
+                          <ChevronRight
+                            size={18} color="#92400e"
+                            style={{ transform: [{ rotate: showPinManagement ? '90deg' : '0deg' }] }}
+                          />
+                        </View>
+                        <Text className="text-xs mt-1" style={{ color: '#b45309' }}>NIP du personnel</Text>
+                        {(ctx.currentBusiness?.staff_pin_display || location.pinCode) && (
+                          <Text className="text-3xl font-black tracking-widest mt-2" style={{ color: '#92400e' }}>
+                            {ctx.currentBusiness?.staff_pin_display || location.pinCode}
+                          </Text>
+                        )}
+                      </Pressable>
+
+                      {showPinManagement && (
+                        <View className="mt-4 pt-4" style={{ borderTopWidth: 1, borderTopColor: '#fcd34d' }}>
+                          <View className="mb-3">
+                            <Text className="text-xs font-medium mb-2" style={{ color: '#92400e' }}>
+                              New PIN (4-5 digits)
+                            </Text>
+                            <TextInput
+                              value={newStaffPin} onChangeText={setNewStaffPin}
+                              placeholder="Enter new PIN" placeholderTextColor="#d97706"
+                              keyboardType="numeric" maxLength={5} secureTextEntry
+                              className="rounded-lg px-4 py-3 text-base"
+                              style={{ backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fcd34d', color: '#92400e' }}
+                            />
+                          </View>
+                          <View className="mb-4">
+                            <Text className="text-xs font-medium mb-2" style={{ color: '#92400e' }}>
+                              Confirm PIN / Confirmer le NIP
+                            </Text>
+                            <TextInput
+                              value={confirmStaffPin} onChangeText={setConfirmStaffPin}
+                              placeholder="Confirm new PIN" placeholderTextColor="#d97706"
+                              keyboardType="numeric" maxLength={5} secureTextEntry
+                              className="rounded-lg px-4 py-3 text-base"
+                              style={{ backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fcd34d', color: '#92400e' }}
+                            />
+                          </View>
+                          <Pressable
+                            onPress={handleSavePin} disabled={isSavingPin}
+                            className="flex-row items-center justify-center py-3 rounded-lg"
+                            style={{ backgroundColor: isSavingPin ? '#d97706' : '#92400e' }}
+                          >
+                            {isSavingPin ? <ActivityIndicator size="small" color="#fff" /> : (
+                              <><Save size={18} color="#fff" /><Text className="text-white font-bold ml-2">Save PIN</Text></>
+                            )}
+                          </Pressable>
+                        </View>
+                      )}
+                    </View>
+                  )}
 
                   {/* Alert Email */}
                   <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.borderLight }}>

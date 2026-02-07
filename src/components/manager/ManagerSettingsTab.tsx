@@ -6,14 +6,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Mail, ChevronRight, Save, Plus, X, ClipboardList, FileText,
-  Calendar, Users, UserPlus, Shield, Eye, Crown, Trash2, Clock, Key,
+  Calendar, Users, UserPlus, Shield, Eye, Crown, Trash2, Clock,
 } from 'lucide-react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useManagerContext, SafeManagerRow, ManagerPermissions, ManagerRole, AlertSchedule } from './ManagerContext';
-import { DEFAULT_ALERT_SCHEDULE, updateAllWashroomPinsForBusiness, updateAlertThresholdForBusiness } from '@/lib/supabase';
+import { DEFAULT_ALERT_SCHEDULE } from '@/lib/supabase';
 import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
-import { TimePickerModal } from '@/components/TimePickerModal';
-import { parseTimeString } from '@/lib/timezone';
 
 type TeamMember = SafeManagerRow & { role: ManagerRole; permissions: ManagerPermissions };
 
@@ -24,28 +22,11 @@ export function ManagerSettingsTab() {
   const [localGlobalEmails, setLocalGlobalEmails] = useState<string[]>([]);
   const [localUseGlobal, setLocalUseGlobal] = useState(false);
   const [newEmail, setNewEmail] = useState('');
+  const [isSavingAlerts, setIsSavingAlerts] = useState(false);
 
   // Per-day schedule
   const [localSchedule, setLocalSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
-
-  // Alert threshold hours (applies to all washrooms)
-  const [alertThresholdHours, setAlertThresholdHours] = useState<number>(8);
-  const [isSavingThreshold, setIsSavingThreshold] = useState(false);
-
-  // Combined saving state for alerts + schedule
-  const [isSavingAllSettings, setIsSavingAllSettings] = useState(false);
-
-  // PIN Management
-  const [showPinSection, setShowPinSection] = useState(false);
-  const [newUniversalPin, setNewUniversalPin] = useState('');
-  const [confirmUniversalPin, setConfirmUniversalPin] = useState('');
-  const [isSavingPin, setIsSavingPin] = useState(false);
-
-  // Time Picker Modal
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [timePickerDay, setTimePickerDay] = useState<string>('');
-  const [timePickerField, setTimePickerField] = useState<'start' | 'end'>('start');
-  const [timePickerInitial, setTimePickerInitial] = useState('08:00');
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
   // Inspector / Audit
   const [showInspector, setShowInspector] = useState(false);
@@ -73,13 +54,9 @@ export function ManagerSettingsTab() {
     setLocalBusinessName(ctx.businessName);
     setLocalBusinessAddress(ctx.businessAddress);
     setLocalSchedule(ctx.alertSchedule);
-    // Get alert threshold from first washroom (they should all be the same)
-    if (ctx.businessLocations.length > 0) {
-      setAlertThresholdHours(ctx.businessLocations[0].alert_threshold_hours ?? 8);
-    }
-  }, [ctx.globalAlertEmails, ctx.useGlobalAlerts, ctx.businessName, ctx.businessAddress, ctx.alertSchedule, ctx.businessLocations]);
+  }, [ctx.globalAlertEmails, ctx.useGlobalAlerts, ctx.businessName, ctx.businessAddress, ctx.alertSchedule]);
 
-  const handleAddEmail = async () => {
+  const handleAddEmail = () => {
     const email = newEmail.trim().toLowerCase();
     if (!email || !/\S+@\S+\.\S+/.test(email)) {
       Alert.alert('Error', 'Please enter a valid email address');
@@ -89,77 +66,24 @@ export function ManagerSettingsTab() {
       Alert.alert('Error', 'This email is already in the list');
       return;
     }
-    const updatedEmails = [...localGlobalEmails, email];
-    setLocalGlobalEmails(updatedEmails);
+    setLocalGlobalEmails(prev => [...prev, email]);
     setNewEmail('');
-    // Auto-save immediately (silent - no alert)
-    await ctx.handleSaveGlobalAlertSettings(updatedEmails, localUseGlobal, false);
   };
 
-  const handleRemoveEmail = async (email: string) => {
-    const updatedEmails = localGlobalEmails.filter(e => e !== email);
-    setLocalGlobalEmails(updatedEmails);
-    // Auto-save immediately (silent - no alert)
-    await ctx.handleSaveGlobalAlertSettings(updatedEmails, localUseGlobal, false);
+  const handleRemoveEmail = (email: string) => {
+    setLocalGlobalEmails(prev => prev.filter(e => e !== email));
   };
 
-  const handleToggleUseGlobal = async (value: boolean) => {
-    setLocalUseGlobal(value);
-    // Auto-save immediately (silent - no alert)
-    await ctx.handleSaveGlobalAlertSettings(localGlobalEmails, value, false);
+  const handleSaveAlertSettings = async () => {
+    setIsSavingAlerts(true);
+    await ctx.handleSaveGlobalAlertSettings(localGlobalEmails, localUseGlobal);
+    setIsSavingAlerts(false);
   };
 
-  // Save only the schedule (emails are auto-saved)
-  const handleSaveScheduleSettings = async () => {
-    setIsSavingAllSettings(true);
-    await ctx.handleSaveAlertSchedule(localSchedule, true);
-    setIsSavingAllSettings(false);
-  };
-
-  // Save universal PIN for all washrooms
-  const handleSaveUniversalPin = async () => {
-    if (!newUniversalPin || newUniversalPin.length < 4 || newUniversalPin.length > 5 || !/^\d{4,5}$/.test(newUniversalPin)) {
-      Alert.alert('Error', 'Please enter a valid 4 or 5-digit PIN');
-      return;
-    }
-    if (newUniversalPin !== confirmUniversalPin) {
-      Alert.alert('Error', 'PINs do not match');
-      return;
-    }
-    if (!ctx.currentBusiness?.name) {
-      Alert.alert('Error', 'Business not found');
-      return;
-    }
-    setIsSavingPin(true);
-    const result = await updateAllWashroomPinsForBusiness(ctx.currentBusiness.name, newUniversalPin);
-    setIsSavingPin(false);
-    if (result.success) {
-      Alert.alert('Success', `PIN updated for ${result.updatedCount} locations!\nNIP mis à jour pour ${result.updatedCount} emplacements!`);
-      setNewUniversalPin('');
-      setConfirmUniversalPin('');
-      setShowPinSection(false);
-      ctx.handleRefreshData();
-    } else {
-      Alert.alert('Error', result.error || 'Failed to update PIN');
-    }
-  };
-
-  // Save alert threshold hours for all washrooms
-  const handleSaveAlertThreshold = async (hours: number) => {
-    if (!ctx.currentBusiness?.name) {
-      Alert.alert('Error', 'Business not found');
-      return;
-    }
-    setIsSavingThreshold(true);
-    const result = await updateAlertThresholdForBusiness(ctx.currentBusiness.name, hours);
-    setIsSavingThreshold(false);
-    if (result.success) {
-      setAlertThresholdHours(hours);
-      Alert.alert('Success', `Alert threshold set to ${hours} hours for ${result.updatedCount} location(s)!\nSeuil d'alerte défini à ${hours} heures!`);
-      ctx.handleRefreshData();
-    } else {
-      Alert.alert('Error', result.error || 'Failed to update alert threshold');
-    }
+  const handleSaveSchedule = async () => {
+    setIsSavingSchedule(true);
+    await ctx.handleSaveAlertSchedule(localSchedule);
+    setIsSavingSchedule(false);
   };
 
   const ALL_DAYS: { key: string; label: string }[] = [
@@ -184,29 +108,6 @@ export function ManagerSettingsTab() {
       const current = prev[dayKey as keyof AlertSchedule] || { enabled: true, start: '08:00', end: '18:00' };
       return { ...prev, [dayKey]: { ...current, [field]: value } };
     });
-  };
-
-  const openTimePicker = (dayKey: string, field: 'start' | 'end', currentValue: string) => {
-    setTimePickerDay(dayKey);
-    setTimePickerField(field);
-    setTimePickerInitial(currentValue);
-    setShowTimePicker(true);
-  };
-
-  const handleTimeSelect = (time: string) => {
-    if (timePickerDay) {
-      updateDayTime(timePickerDay, timePickerField, time);
-    }
-  };
-
-  // Format 24h time to 12h display
-  const formatTimeDisplay = (time24: string): string => {
-    const { hours, minutes } = parseTimeString(time24);
-    const m = minutes.toString().padStart(2, '0');
-    if (hours === 0) return `12:${m} AM`;
-    if (hours < 12) return `${hours}:${m} AM`;
-    if (hours === 12) return `12:${m} PM`;
-    return `${hours - 12}:${m} PM`;
   };
 
   const handleSaveAddress = async () => {
@@ -277,7 +178,7 @@ export function ManagerSettingsTab() {
                     </Text>
                   </View>
                   <Switch
-                    value={localUseGlobal} onValueChange={handleToggleUseGlobal}
+                    value={localUseGlobal} onValueChange={setLocalUseGlobal}
                     trackColor={{ false: '#d1d5db', true: '#86efac' }}
                     thumbColor={localUseGlobal ? C.actionGreen : '#f4f3f4'}
                   />
@@ -318,6 +219,17 @@ export function ManagerSettingsTab() {
                 </Pressable>
               </View>
 
+              <Pressable
+                onPress={handleSaveAlertSettings} disabled={isSavingAlerts}
+                className="flex-row items-center justify-center py-3 rounded-lg"
+                style={{ backgroundColor: isSavingAlerts ? C.textMuted : C.actionGreen }}
+              >
+                {isSavingAlerts ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <><Save size={16} color="#fff" /><Text className="text-white font-bold ml-2">Save Alert Settings</Text></>
+                )}
+              </Pressable>
             </View>
           </Animated.View>
         )}
@@ -361,25 +273,23 @@ export function ManagerSettingsTab() {
                     </View>
                     {isEnabled && (
                       <View className="flex-row items-center gap-2 mt-1">
-                        <Pressable
-                          onPress={() => openTimePicker(day.key, 'start', startTime)}
-                          className="flex-1 rounded-lg px-3 py-2.5 items-center active:opacity-70"
-                          style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.actionGreen }}
-                        >
-                          <Text className="text-sm font-medium" style={{ color: C.emeraldDark }}>
-                            {formatTimeDisplay(startTime)}
-                          </Text>
-                        </Pressable>
+                        <TextInput
+                          value={startTime}
+                          onChangeText={(text) => updateDayTime(day.key, 'start', text)}
+                          placeholder="08:00"
+                          placeholderTextColor={C.textMuted}
+                          className="flex-1 rounded-lg px-3 py-2 text-center text-sm"
+                          style={{ backgroundColor: C.white, borderWidth: 1, borderColor: '#e2e8f0', color: C.textPrimary }}
+                        />
                         <Text className="text-xs font-medium" style={{ color: C.textMuted }}>to</Text>
-                        <Pressable
-                          onPress={() => openTimePicker(day.key, 'end', endTime)}
-                          className="flex-1 rounded-lg px-3 py-2.5 items-center active:opacity-70"
-                          style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.actionGreen }}
-                        >
-                          <Text className="text-sm font-medium" style={{ color: C.emeraldDark }}>
-                            {formatTimeDisplay(endTime)}
-                          </Text>
-                        </Pressable>
+                        <TextInput
+                          value={endTime}
+                          onChangeText={(text) => updateDayTime(day.key, 'end', text)}
+                          placeholder="18:00"
+                          placeholderTextColor={C.textMuted}
+                          className="flex-1 rounded-lg px-3 py-2 text-center text-sm"
+                          style={{ backgroundColor: C.white, borderWidth: 1, borderColor: '#e2e8f0', color: C.textPrimary }}
+                        />
                       </View>
                     )}
                   </View>
@@ -387,144 +297,20 @@ export function ManagerSettingsTab() {
               })}
 
               <Text className="text-[10px] mb-3 mt-1" style={{ color: C.textMuted }}>
-                Tap times to change. All times in Atlantic timezone (Moncton/Dieppe).
+                Use 24-hour format (e.g., 08:00, 18:00). Alerts are only sent during enabled days and hours.
               </Text>
 
               <Pressable
-                onPress={handleSaveScheduleSettings} disabled={isSavingAllSettings}
+                onPress={handleSaveSchedule} disabled={isSavingSchedule}
                 className="flex-row items-center justify-center py-3 rounded-lg"
-                style={{ backgroundColor: isSavingAllSettings ? C.textMuted : C.actionGreen }}
+                style={{ backgroundColor: isSavingSchedule ? C.textMuted : '#d97706' }}
               >
-                {isSavingAllSettings ? (
+                {isSavingSchedule ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <><Save size={16} color="#fff" /><Text className="text-white font-bold ml-2">Save Schedule Settings</Text></>
+                  <><Save size={16} color="#fff" /><Text className="text-white font-bold ml-2">Save Schedule</Text></>
                 )}
               </Pressable>
-            </View>
-          </Animated.View>
-        )}
-
-        {/* Alert Threshold Hours - Owner only */}
-        {ctx.canPerformAction('canEditSettings') && (
-          <Animated.View entering={FadeIn.delay(160).duration(400)}>
-            <View className="rounded-2xl p-4 mb-3" style={{ backgroundColor: C.white, ...D.shadow.sm }}>
-              <View className="flex-row items-center mb-3">
-                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: '#fee2e2' }}>
-                  <Clock size={20} color="#dc2626" />
-                </View>
-                <View className="ml-3 flex-1">
-                  <Text className="text-sm font-bold" style={{ color: C.textPrimary }}>Alert Threshold</Text>
-                  <Text className="text-xs" style={{ color: C.textMuted }}>Seuil d'alerte (heures sans nettoyage)</Text>
-                </View>
-              </View>
-
-              <Text className="text-xs mb-3" style={{ color: C.textMuted }}>
-                Send alert when no cleaning is logged after this many hours during business hours.
-              </Text>
-
-              <View className="flex-row flex-wrap gap-2">
-                {[1, 2, 4, 6, 8, 12, 24].map((hours) => (
-                  <Pressable
-                    key={hours}
-                    onPress={() => handleSaveAlertThreshold(hours)}
-                    disabled={isSavingThreshold}
-                    className="px-4 py-2.5 rounded-xl"
-                    style={{
-                      backgroundColor: alertThresholdHours === hours ? '#dc2626' : '#f1f5f9',
-                      opacity: isSavingThreshold ? 0.6 : 1,
-                    }}
-                  >
-                    <Text
-                      className="font-bold text-sm"
-                      style={{ color: alertThresholdHours === hours ? '#ffffff' : '#64748b' }}
-                    >
-                      {hours}h
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              <Text className="text-[10px] mt-3" style={{ color: C.textMuted }}>
-                Currently set to {alertThresholdHours} hour{alertThresholdHours !== 1 ? 's' : ''}. Tap to change for all locations.
-              </Text>
-            </View>
-          </Animated.View>
-        )}
-
-        {/* PIN for All Washrooms - Owner only */}
-        {ctx.canPerformAction('canEditSettings') && (
-          <Animated.View entering={FadeIn.delay(175).duration(400)}>
-            <View className="rounded-2xl p-4 mb-3" style={{ backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fcd34d', ...D.shadow.sm }}>
-              <Pressable onPress={() => setShowPinSection(!showPinSection)}>
-                <View className="flex-row items-center justify-between">
-                  <View className="flex-row items-center">
-                    <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: '#fde68a' }}>
-                      <Key size={20} color="#92400e" />
-                    </View>
-                    <View className="ml-3 flex-1">
-                      <Text className="text-sm font-bold" style={{ color: '#92400e' }}>PIN for All Washrooms</Text>
-                      <Text className="text-xs" style={{ color: '#b45309' }}>NIP pour tous les emplacements</Text>
-                    </View>
-                  </View>
-                  <ChevronRight
-                    size={18} color="#92400e"
-                    style={{ transform: [{ rotate: showPinSection ? '90deg' : '0deg' }] }}
-                  />
-                </View>
-              </Pressable>
-
-              {/* Current PIN Display */}
-              {(ctx.currentBusiness?.staff_pin_display || (ctx.businessLocations.length > 0 && ctx.businessLocations[0]?.pin_display)) && (
-                <View className="mt-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: '#fcd34d' }}>
-                  <Text className="text-xs font-medium" style={{ color: '#b45309' }}>Current PIN / NIP actuel</Text>
-                  <Text className="text-3xl font-black tracking-widest mt-1" style={{ color: '#92400e' }}>
-                    {ctx.currentBusiness?.staff_pin_display || ctx.businessLocations[0]?.pin_display}
-                  </Text>
-                </View>
-              )}
-
-              {showPinSection && (
-                <View className="mt-4 pt-4" style={{ borderTopWidth: 1, borderTopColor: '#fcd34d' }}>
-                  <Text className="text-xs mb-3" style={{ color: '#b45309' }}>
-                    Update the staff PIN for all washroom locations at once.
-                  </Text>
-
-                  <View className="mb-3">
-                    <Text className="text-xs font-medium mb-1.5" style={{ color: '#92400e' }}>New PIN (4-5 digits)</Text>
-                    <TextInput
-                      value={newUniversalPin} onChangeText={setNewUniversalPin}
-                      placeholder="Enter new PIN" placeholderTextColor="#d97706"
-                      keyboardType="numeric" maxLength={5} secureTextEntry
-                      className="rounded-lg px-4 py-3 text-base"
-                      style={{ backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fcd34d', color: '#92400e' }}
-                    />
-                  </View>
-
-                  <View className="mb-4">
-                    <Text className="text-xs font-medium mb-1.5" style={{ color: '#92400e' }}>Confirm PIN / Confirmer le NIP</Text>
-                    <TextInput
-                      value={confirmUniversalPin} onChangeText={setConfirmUniversalPin}
-                      placeholder="Confirm new PIN" placeholderTextColor="#d97706"
-                      keyboardType="numeric" maxLength={5} secureTextEntry
-                      className="rounded-lg px-4 py-3 text-base"
-                      style={{ backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fcd34d', color: '#92400e' }}
-                    />
-                  </View>
-
-                  <Pressable
-                    onPress={handleSaveUniversalPin} disabled={isSavingPin}
-                    className="flex-row items-center justify-center py-3 rounded-lg"
-                    style={{ backgroundColor: isSavingPin ? '#d97706' : '#92400e' }}
-                  >
-                    {isSavingPin ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <><Save size={16} color="#fff" /><Text className="text-white font-bold ml-2">Update PIN for All Locations</Text></>
-                    )}
-                  </Pressable>
-                </View>
-              )}
             </View>
           </Animated.View>
         )}
@@ -771,16 +557,6 @@ export function ManagerSettingsTab() {
           </View>
         </View>
       </Modal>
-
-      {/* Time Picker Modal */}
-      <TimePickerModal
-        visible={showTimePicker}
-        onClose={() => setShowTimePicker(false)}
-        onSelect={handleTimeSelect}
-        initialTime={timePickerInitial}
-        title={timePickerField === 'start' ? 'Start Time' : 'End Time'}
-        titleFr={timePickerField === 'start' ? 'Heure de début' : 'Heure de fin'}
-      />
     </>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,9 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
+  TextInput,
   Alert,
   Switch,
-  RefreshControl,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -47,8 +46,8 @@ import * as Linking from 'expo-linking';
 import * as Clipboard from 'expo-clipboard';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { Platform } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { WebSafeInput } from '@/components/WebSafeInput';
 import { generatePDFHTML, openPDFInNewWindow } from '@/lib/pdf-template';
 import {
   BusinessRow,
@@ -69,7 +68,6 @@ import {
   deleteWashroomAndRelatedData,
   updateBusinessAddress,
   updateBusinessPassword,
-  updateAllWashroomPinsForBusiness,
   getQrScanStatsForLocations,
   QrScanStatRow,
   getQrScanLogsForLocations,
@@ -131,16 +129,9 @@ export default function BusinessDetailScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [isSavingPassword, setIsSavingPassword] = useState(false);
 
-  // Universal PIN for all locations
-  const [newUniversalPin, setNewUniversalPin] = useState('');
-  const [isSavingUniversalPin, setIsSavingUniversalPin] = useState(false);
-
   // QR Code modal
   const [showQrModal, setShowQrModal] = useState(false);
   const [selectedWashroom, setSelectedWashroom] = useState<WashroomRow | null>(null);
-
-  // Pull-to-refresh state
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isExportingScanHistory, setIsExportingScanHistory] = useState(false);
 
@@ -300,66 +291,6 @@ export default function BusinessDetailScreen() {
     if (id) {
       loadData();
     }
-
-    // Auto-refresh every 30 seconds to keep data current
-    const refreshInterval = setInterval(() => {
-      if (id && !isLoading) {
-        loadDataSilent();
-      }
-    }, 30000);
-
-    return () => clearInterval(refreshInterval);
-  }, [id]);
-
-  // Silent data load for auto-refresh (no loading spinner)
-  const loadDataSilent = async () => {
-    try {
-      const businessesResult = await getAllBusinesses();
-      if (businessesResult.success && businessesResult.data) {
-        const foundBusiness = businessesResult.data.find(b => b.id === id);
-        if (foundBusiness) {
-          setBusiness(foundBusiness);
-          setBusinessSchedule(foundBusiness.alert_schedule as AlertSchedule ?? DEFAULT_ALERT_SCHEDULE);
-
-          const washroomsResult = await getWashroomsForBusiness(foundBusiness.name);
-          if (washroomsResult.success && washroomsResult.data) {
-            setWashrooms(washroomsResult.data);
-
-            const washroomIds = washroomsResult.data.map(w => w.id);
-            if (washroomIds.length > 0) {
-              const [logsResult, issuesResult, qrStatsResult, qrLogsResult] = await Promise.all([
-                getLogsForBusinessByName(foundBusiness.name),
-                getIssuesForBusinessByName(foundBusiness.name),
-                getQrScanStatsForLocations(washroomIds),
-                getQrScanLogsForLocations(washroomIds, { limit: 50 }),
-              ]);
-
-              if (logsResult.success && logsResult.data) {
-                setAllLogs(logsResult.data);
-              }
-              if (issuesResult.success && issuesResult.data) {
-                setAllIssues(issuesResult.data);
-              }
-              if (qrStatsResult.success && qrStatsResult.data) {
-                setQrScanStats(qrStatsResult.data);
-              }
-              if (qrLogsResult.success && qrLogsResult.data) {
-                setQrScanLogs(qrLogsResult.data);
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('[BusinessDetail] Silent refresh error:', error);
-    }
-  };
-
-  // Pull-to-refresh handler
-  const onRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    await loadDataSilent();
-    setIsRefreshing(false);
   }, [id]);
 
   const loadData = async () => {
@@ -422,25 +353,9 @@ export default function BusinessDetailScreen() {
       return;
     }
 
-    // Determine PIN to use
-    const isFirstWashroom = washrooms.length === 0;
-    let pinToUse: string;
-
-    if (isFirstWashroom) {
-      // First washroom - require PIN entry
-      if (!newLocationPin || newLocationPin.length < 4 || newLocationPin.length > 5 || !/^\d{4,5}$/.test(newLocationPin)) {
-        Alert.alert('Error', 'Please enter a valid 4 or 5-digit PIN');
-        return;
-      }
-      pinToUse = newLocationPin;
-    } else {
-      // Subsequent washroom - inherit PIN from existing washroom
-      const existingPin = washrooms[0]?.pin_display || business?.staff_pin_display;
-      if (!existingPin) {
-        Alert.alert('Error', 'No existing PIN found. Please contact support.');
-        return;
-      }
-      pinToUse = existingPin;
+    if (!newLocationPin || newLocationPin.length < 4 || newLocationPin.length > 5 || !/^\d{4,5}$/.test(newLocationPin)) {
+      Alert.alert('Error', 'Please enter a valid 4 or 5-digit PIN');
+      return;
     }
 
     setIsCreating(true);
@@ -450,7 +365,7 @@ export default function BusinessDetailScreen() {
         id: generateId(),
         business_name: business.name,
         room_name: newLocationName.trim(),
-        pin_code: pinToUse,
+        pin_code: newLocationPin,
         alert_email: newLocationAlertEmail.trim() || undefined,
       });
 
@@ -460,7 +375,7 @@ export default function BusinessDetailScreen() {
         setNewLocationPin('');
         setNewLocationAlertEmail('');
         loadData();
-        Alert.alert('Success', `Washroom "${newLocationName.trim()}" created with PIN: ${pinToUse}`);
+        Alert.alert('Success', `Washroom "${newLocationName.trim()}" created with PIN: ${newLocationPin}`);
       } else {
         Alert.alert('Error', result.error || 'Failed to create location');
       }
@@ -787,8 +702,6 @@ export default function BusinessDetailScreen() {
               const result = await updateBusinessPassword(business.id, newPassword.trim());
               if (result.success) {
                 setNewPassword('');
-                // Reload data to get the updated password_display
-                loadData();
                 Alert.alert('Success', 'Password updated! The business manager can now log in with the new password.');
               } else {
                 Alert.alert('Error', result.error || 'Failed to update password');
@@ -804,57 +717,10 @@ export default function BusinessDetailScreen() {
     );
   };
 
-  // Handle updating PIN for all locations
-  const handleUpdateAllPins = async () => {
-    if (!business?.name) return;
-    if (!newUniversalPin.trim()) {
-      Alert.alert('Error', 'Please enter a new PIN');
-      return;
-    }
-    if (!/^\d{4,5}$/.test(newUniversalPin.trim())) {
-      Alert.alert('Error', 'PIN must be 4 or 5 digits');
-      return;
-    }
-
-    Alert.alert(
-      'Update PIN for All Locations',
-      `Are you sure you want to update the PIN to "${newUniversalPin}" for ALL ${washrooms.length} washroom location(s)?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Update All',
-          onPress: async () => {
-            setIsSavingUniversalPin(true);
-            try {
-              const result = await updateAllWashroomPinsForBusiness(business.name, newUniversalPin.trim());
-              if (result.success) {
-                setNewUniversalPin('');
-                loadData(); // Refresh to show updated PINs
-                Alert.alert('Success', `PIN updated for ${result.updatedCount || 0} location(s)!`);
-              } else {
-                Alert.alert('Error', result.error || 'Failed to update PINs');
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Network error. Please try again.');
-            } finally {
-              setIsSavingUniversalPin(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  // Calculate today's logs - ensure timezone-safe comparison
   const todayLogs = allLogs.filter(log => {
     const logDate = new Date(log.timestamp);
     const today = new Date();
-    // Compare year, month, day in local timezone
-    return (
-      logDate.getFullYear() === today.getFullYear() &&
-      logDate.getMonth() === today.getMonth() &&
-      logDate.getDate() === today.getDate()
-    );
+    return logDate.toDateString() === today.toDateString();
   }).length;
 
   const openIssueCount = allIssues.filter(i => i.status === 'open').length;
@@ -921,18 +787,7 @@ export default function BusinessDetailScreen() {
           </View>
         </View>
 
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ padding: 16 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={onRefresh}
-              colors={[COLORS.primary]}
-              tintColor={COLORS.primary}
-            />
-          }
-        >
+        <ScrollView className="flex-1" contentContainerStyle={{ padding: 16 }}>
           {/* Stats Overview */}
           <Animated.View
             entering={FadeInDown.duration(400)}
@@ -1194,21 +1049,19 @@ export default function BusinessDetailScreen() {
                       </View>
                     </View>
 
-                    {/* Middle row: Stats and Alert Email */}
+                    {/* Middle row: PIN and Alert Email */}
                     <View className="flex-row items-center mt-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
+                      <View className="flex-1 flex-row items-center">
+                        <Key size={14} color={COLORS.textMuted} />
+                        <Text className="text-sm font-mono ml-2" style={{ color: business?.staff_pin_display ? '#d97706' : (washroom.pin_display ? COLORS.textDark : COLORS.textMuted) }}>
+                          PIN: {business?.staff_pin_display ? 'Universal' : (washroom.pin_display || 'Not set')}
+                        </Text>
+                      </View>
                       {washroom.alert_email && (
                         <View className="flex-1 flex-row items-center">
                           <Mail size={14} color={COLORS.textMuted} />
                           <Text className="text-xs ml-2" style={{ color: COLORS.textMuted }} numberOfLines={1}>
                             {washroom.alert_email}
-                          </Text>
-                        </View>
-                      )}
-                      {!washroom.alert_email && (
-                        <View className="flex-1 flex-row items-center">
-                          <Mail size={14} color={COLORS.textMuted} />
-                          <Text className="text-xs ml-2" style={{ color: COLORS.textMuted }}>
-                            No alert email set
                           </Text>
                         </View>
                       )}
@@ -1284,140 +1137,11 @@ export default function BusinessDetailScreen() {
                 </Text>
               </View>
 
-              {/* Email with Current Password PIN displayed */}
+              {/* Email */}
               <View className="mb-3">
                 <Text className="text-xs font-medium mb-1" style={{ color: COLORS.textMuted }}>Email</Text>
-                <View className="flex-row items-center justify-between">
-                  <Text className="text-sm flex-1" style={{ color: COLORS.textDark }}>
-                    {business.email}
-                  </Text>
-                  {/* Current Password/PIN Display */}
-                  {business.password_display && (
-                    <View className="flex-row items-center px-2 py-1 rounded-lg ml-2" style={{ backgroundColor: '#fef3c7' }}>
-                      <Key size={12} color="#d97706" />
-                      <Text className="text-xs font-mono font-bold ml-1" style={{ color: '#d97706' }}>
-                        PIN: {business.password_display}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              {/* Business Address - Directly beneath email/PIN */}
-              <View className="mb-3">
-                <Text className="text-xs font-medium mb-1" style={{ color: COLORS.textMuted }}>Business Address</Text>
-                <View className="flex-row items-center gap-2">
-                  <WebSafeInput
-                    value={businessAddress}
-                    onChangeText={setBusinessAddress}
-                    placeholder="Enter business address"
-                    placeholderTextColor={COLORS.textMuted}
-                    inputType="text"
-                    style={{
-                      backgroundColor: COLORS.primaryLight,
-                      fontSize: 14,
-                      color: COLORS.textDark,
-                    }}
-                  />
-                  <Pressable
-                    onPress={handleSaveBusinessAddress}
-                    disabled={isSavingAddress}
-                    className="px-3 py-2 rounded-lg active:opacity-70"
-                    style={{ backgroundColor: COLORS.primary }}
-                  >
-                    {isSavingAddress ? (
-                      <ActivityIndicator size="small" color={COLORS.white} />
-                    ) : (
-                      <Save size={18} color={COLORS.white} />
-                    )}
-                  </Pressable>
-                </View>
-                <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
-                  This address appears in audit reports
-                </Text>
-              </View>
-
-              {/* Manager Password - Editable */}
-              <View className="mb-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
-                <Text className="text-xs font-medium mb-1" style={{ color: COLORS.textMuted }}>Manager Password</Text>
-                <View className="flex-row items-center gap-2">
-                  <WebSafeInput
-                    value={newPassword}
-                    onChangeText={setNewPassword}
-                    placeholder="Enter new password"
-                    placeholderTextColor={COLORS.textMuted}
-                    inputType="text"
-                    style={{
-                      backgroundColor: COLORS.primaryLight,
-                      fontSize: 14,
-                      color: COLORS.textDark,
-                    }}
-                  />
-                  <Pressable
-                    onPress={handleSavePassword}
-                    disabled={isSavingPassword || !newPassword.trim()}
-                    className="px-3 py-2 rounded-lg active:opacity-70"
-                    style={{ backgroundColor: newPassword.trim() ? COLORS.primary : COLORS.textMuted }}
-                  >
-                    {isSavingPassword ? (
-                      <ActivityIndicator size="small" color={COLORS.white} />
-                    ) : (
-                      <Save size={18} color={COLORS.white} />
-                    )}
-                  </Pressable>
-                </View>
-                <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
-                  Leave empty to keep current password
-                </Text>
-              </View>
-
-              {/* Universal PIN for All Locations */}
-              <View className="mb-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
-                <Text className="text-xs font-medium mb-2" style={{ color: COLORS.textMuted }}>Universal Staff PIN (All Locations)</Text>
-
-                {/* Current PIN Display */}
-                {washrooms.length > 0 && washrooms[0].pin_display && (
-                  <View className="flex-row items-center px-3 py-2 rounded-lg mb-2" style={{ backgroundColor: '#fef3c7' }}>
-                    <Key size={16} color="#d97706" />
-                    <Text className="text-lg font-mono font-bold ml-2" style={{ color: '#d97706' }}>
-                      Current: {washrooms[0].pin_display}
-                    </Text>
-                    <Text className="text-xs ml-2" style={{ color: '#92400e' }}>
-                      (applies to {washrooms.length} location{washrooms.length !== 1 ? 's' : ''})
-                    </Text>
-                  </View>
-                )}
-
-                {/* Update PIN Input */}
-                <View className="flex-row items-center gap-2">
-                  <WebSafeInput
-                    value={newUniversalPin}
-                    onChangeText={(text) => setNewUniversalPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
-                    placeholder="New PIN (4-5 digits)"
-                    placeholderTextColor={COLORS.textMuted}
-                    inputType="number"
-                    style={{
-                      backgroundColor: COLORS.primaryLight,
-                      fontSize: 14,
-                      color: COLORS.textDark,
-                      letterSpacing: 4,
-                    }}
-                  />
-                  <Pressable
-                    onPress={handleUpdateAllPins}
-                    disabled={isSavingUniversalPin || !newUniversalPin.trim() || washrooms.length === 0}
-                    className="px-3 py-2 rounded-lg active:opacity-70"
-                    style={{ backgroundColor: (newUniversalPin.trim() && washrooms.length > 0) ? '#d97706' : COLORS.textMuted }}
-                  >
-                    {isSavingUniversalPin ? (
-                      <ActivityIndicator size="small" color={COLORS.white} />
-                    ) : (
-                      <Save size={18} color={COLORS.white} />
-                    )}
-                  </Pressable>
-                </View>
-                <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
-                  Update PIN for All Locations - this will change the PIN for all {washrooms.length} washroom(s)
+                <Text className="text-sm" style={{ color: COLORS.textDark }}>
+                  {business.email}
                 </Text>
               </View>
 
@@ -1499,6 +1223,109 @@ export default function BusinessDetailScreen() {
                 </View>
               </View>
 
+              {/* Manager Password - Editable */}
+              <View className="mb-3">
+                <Text className="text-xs font-medium mb-1" style={{ color: COLORS.textMuted }}>Manager Password</Text>
+                <View className="flex-row items-center gap-2">
+                  <TextInput
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    placeholder="Enter new password"
+                    placeholderTextColor={COLORS.textMuted}
+                    secureTextEntry
+                    className="flex-1 rounded-lg px-3 py-2"
+                    style={{
+                      backgroundColor: COLORS.primaryLight,
+                      fontSize: 14,
+                      color: COLORS.textDark,
+                    }}
+                  />
+                  <Pressable
+                    onPress={handleSavePassword}
+                    disabled={isSavingPassword || !newPassword.trim()}
+                    className="px-3 py-2 rounded-lg active:opacity-70"
+                    style={{ backgroundColor: newPassword.trim() ? COLORS.primary : COLORS.textMuted }}
+                  >
+                    {isSavingPassword ? (
+                      <ActivityIndicator size="small" color={COLORS.white} />
+                    ) : (
+                      <Save size={18} color={COLORS.white} />
+                    )}
+                  </Pressable>
+                </View>
+                <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                  Leave empty to keep current password
+                </Text>
+              </View>
+
+              {/* Business Address - Editable */}
+              <View className="mb-3">
+                <Text className="text-xs font-medium mb-1" style={{ color: COLORS.textMuted }}>Business Address</Text>
+                <View className="flex-row items-center gap-2">
+                  <TextInput
+                    value={businessAddress}
+                    onChangeText={setBusinessAddress}
+                    placeholder="Enter business address"
+                    placeholderTextColor={COLORS.textMuted}
+                    className="flex-1 rounded-lg px-3 py-2"
+                    style={{
+                      backgroundColor: COLORS.primaryLight,
+                      fontSize: 14,
+                      color: COLORS.textDark,
+                    }}
+                  />
+                  <Pressable
+                    onPress={handleSaveBusinessAddress}
+                    disabled={isSavingAddress}
+                    className="px-3 py-2 rounded-lg active:opacity-70"
+                    style={{ backgroundColor: COLORS.primary }}
+                  >
+                    {isSavingAddress ? (
+                      <ActivityIndicator size="small" color={COLORS.white} />
+                    ) : (
+                      <Save size={18} color={COLORS.white} />
+                    )}
+                  </Pressable>
+                </View>
+                <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                  This address appears in audit reports
+                </Text>
+              </View>
+
+              {/* Universal Business PIN */}
+              {business.staff_pin_display && (
+                <View className="mb-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
+                  <Text className="text-xs font-medium mb-2" style={{ color: COLORS.textMuted }}>Universal Staff PIN (All Locations)</Text>
+                  <View className="flex-row items-center px-3 py-2 rounded-lg" style={{ backgroundColor: '#fef3c7' }}>
+                    <Key size={16} color="#d97706" />
+                    <Text className="text-lg font-mono font-bold ml-2" style={{ color: '#d97706' }}>
+                      {business.staff_pin_display}
+                    </Text>
+                  </View>
+                  <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                    This PIN works at all locations for this business
+                  </Text>
+                </View>
+              )}
+
+              {/* Washroom PINs Summary */}
+              {washrooms.length > 0 && !business.staff_pin_display && (
+                <View className="mb-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
+                  <Text className="text-xs font-medium mb-2" style={{ color: COLORS.textMuted }}>Individual Location PINs</Text>
+                  {washrooms.map((w) => (
+                    <View key={w.id} className="flex-row items-center justify-between py-1">
+                      <Text className="text-sm" style={{ color: COLORS.textDark }}>{w.room_name}</Text>
+                      <View className="flex-row items-center">
+                        <Key size={12} color={COLORS.primary} />
+                        <Text className="text-sm font-mono ml-1" style={{ color: w.pin_display ? COLORS.primary : COLORS.textMuted }}>
+                          {w.pin_display || 'Not set'}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
               {/* Created At */}
               <View className="pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
                 <Text className="text-xs" style={{ color: COLORS.textMuted }}>
@@ -1534,12 +1361,12 @@ export default function BusinessDetailScreen() {
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                   Location Name
                 </Text>
-                <WebSafeInput
+                <TextInput
                   value={newLocationName}
                   onChangeText={setNewLocationName}
                   placeholder="e.g., Lobby Restroom, Floor 2"
                   placeholderTextColor={COLORS.textMuted}
-                  inputType="text"
+                  className="rounded-xl px-4 py-3"
                   style={{
                     backgroundColor: COLORS.primaryLight,
                     fontSize: 16,
@@ -1548,56 +1375,42 @@ export default function BusinessDetailScreen() {
                 />
               </View>
 
-              {/* PIN Field - only show for first washroom, subsequent inherit from business */}
-              {washrooms.length === 0 ? (
-                <View className="mb-4">
-                  <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
-                    Staff PIN (4-5 digits)
-                  </Text>
-                  <WebSafeInput
-                    value={newLocationPin}
-                    onChangeText={(text) => setNewLocationPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
-                    placeholder="e.g., 1234 or 12345"
-                    placeholderTextColor={COLORS.textMuted}
-                    inputType="number"
-                    style={{
-                      backgroundColor: COLORS.primaryLight,
-                      fontSize: 16,
-                      color: COLORS.textDark,
-                      letterSpacing: 8,
-                    }}
-                  />
-                  <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
-                    This PIN will be used for all washroom locations
-                  </Text>
-                </View>
-              ) : (
-                <View className="mb-4 p-3 rounded-xl" style={{ backgroundColor: '#fef3c7' }}>
-                  <View className="flex-row items-center">
-                    <Key size={18} color="#d97706" />
-                    <Text className="text-sm font-semibold ml-2" style={{ color: '#92400e' }}>
-                      Staff PIN
-                    </Text>
-                  </View>
-                  <Text className="text-lg font-mono font-bold mt-1" style={{ color: '#d97706' }}>
-                    {washrooms[0]?.pin_display || business?.staff_pin_display || 'Not set'}
-                  </Text>
-                  <Text className="text-xs mt-1" style={{ color: '#92400e' }}>
-                    New location will use the same PIN as existing washrooms
-                  </Text>
-                </View>
-              )}
+              <View className="mb-4">
+                <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
+                  Staff PIN (4-5 digits)
+                </Text>
+                <TextInput
+                  value={newLocationPin}
+                  onChangeText={(text) => setNewLocationPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
+                  placeholder="e.g., 1234 or 12345"
+                  placeholderTextColor={COLORS.textMuted}
+                  keyboardType="number-pad"
+                  maxLength={5}
+                  className="rounded-xl px-4 py-3"
+                  style={{
+                    backgroundColor: COLORS.primaryLight,
+                    fontSize: 16,
+                    color: COLORS.textDark,
+                    letterSpacing: 8,
+                  }}
+                />
+                <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                  Staff will use this PIN to submit cleaning logs
+                </Text>
+              </View>
 
               <View className="mb-6">
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                   Alert Email (optional)
                 </Text>
-                <WebSafeInput
+                <TextInput
                   value={newLocationAlertEmail}
                   onChangeText={setNewLocationAlertEmail}
                   placeholder="supervisor@example.com"
                   placeholderTextColor={COLORS.textMuted}
-                  inputType="text"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  className="rounded-xl px-4 py-3"
                   style={{
                     backgroundColor: COLORS.primaryLight,
                     fontSize: 16,
@@ -1794,12 +1607,14 @@ export default function BusinessDetailScreen() {
                           <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                             Alert Email
                           </Text>
-                          <WebSafeInput
+                          <TextInput
                             value={alertEmail}
                             onChangeText={setAlertEmail}
                             placeholder="supervisor@example.com"
                             placeholderTextColor={COLORS.textMuted}
-                            inputType="text"
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            className="rounded-xl px-4 py-3"
                             style={{
                               backgroundColor: '#f1f5f9',
                               fontSize: 14,
@@ -1867,22 +1682,22 @@ export default function BusinessDetailScreen() {
                                 </View>
                                 {isEnabled && (
                                   <View className="flex-row items-center gap-2 mt-1">
-                                    <WebSafeInput
+                                    <TextInput
                                       value={startTime}
                                       onChangeText={(text) => updateScheduleTime(day.key, 'start', text)}
                                       placeholder="08:00"
                                       placeholderTextColor={COLORS.textMuted}
-                                      inputType="text"
-                                      style={{ backgroundColor: '#ffffff', fontSize: 14, color: COLORS.textDark, textAlign: 'center' }}
+                                      className="flex-1 rounded-lg px-3 py-2 text-center"
+                                      style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', fontSize: 14, color: COLORS.textDark }}
                                     />
                                     <Text style={{ color: COLORS.textMuted }}>to</Text>
-                                    <WebSafeInput
+                                    <TextInput
                                       value={endTime}
                                       onChangeText={(text) => updateScheduleTime(day.key, 'end', text)}
                                       placeholder="18:00"
                                       placeholderTextColor={COLORS.textMuted}
-                                      inputType="text"
-                                      style={{ backgroundColor: '#ffffff', fontSize: 14, color: COLORS.textDark, textAlign: 'center' }}
+                                      className="flex-1 rounded-lg px-3 py-2 text-center"
+                                      style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', fontSize: 14, color: COLORS.textDark }}
                                     />
                                   </View>
                                 )}
