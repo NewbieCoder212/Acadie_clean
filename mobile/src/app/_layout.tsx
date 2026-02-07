@@ -3,13 +3,24 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, Component, ReactNode } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { startOfflineSync, stopOfflineSync } from '@/lib/offline-queue';
+
+// KeyboardProvider requires native linking (dev build). In Expo Go / web it's unavailable — use a passthrough.
+function getKeyboardProviderWrapper(): React.ComponentType<{ children: ReactNode }> {
+  try {
+    const mod = require('react-native-keyboard-controller');
+    if (mod?.KeyboardProvider) return mod.KeyboardProvider;
+  } catch {
+    // Module not linked (Expo Go, web, or pod install not run)
+  }
+  return ({ children }: { children: ReactNode }) => <>{children}</>;
+}
+const KeyboardProviderWrapper = getKeyboardProviderWrapper();
 import { AlertTriangle, RefreshCw } from 'lucide-react-native';
 
 export const unstable_settings = {
@@ -245,22 +256,24 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
-  // Start offline sync listener on app mount
+  // Start offline sync listener on app mount - ONLY on native (causes refresh issues on web)
   useEffect(() => {
-    startOfflineSync();
-    return () => {
-      stopOfflineSync();
-    };
+    if (Platform.OS !== 'web') {
+      startOfflineSync();
+      return () => {
+        stopOfflineSync();
+      };
+    }
   }, []);
 
   return (
     <GlobalErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView style={{ flex: 1 }}>
-          <KeyboardProvider>
+          <KeyboardProviderWrapper>
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
             <RootLayoutNav colorScheme={colorScheme} />
-          </KeyboardProvider>
+          </KeyboardProviderWrapper>
         </GestureHandlerRootView>
       </QueryClientProvider>
     </GlobalErrorBoundary>
