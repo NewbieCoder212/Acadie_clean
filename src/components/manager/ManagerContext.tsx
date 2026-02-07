@@ -105,13 +105,13 @@ export interface ManagerContextType {
   handleRefreshData: () => void;
   handleLogout: () => Promise<void>;
   handleSwitchBusiness: (businessAccess: ManagerBusinessAccess) => Promise<void>;
-  handleResolveIssue: (issueId: string, action?: ResolutionAction, issue?: ReportedIssueRow) => Promise<void>;
+  handleResolveIssue: (issueId: string, action?: ResolutionAction, issue?: ReportedIssueRow, resolvedByLabel?: string) => Promise<void>;
   handleSaveAlertEmail: (locationId: string, email: string) => Promise<void>;
   handleToggleLocationActive: (location: WashroomLocation) => void;
   handleDeleteLocation: (location: WashroomLocation) => void;
   handleSaveBusinessAddress: (address: string) => Promise<void>;
-  handleSaveGlobalAlertSettings: (emails: string[], useGlobal: boolean) => Promise<void>;
-  handleSaveAlertSchedule: (schedule: AlertSchedule) => Promise<void>;
+  handleSaveGlobalAlertSettings: (emails: string[], useGlobal: boolean, showAlert?: boolean) => Promise<void>;
+  handleSaveAlertSchedule: (schedule: AlertSchedule, showAlert?: boolean) => Promise<void>;
   handleSaveStaffPin: (locationId: string, pin: string) => Promise<void>;
   handleExport: (locationId: string) => Promise<void>;
   handlePremiumExport: (locationId: string, locationName: string, startDate: Date, endDate: Date) => Promise<void>;
@@ -405,12 +405,13 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
   const handleResolveIssue = useCallback(async (
     issueId: string,
     action?: ResolutionAction,
-    issue?: ReportedIssueRow
+    issue?: ReportedIssueRow,
+    resolvedByLabel?: string
   ) => {
     setResolvingIssueId(issueId);
     try {
-      // Get the manager/business name for the log
-      const resolvedBy = currentManager?.name || currentBusiness?.name || 'Manager';
+      // Use the provided label, or fall back to manager/business name
+      const resolvedBy = resolvedByLabel || currentManager?.name || currentBusiness?.name || 'Manager';
 
       const result = await resolveReportedIssue(issueId, {
         action,
@@ -523,7 +524,7 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
     }
   }, [currentBusiness]);
 
-  const handleSaveGlobalAlertSettings = useCallback(async (emails: string[], useGlobal: boolean) => {
+  const handleSaveGlobalAlertSettings = useCallback(async (emails: string[], useGlobal: boolean, showAlert: boolean = true) => {
     if (!currentBusiness?.id) return;
     const result = await updateBusinessGlobalAlertSettings(currentBusiness.id, {
       global_alert_emails: emails,
@@ -539,13 +540,15 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
       setCurrentBusiness(updatedBusiness);
       setGlobalAlertEmails(emails);
       setUseGlobalAlerts(useGlobal);
-      Alert.alert('Success', 'Alert settings saved!\nParamètres d\'alerte enregistrés!');
+      if (showAlert) {
+        Alert.alert('Success', 'Alert settings saved!\nParamètres d\'alerte enregistrés!');
+      }
     } else {
       Alert.alert('Error', result.error || 'Failed to save alert settings');
     }
   }, [currentBusiness]);
 
-  const handleSaveAlertSchedule = useCallback(async (schedule: AlertSchedule) => {
+  const handleSaveAlertSchedule = useCallback(async (schedule: AlertSchedule, showAlert: boolean = true) => {
     if (!currentBusiness?.id) return;
     const result = await updateBusinessAlertSchedule(currentBusiness.id, schedule);
     if (result.success) {
@@ -553,7 +556,9 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem('currentBusiness', JSON.stringify(updatedBusiness));
       setCurrentBusiness(updatedBusiness);
       setAlertSchedule(schedule);
-      Alert.alert('Success', 'Business hours schedule saved!\nHoraire enregistré!');
+      if (showAlert) {
+        Alert.alert('Success', 'Business hours schedule saved!\nHoraire enregistré!');
+      }
     } else {
       Alert.alert('Error', result.error || 'Failed to save schedule');
     }

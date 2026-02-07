@@ -6,10 +6,10 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
-  TextInput,
   Alert,
   Switch,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -47,8 +47,8 @@ import * as Linking from 'expo-linking';
 import * as Clipboard from 'expo-clipboard';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { Platform } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { WebSafeInput } from '@/components/WebSafeInput';
 import { generatePDFHTML, openPDFInNewWindow } from '@/lib/pdf-template';
 import {
   BusinessRow,
@@ -422,9 +422,25 @@ export default function BusinessDetailScreen() {
       return;
     }
 
-    if (!newLocationPin || newLocationPin.length < 4 || newLocationPin.length > 5 || !/^\d{4,5}$/.test(newLocationPin)) {
-      Alert.alert('Error', 'Please enter a valid 4 or 5-digit PIN');
-      return;
+    // Determine PIN to use
+    const isFirstWashroom = washrooms.length === 0;
+    let pinToUse: string;
+
+    if (isFirstWashroom) {
+      // First washroom - require PIN entry
+      if (!newLocationPin || newLocationPin.length < 4 || newLocationPin.length > 5 || !/^\d{4,5}$/.test(newLocationPin)) {
+        Alert.alert('Error', 'Please enter a valid 4 or 5-digit PIN');
+        return;
+      }
+      pinToUse = newLocationPin;
+    } else {
+      // Subsequent washroom - inherit PIN from existing washroom
+      const existingPin = washrooms[0]?.pin_display || business?.staff_pin_display;
+      if (!existingPin) {
+        Alert.alert('Error', 'No existing PIN found. Please contact support.');
+        return;
+      }
+      pinToUse = existingPin;
     }
 
     setIsCreating(true);
@@ -434,7 +450,7 @@ export default function BusinessDetailScreen() {
         id: generateId(),
         business_name: business.name,
         room_name: newLocationName.trim(),
-        pin_code: newLocationPin,
+        pin_code: pinToUse,
         alert_email: newLocationAlertEmail.trim() || undefined,
       });
 
@@ -444,7 +460,7 @@ export default function BusinessDetailScreen() {
         setNewLocationPin('');
         setNewLocationAlertEmail('');
         loadData();
-        Alert.alert('Success', `Washroom "${newLocationName.trim()}" created with PIN: ${newLocationPin}`);
+        Alert.alert('Success', `Washroom "${newLocationName.trim()}" created with PIN: ${pinToUse}`);
       } else {
         Alert.alert('Error', result.error || 'Failed to create location');
       }
@@ -1291,12 +1307,12 @@ export default function BusinessDetailScreen() {
               <View className="mb-3">
                 <Text className="text-xs font-medium mb-1" style={{ color: COLORS.textMuted }}>Business Address</Text>
                 <View className="flex-row items-center gap-2">
-                  <TextInput
+                  <WebSafeInput
                     value={businessAddress}
                     onChangeText={setBusinessAddress}
                     placeholder="Enter business address"
                     placeholderTextColor={COLORS.textMuted}
-                    className="flex-1 rounded-lg px-3 py-2"
+                    inputType="text"
                     style={{
                       backgroundColor: COLORS.primaryLight,
                       fontSize: 14,
@@ -1325,13 +1341,12 @@ export default function BusinessDetailScreen() {
               <View className="mb-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
                 <Text className="text-xs font-medium mb-1" style={{ color: COLORS.textMuted }}>Manager Password</Text>
                 <View className="flex-row items-center gap-2">
-                  <TextInput
+                  <WebSafeInput
                     value={newPassword}
                     onChangeText={setNewPassword}
                     placeholder="Enter new password"
                     placeholderTextColor={COLORS.textMuted}
-                    secureTextEntry
-                    className="flex-1 rounded-lg px-3 py-2"
+                    inputType="text"
                     style={{
                       backgroundColor: COLORS.primaryLight,
                       fontSize: 14,
@@ -1375,14 +1390,12 @@ export default function BusinessDetailScreen() {
 
                 {/* Update PIN Input */}
                 <View className="flex-row items-center gap-2">
-                  <TextInput
+                  <WebSafeInput
                     value={newUniversalPin}
                     onChangeText={(text) => setNewUniversalPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
                     placeholder="New PIN (4-5 digits)"
                     placeholderTextColor={COLORS.textMuted}
-                    keyboardType="number-pad"
-                    maxLength={5}
-                    className="flex-1 rounded-lg px-3 py-2"
+                    inputType="number"
                     style={{
                       backgroundColor: COLORS.primaryLight,
                       fontSize: 14,
@@ -1521,12 +1534,12 @@ export default function BusinessDetailScreen() {
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                   Location Name
                 </Text>
-                <TextInput
+                <WebSafeInput
                   value={newLocationName}
                   onChangeText={setNewLocationName}
                   placeholder="e.g., Lobby Restroom, Floor 2"
                   placeholderTextColor={COLORS.textMuted}
-                  className="rounded-xl px-4 py-3"
+                  inputType="text"
                   style={{
                     backgroundColor: COLORS.primaryLight,
                     fontSize: 16,
@@ -1535,42 +1548,56 @@ export default function BusinessDetailScreen() {
                 />
               </View>
 
-              <View className="mb-4">
-                <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
-                  Staff PIN (4-5 digits)
-                </Text>
-                <TextInput
-                  value={newLocationPin}
-                  onChangeText={(text) => setNewLocationPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
-                  placeholder="e.g., 1234 or 12345"
-                  placeholderTextColor={COLORS.textMuted}
-                  keyboardType="number-pad"
-                  maxLength={5}
-                  className="rounded-xl px-4 py-3"
-                  style={{
-                    backgroundColor: COLORS.primaryLight,
-                    fontSize: 16,
-                    color: COLORS.textDark,
-                    letterSpacing: 8,
-                  }}
-                />
-                <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
-                  Staff will use this PIN to submit cleaning logs
-                </Text>
-              </View>
+              {/* PIN Field - only show for first washroom, subsequent inherit from business */}
+              {washrooms.length === 0 ? (
+                <View className="mb-4">
+                  <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
+                    Staff PIN (4-5 digits)
+                  </Text>
+                  <WebSafeInput
+                    value={newLocationPin}
+                    onChangeText={(text) => setNewLocationPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
+                    placeholder="e.g., 1234 or 12345"
+                    placeholderTextColor={COLORS.textMuted}
+                    inputType="number"
+                    style={{
+                      backgroundColor: COLORS.primaryLight,
+                      fontSize: 16,
+                      color: COLORS.textDark,
+                      letterSpacing: 8,
+                    }}
+                  />
+                  <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
+                    This PIN will be used for all washroom locations
+                  </Text>
+                </View>
+              ) : (
+                <View className="mb-4 p-3 rounded-xl" style={{ backgroundColor: '#fef3c7' }}>
+                  <View className="flex-row items-center">
+                    <Key size={18} color="#d97706" />
+                    <Text className="text-sm font-semibold ml-2" style={{ color: '#92400e' }}>
+                      Staff PIN
+                    </Text>
+                  </View>
+                  <Text className="text-lg font-mono font-bold mt-1" style={{ color: '#d97706' }}>
+                    {washrooms[0]?.pin_display || business?.staff_pin_display || 'Not set'}
+                  </Text>
+                  <Text className="text-xs mt-1" style={{ color: '#92400e' }}>
+                    New location will use the same PIN as existing washrooms
+                  </Text>
+                </View>
+              )}
 
               <View className="mb-6">
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                   Alert Email (optional)
                 </Text>
-                <TextInput
+                <WebSafeInput
                   value={newLocationAlertEmail}
                   onChangeText={setNewLocationAlertEmail}
                   placeholder="supervisor@example.com"
                   placeholderTextColor={COLORS.textMuted}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  className="rounded-xl px-4 py-3"
+                  inputType="text"
                   style={{
                     backgroundColor: COLORS.primaryLight,
                     fontSize: 16,
@@ -1767,14 +1794,12 @@ export default function BusinessDetailScreen() {
                           <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                             Alert Email
                           </Text>
-                          <TextInput
+                          <WebSafeInput
                             value={alertEmail}
                             onChangeText={setAlertEmail}
                             placeholder="supervisor@example.com"
                             placeholderTextColor={COLORS.textMuted}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            className="rounded-xl px-4 py-3"
+                            inputType="text"
                             style={{
                               backgroundColor: '#f1f5f9',
                               fontSize: 14,
@@ -1842,22 +1867,22 @@ export default function BusinessDetailScreen() {
                                 </View>
                                 {isEnabled && (
                                   <View className="flex-row items-center gap-2 mt-1">
-                                    <TextInput
+                                    <WebSafeInput
                                       value={startTime}
                                       onChangeText={(text) => updateScheduleTime(day.key, 'start', text)}
                                       placeholder="08:00"
                                       placeholderTextColor={COLORS.textMuted}
-                                      className="flex-1 rounded-lg px-3 py-2 text-center"
-                                      style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', fontSize: 14, color: COLORS.textDark }}
+                                      inputType="text"
+                                      style={{ backgroundColor: '#ffffff', fontSize: 14, color: COLORS.textDark, textAlign: 'center' }}
                                     />
                                     <Text style={{ color: COLORS.textMuted }}>to</Text>
-                                    <TextInput
+                                    <WebSafeInput
                                       value={endTime}
                                       onChangeText={(text) => updateScheduleTime(day.key, 'end', text)}
                                       placeholder="18:00"
                                       placeholderTextColor={COLORS.textMuted}
-                                      className="flex-1 rounded-lg px-3 py-2 text-center"
-                                      style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', fontSize: 14, color: COLORS.textDark }}
+                                      inputType="text"
+                                      style={{ backgroundColor: '#ffffff', fontSize: 14, color: COLORS.textDark, textAlign: 'center' }}
                                     />
                                   </View>
                                 )}
