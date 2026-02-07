@@ -15,7 +15,7 @@ import {
   MapPin, ClipboardList, Settings, LogOut, RefreshCw,
   Shield, Lock, Eye, EyeOff,
 } from 'lucide-react-native';
-import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, cancelAnimation } from 'react-native-reanimated';
+import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, cancelAnimation, withSpring } from 'react-native-reanimated';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { BusinessSwitcher } from '@/components/BusinessPicker';
@@ -23,7 +23,7 @@ import { ManagerProvider, useManagerContext } from '@/components/manager/Manager
 import { ManagerLocationsTab } from '@/components/manager/ManagerLocationsTab';
 import { ManagerActivityTab } from '@/components/manager/ManagerActivityTab';
 import { ManagerSettingsTab } from '@/components/manager/ManagerSettingsTab';
-import { BRAND_COLORS as C } from '@/lib/colors';
+import { BRAND_COLORS as C, DESIGN as D } from '@/lib/colors';
 import { useStore } from '@/lib/store';
 import { verifyPassword as verifyPasswordUtil, hashPassword as hashPasswordUtil } from '@/lib/password';
 
@@ -45,9 +45,10 @@ function TabBar({ activeTab, onTabPress, openIssueCount }: { activeTab: Dashboar
       style={{
         backgroundColor: C.white,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(0,0,0,0.06)',
-        paddingBottom: Platform.OS === 'ios' ? 20 : 8,
-        paddingTop: 6,
+        borderTopColor: 'rgba(0,0,0,0.04)',
+        paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+        paddingTop: 8,
+        ...D.shadow.md,
       }}
     >
       {TAB_CONFIG.map(tab => {
@@ -59,23 +60,48 @@ function TabBar({ activeTab, onTabPress, openIssueCount }: { activeTab: Dashboar
             onPress={() => onTabPress(tab.key)}
             className="flex-1 items-center py-1"
           >
-            <View className="relative">
-              <Icon size={22} color={isActive ? C.emeraldDark : '#94a3b8'} />
+            {/* Icon container with glow effect for active state */}
+            <View
+              className="relative rounded-xl px-5 py-1.5"
+              style={isActive ? {
+                backgroundColor: 'rgba(16, 185, 129, 0.12)',
+              } : {}}
+            >
+              <Icon
+                size={22}
+                color={isActive ? C.emeraldDark : '#94a3b8'}
+                strokeWidth={isActive ? 2.5 : 1.5}
+                fill={isActive ? C.emeraldLight : 'transparent'}
+              />
+              {/* Notification badge */}
               {tab.key === 'activity' && openIssueCount > 0 && (
                 <View
-                  className="absolute -top-1 -right-2.5 px-1 min-w-[14px] h-[14px] rounded-full items-center justify-center"
+                  className="absolute -top-1 -right-1 px-1.5 min-w-[16px] h-[16px] rounded-full items-center justify-center"
                   style={{ backgroundColor: '#ef4444' }}
                 >
-                  <Text style={{ fontSize: 9, fontWeight: '700', color: '#fff' }}>{openIssueCount}</Text>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#fff' }}>{openIssueCount}</Text>
                 </View>
               )}
             </View>
+
+            {/* Label */}
             <Text
-              className="text-[10px] mt-0.5 font-medium"
-              style={{ color: isActive ? C.emeraldDark : '#94a3b8' }}
+              className="text-[10px] mt-1"
+              style={{
+                color: isActive ? C.emeraldDark : '#94a3b8',
+                fontWeight: isActive ? '700' : '500',
+              }}
             >
               {tab.label}
             </Text>
+
+            {/* Active dot indicator */}
+            {isActive && (
+              <View
+                className="mt-1 w-1 h-1 rounded-full"
+                style={{ backgroundColor: C.actionGreen }}
+              />
+            )}
           </Pressable>
         );
       })}

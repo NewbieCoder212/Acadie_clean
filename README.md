@@ -143,6 +143,13 @@ If a manager forgets their password, the admin can update it directly in Supabas
 
 - **Unified Branding**: All screens use the AcadiaLogo component for consistent logo display (Business Login, Cleaning Page, Admin Dashboard)
 - **Consistent Brand Identity**: All screens use the same color palette (Mint background #F0FFF7, Dark Emerald #065F46 for headers, Action Green #10B981 for user buttons)
+- **Atlantic Timezone**: All timestamps throughout the app are displayed in Atlantic Time (Moncton/Dieppe). This is the single standardized timezone for the entire application.
+- **Premium Navigation Bar**: The Manager Dashboard features a refined bottom navigation bar with:
+  - Subtle glow effect (light emerald background) on the active tab icon
+  - Filled icons for active state, outline icons for inactive state
+  - Small dot indicator below the active tab
+  - Increased stroke weight for active icons
+- **Modal Time Picker**: Business hours scheduling uses a mobile-friendly modal time picker instead of keyboard entry, with quick-select options for common times
 - **Reusable Header Component**: `AppHeader` component with centered Acadia Clean IQ logo, radial gradient (#CFFFE5 to #F0FFF7), bilingual navigation labels
 - **Custom Logo**: SVG logo featuring a QR code pattern with a water drop containing a white checkmark. "Acadia" in Dark Emerald, "Clean IQ" in Action Green
 - **Lightweight Public QR Landing Page**: Optimized for fast loading in low-bandwidth environments (e.g., restrooms with poor Wi-Fi)
@@ -177,6 +184,35 @@ The Business Portal Dashboard (`/manager`) provides a comprehensive single-page 
 7. **Send to Inspector**: Collapsible section for generating PDF audit reports
 8. **Compliance Footer**: "Compliance Verified / Conformité vérifiée" badge
 9. **Powered by Footer**: "Powered by Acadia Clean" at the bottom
+
+### Manager Dashboard Settings Tab
+
+The Settings tab provides comprehensive business configuration:
+
+- **Alert Email Settings**: Manage global alert emails with toggle for using global emails across all locations
+- **Business Hours Schedule**: Configure alert hours for each day of the week (combined with alert settings in one save action)
+- **PIN for All Washrooms**: Universal PIN management card that displays the current PIN and allows updating the PIN for all locations at once
+- **Send to Inspector**: Generate PDF audit reports for NB Department of Health compliance
+
+### Manager Dashboard Activity Tab
+
+The Activity tab shows cleaning logs and issues:
+
+- **Cleaning Logs**: Recent cleaning entries with location, staff name, timestamp, and compliance status
+- **Issues**: Open issues requiring attention with resolve button
+- **Resolved Issues (30 Days)**: Collapsible section showing all resolved issues from the past 30 days with:
+  - Resolution action taken
+  - Resolved by (manager name)
+  - Resolution timestamp
+  - Issue type and location
+
+### Manager Dashboard Locations Tab
+
+The Locations tab provides location-specific management:
+
+- **Location Status Cards**: Visual status (CLEAN, ATTENTION, ISSUE, NEW, INACTIVE) with recent cleaning times
+- **Location Settings Modal**: View public page, export history PDF, manage alert email, toggle location active status
+- **Note**: PIN management has been moved to the Settings tab for centralized management
 
 ### View Public Page Feature
 
@@ -251,8 +287,16 @@ When viewing a specific business:
 
 ### PIN Display
 - **Universal Business PIN**: If set, displayed prominently in a yellow box for managers to share with staff
-- **Individual Location PINs**: Shown per-washroom, or "Use Universal PIN" if not set
+- **Global PIN Management**: Admin Dashboard shows the current PIN for all locations and provides an "Update PIN for All Locations" button to change the PIN for every washroom simultaneously
+- **Auto-Inherited PIN**: When a new washroom is created, it automatically inherits the business's universal PIN (or the first washroom's PIN if no universal PIN is set)
 - PINs are stored hashed for security, with a separate `pin_display` column for showing to authorized managers
+
+### Admin Dashboard Features
+- **Password/PIN Display**: The business password is displayed next to the email in the Business Info section for quick reference
+- **Update PIN for All Locations**: A single button to update the staff PIN across all washroom locations for the business
+- **Real-Time Updates**: Dashboard auto-refreshes every 30 seconds, with pull-to-refresh support
+- **Today's Activity**: Accurate timezone-aware counting of today's cleaning logs
+- **Open Issues Count**: Updates immediately when new issues are reported or resolved
 
 ## Data Storage
 
