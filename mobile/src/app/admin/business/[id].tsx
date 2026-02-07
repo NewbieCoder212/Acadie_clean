@@ -49,6 +49,7 @@ import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { WebSafeInput } from '@/components/WebSafeInput';
+import { TimePickerModal } from '@/components/TimePickerModal';
 import { generatePDFHTML, openPDFInNewWindow } from '@/lib/pdf-template';
 import {
   BusinessRow,
@@ -165,6 +166,12 @@ export default function BusinessDetailScreen() {
   const [businessSchedule, setBusinessSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
+  // Time picker modal state
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [timePickerDay, setTimePickerDay] = useState<string>('monday');
+  const [timePickerField, setTimePickerField] = useState<'start' | 'end'>('start');
+  const [timePickerInitial, setTimePickerInitial] = useState('08:00');
+
   // Day options for alert settings
   const ALL_DAYS = [
     { key: 'monday', label: 'Mon' },
@@ -176,14 +183,14 @@ export default function BusinessDetailScreen() {
     { key: 'sunday', label: 'Sun' },
   ];
 
-  // Timezone options
-  const TIMEZONES = [
-    { value: 'America/Halifax', label: 'Atlantic (Halifax)' },
-    { value: 'America/Toronto', label: 'Eastern (Toronto)' },
-    { value: 'America/Winnipeg', label: 'Central (Winnipeg)' },
-    { value: 'America/Edmonton', label: 'Mountain (Edmonton)' },
-    { value: 'America/Vancouver', label: 'Pacific (Vancouver)' },
-  ];
+  // Helper to format 24-hour time to 12-hour display
+  const formatTimeDisplay = (time: string) => {
+    const [h, m] = time.split(':').map(Number);
+    if (h === 0) return `12:${m.toString().padStart(2, '0')} AM`;
+    if (h < 12) return `${h}:${m.toString().padStart(2, '0')} AM`;
+    if (h === 12) return `12:${m.toString().padStart(2, '0')} PM`;
+    return `${h - 12}:${m.toString().padStart(2, '0')} PM`;
+  };
 
   // Generate public URL for washroom
   // Includes ?scan=true to track actual QR scans (not page refreshes)
@@ -220,12 +227,22 @@ export default function BusinessDetailScreen() {
     setShowAlertModal(true);
   };
 
-  // Save alert settings
+  // Save alert settings (includes schedule)
   const handleSaveAlertSettings = async () => {
     if (!alertWashroom) return;
 
     setIsSavingAlertSettings(true);
     try {
+      // Update business schedule first
+      if (business?.id) {
+        const scheduleResult = await updateBusinessAlertSchedule(business.id, businessSchedule);
+        if (!scheduleResult.success) {
+          Alert.alert('Error', scheduleResult.error || 'Failed to save schedule');
+          setIsSavingAlertSettings(false);
+          return;
+        }
+      }
+
       // Update alert settings
       const settingsResult = await updateWashroomAlertSettings(alertWashroom.id, alertSettings);
       if (!settingsResult.success) {
@@ -277,6 +294,20 @@ export default function BusinessDetailScreen() {
       const current = prev[dayKey as keyof AlertSchedule] || { enabled: true, start: '08:00', end: '18:00' };
       return { ...prev, [dayKey]: { ...current, [field]: value } };
     });
+  };
+
+  // Open time picker for a specific day/field
+  const openTimePicker = (dayKey: string, field: 'start' | 'end', currentTime: string) => {
+    setTimePickerDay(dayKey);
+    setTimePickerField(field);
+    setTimePickerInitial(currentTime);
+    setShowTimePicker(true);
+  };
+
+  // Handle time selection from picker
+  const handleTimeSelect = (time: string) => {
+    updateScheduleTime(timePickerDay, timePickerField, time);
+    setShowTimePicker(false);
   };
 
   const handleSaveBusinessSchedule = async () => {
@@ -1876,76 +1907,35 @@ export default function BusinessDetailScreen() {
                                 </View>
                                 {isEnabled && (
                                   <View className="flex-row items-center gap-2 mt-1">
-                                    <WebSafeInput
-                                      value={startTime}
-                                      onChangeText={(text) => updateScheduleTime(day.key, 'start', text)}
-                                      placeholder="08:00"
-                                      placeholderTextColor={COLORS.textMuted}
-                                      className="flex-1 rounded-lg px-3 py-2 text-center"
-                                      style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', fontSize: 14, color: COLORS.textDark, textAlign: 'center' }}
-                                    />
+                                    <Pressable
+                                      onPress={() => openTimePicker(day.key, 'start', startTime)}
+                                      className="flex-1 rounded-lg px-3 py-2 flex-row items-center justify-center"
+                                      style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0' }}
+                                    >
+                                      <Clock size={14} color="#d97706" />
+                                      <Text className="ml-1 text-sm font-medium" style={{ color: COLORS.textDark }}>
+                                        {formatTimeDisplay(startTime)}
+                                      </Text>
+                                    </Pressable>
                                     <Text style={{ color: COLORS.textMuted }}>to</Text>
-                                    <WebSafeInput
-                                      value={endTime}
-                                      onChangeText={(text) => updateScheduleTime(day.key, 'end', text)}
-                                      placeholder="18:00"
-                                      placeholderTextColor={COLORS.textMuted}
-                                      className="flex-1 rounded-lg px-3 py-2 text-center"
-                                      style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', fontSize: 14, color: COLORS.textDark, textAlign: 'center' }}
-                                    />
+                                    <Pressable
+                                      onPress={() => openTimePicker(day.key, 'end', endTime)}
+                                      className="flex-1 rounded-lg px-3 py-2 flex-row items-center justify-center"
+                                      style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0' }}
+                                    >
+                                      <Clock size={14} color="#d97706" />
+                                      <Text className="ml-1 text-sm font-medium" style={{ color: COLORS.textDark }}>
+                                        {formatTimeDisplay(endTime)}
+                                      </Text>
+                                    </Pressable>
                                   </View>
                                 )}
                               </View>
                             );
                           })}
                           <Text className="text-xs mt-1" style={{ color: COLORS.textMuted }}>
-                            Use 24-hour format (e.g., 08:00, 18:00). Applies to all washrooms in this business.
+                            All times in Atlantic timezone. Applies to all washrooms in this business.
                           </Text>
-
-                          {/* Save Schedule Button */}
-                          <Pressable
-                            onPress={handleSaveBusinessSchedule}
-                            disabled={isSavingSchedule}
-                            className="rounded-xl py-3 items-center active:opacity-80 mt-3"
-                            style={{ backgroundColor: isSavingSchedule ? '#94a3b8' : '#d97706' }}
-                          >
-                            {isSavingSchedule ? (
-                              <ActivityIndicator color={COLORS.white} />
-                            ) : (
-                              <View className="flex-row items-center">
-                                <Save size={16} color={COLORS.white} />
-                                <Text className="text-sm font-bold ml-2" style={{ color: COLORS.white }}>
-                                  Save Schedule
-                                </Text>
-                              </View>
-                            )}
-                          </Pressable>
-                        </View>
-
-                        {/* Timezone */}
-                        <View className="mb-4">
-                          <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
-                            Timezone
-                          </Text>
-                          <View className="gap-1">
-                            {TIMEZONES.map((tz) => (
-                              <Pressable
-                                key={tz.value}
-                                onPress={() => setAlertSettings(prev => ({ ...prev, timezone: tz.value }))}
-                                className="flex-row items-center px-3 py-2 rounded-lg"
-                                style={{
-                                  backgroundColor: alertSettings.timezone === tz.value ? '#d97706' : '#f1f5f9',
-                                }}
-                              >
-                                <Text
-                                  className="text-sm"
-                                  style={{ color: alertSettings.timezone === tz.value ? '#ffffff' : '#64748b' }}
-                                >
-                                  {tz.label}
-                                </Text>
-                              </Pressable>
-                            ))}
-                          </View>
                         </View>
                       </>
                     )}
@@ -1978,6 +1968,16 @@ export default function BusinessDetailScreen() {
             </ScrollView>
           </View>
         </Modal>
+
+        {/* Time Picker Modal */}
+        <TimePickerModal
+          visible={showTimePicker}
+          onClose={() => setShowTimePicker(false)}
+          onSelect={handleTimeSelect}
+          initialTime={timePickerInitial}
+          title={timePickerField === 'start' ? 'Start Time' : 'End Time'}
+          titleFr={timePickerField === 'start' ? 'Heure de début' : 'Heure de fin'}
+        />
       </SafeAreaView>
     </LinearGradient>
   );
