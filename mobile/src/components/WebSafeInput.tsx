@@ -1,5 +1,5 @@
 import { Platform, TextInput, TextInputProps } from 'react-native';
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect } from 'react';
 
 interface WebSafeInputProps extends Omit<TextInputProps, 'onChange'> {
   value: string;
@@ -15,6 +15,8 @@ const SYNC_DEBOUNCE_MS = 80;
  * page refresh issues with React Native Web's TextInput.
  * Uses uncontrolled input pattern on web to avoid React re-renders.
  * Debounces prop→DOM sync so stale parent re-renders don't clear the input on every keystroke.
+ * Uses stable defaultValue (set once on mount) so React never updates the input element on re-render,
+ * which prevents focus/keyboard loss after each keystroke.
  */
 export function WebSafeInput({
   value,
@@ -29,14 +31,14 @@ export function WebSafeInput({
   const inputRef = useRef<HTMLInputElement>(null);
   const lastValueRef = useRef(value);
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Handle input changes using native event listener (avoids React synthetic events)
-  const handleInput = useCallback((e: Event) => {
-    const target = e.target as HTMLInputElement;
-    const newValue = target.value;
-    lastValueRef.current = newValue;
-    onChangeText(newValue);
-  }, [onChangeText]);
+  /** Keep latest onChangeText in a ref so the single event listener always calls it (avoids re-subscribing on every parent re-render). */
+  const onChangeTextRef = useRef(onChangeText);
+  onChangeTextRef.current = onChangeText;
+  /** Web only: initial defaultValue so React never updates it after mount (prevents focus/keyboard loss on re-render). */
+  const initialDefaultValueRef = useRef<string | null>(null);
+  if (initialDefaultValueRef.current === null) {
+    initialDefaultValueRef.current = value || '';
+  }
 
   // Sync value to input only when it changes externally (e.g. form reset).
   // Debounce so we don't overwrite the DOM with stale value during rapid parent re-renders
@@ -55,15 +57,23 @@ export function WebSafeInput({
     };
   }, [value]);
 
-  // Set up native event listener once ref is available (after mount)
+  // Single event listener for the lifetime of the input — uses onChangeTextRef so we never re-run this effect.
+  // Prevents removeEventListener/addEventListener churn on every parent re-render (which can cause focus loss).
   useEffect(() => {
     const input = inputRef.current;
     if (!input) return;
+    const handleInput = (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      const newValue = target.value;
+      lastValueRef.current = newValue;
+      onChangeTextRef.current(newValue);
+    };
     input.addEventListener('input', handleInput);
     return () => input.removeEventListener('input', handleInput);
-  }, [handleInput]);
+  }, []);
 
-  // On web, use native HTML input with uncontrolled pattern
+  // On web, use native HTML input with uncontrolled pattern.
+  // defaultValue is set ONCE from initial value so React never updates this prop on re-render (prevents focus loss).
   if (Platform.OS === 'web') {
     // Flatten style if it's an array
     const flatStyle = Array.isArray(style)
@@ -76,7 +86,7 @@ export function WebSafeInput({
         ref={inputRef}
         type={inputType === 'password' ? 'password' : 'text'}
         inputMode={inputType === 'number' ? 'numeric' : undefined}
-        defaultValue={value || ''}
+        defaultValue={initialDefaultValueRef.current}
         placeholder={placeholder}
         maxLength={maxLength}
         autoComplete="off"

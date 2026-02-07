@@ -924,6 +924,8 @@ export default function BusinessDetailScreen() {
         <ScrollView
           className="flex-1"
           contentContainerStyle={{ padding: 16 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
@@ -1749,6 +1751,8 @@ export default function BusinessDetailScreen() {
             <ScrollView
               contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 16 }}
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="none"
             >
               <View
                 className="w-full max-w-sm rounded-3xl p-5"
