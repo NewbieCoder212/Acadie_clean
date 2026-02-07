@@ -7,10 +7,14 @@ interface WebSafeInputProps extends Omit<TextInputProps, 'onChange'> {
   inputType?: 'text' | 'password' | 'number';
 }
 
+/** Debounce ms for syncing value prop to DOM — avoids clearing input on every keystroke when parent re-renders with stale value. */
+const SYNC_DEBOUNCE_MS = 80;
+
 /**
  * A TextInput wrapper that uses native HTML input on web to prevent
  * page refresh issues with React Native Web's TextInput.
  * Uses uncontrolled input pattern on web to avoid React re-renders.
+ * Debounces prop→DOM sync so stale parent re-renders don't clear the input on every keystroke.
  */
 export function WebSafeInput({
   value,
@@ -24,6 +28,7 @@ export function WebSafeInput({
 }: WebSafeInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const lastValueRef = useRef(value);
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Handle input changes using native event listener (avoids React synthetic events)
   const handleInput = useCallback((e: Event) => {
@@ -33,12 +38,21 @@ export function WebSafeInput({
     onChangeText(newValue);
   }, [onChangeText]);
 
-  // Sync value to input only when it changes externally (not from typing)
+  // Sync value to input only when it changes externally (e.g. form reset).
+  // Debounce so we don't overwrite the DOM with stale value during rapid parent re-renders
+  // (which would clear the input on every keystroke).
   useEffect(() => {
-    if (inputRef.current && value !== lastValueRef.current) {
-      inputRef.current.value = value || '';
-      lastValueRef.current = value;
-    }
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    syncTimeoutRef.current = setTimeout(() => {
+      syncTimeoutRef.current = null;
+      if (inputRef.current && value !== lastValueRef.current) {
+        inputRef.current.value = value || '';
+        lastValueRef.current = value;
+      }
+    }, SYNC_DEBOUNCE_MS);
+    return () => {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    };
   }, [value]);
 
   // Set up native event listener once ref is available (after mount)
@@ -72,9 +86,10 @@ export function WebSafeInput({
         data-form-type="other"
         data-lpignore="true"
         onKeyDown={(e) => {
-          // Prevent form submission on Enter
+          // Prevent form submission and any default Enter behavior (e.g. in PWA)
           if (e.key === 'Enter') {
             e.preventDefault();
+            e.stopPropagation();
           }
         }}
         style={{
