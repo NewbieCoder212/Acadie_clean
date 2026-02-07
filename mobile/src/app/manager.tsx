@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -153,8 +153,21 @@ function ManagerDashboardContent() {
   const isBusinessAuthenticated = !!ctx.currentBusiness;
   const showDashboard = isAuthenticated || isBusinessAuthenticated;
 
+  // When not authenticated, redirect to the manager login page so /manager is not a dead link
+  useEffect(() => {
+    if (!showDashboard) {
+      router.replace('/manage-acadia9511');
+    }
+  }, [showDashboard, router]);
+
   if (!showDashboard) {
-    return <LegacyPasswordScreen />;
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center" style={{ backgroundColor: C.mintBackground }}>
+        <AcadiaLogo size={80} />
+        <ActivityIndicator size="large" color={C.actionGreen} style={{ marginTop: 24 }} />
+        <Text className="mt-3 text-sm" style={{ color: C.textMuted }}>Redirecting to login...</Text>
+      </SafeAreaView>
+    );
   }
 
   return (

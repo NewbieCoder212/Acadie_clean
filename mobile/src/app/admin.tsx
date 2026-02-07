@@ -6,7 +6,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
-  TextInput,
   Alert,
   Switch,
   Platform,
@@ -64,6 +63,7 @@ import {
   extendTrial,
 } from '@/lib/supabase';
 import { AcadiaLogo } from '@/components/AcadiaLogo';
+import { WebSafeInput } from '@/components/WebSafeInput';
 import { sendTrialExpiryReminderToAdmin } from '@/lib/email';
 
 const COLORS = {
@@ -1201,7 +1201,7 @@ export default function AdminDashboardScreen() {
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                   Business Name
                 </Text>
-                <TextInput
+                <WebSafeInput
                   value={newBusinessName}
                   onChangeText={setNewBusinessName}
                   placeholder="e.g., Hotel Marais"
@@ -1219,13 +1219,11 @@ export default function AdminDashboardScreen() {
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                   Manager Email
                 </Text>
-                <TextInput
+                <WebSafeInput
                   value={newBusinessEmail}
                   onChangeText={setNewBusinessEmail}
                   placeholder="manager@business.com"
                   placeholderTextColor={COLORS.textMuted}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
                   className="rounded-xl px-4 py-3"
                   style={{
                     backgroundColor: COLORS.primaryLight,
@@ -1239,11 +1237,12 @@ export default function AdminDashboardScreen() {
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                   Password
                 </Text>
-                <TextInput
+                <WebSafeInput
                   value={newBusinessPassword}
                   onChangeText={setNewBusinessPassword}
                   placeholder="Create password"
                   placeholderTextColor={COLORS.textMuted}
+                  inputType="password"
                   className="rounded-xl px-4 py-3"
                   style={{
                     backgroundColor: COLORS.primaryLight,
@@ -1260,7 +1259,7 @@ export default function AdminDashboardScreen() {
                 <Text className="text-xs mb-1" style={{ color: COLORS.textMuted }}>
                   Adresse de l'entreprise (optional)
                 </Text>
-                <TextInput
+                <WebSafeInput
                   value={newBusinessAddress}
                   onChangeText={setNewBusinessAddress}
                   placeholder="Enter business address"

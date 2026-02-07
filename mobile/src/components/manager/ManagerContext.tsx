@@ -264,7 +264,7 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
           if (!validation.valid) {
             await AsyncStorage.multiRemove(['currentManager', 'selectedBusinessAccess', 'managerBusinesses', 'currentBusiness', 'sessionTimestamp']);
             Alert.alert('Session Expired', validation.error || 'Please log in again.');
-            router.replace('/login');
+            router.replace('/manage-acadia9511');
             return;
           }
           setCurrentManager(validation.manager || manager);
@@ -289,7 +289,7 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
             if (!businessValidation.valid) {
               await AsyncStorage.multiRemove(['currentBusiness', 'currentManager', 'selectedBusinessAccess', 'managerBusinesses', 'sessionTimestamp']);
               Alert.alert('Account Deactivated', businessValidation.error || 'Please contact support.');
-              router.replace('/login');
+              router.replace('/manage-acadia9511');
               return;
             }
             const refreshedBusiness = businessValidation.business!;

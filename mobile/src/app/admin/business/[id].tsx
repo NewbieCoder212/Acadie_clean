@@ -6,7 +6,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
-  TextInput,
   Alert,
   Switch,
   RefreshControl,
@@ -49,6 +48,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { WebSafeInput } from '@/components/WebSafeInput';
 import { generatePDFHTML, openPDFInNewWindow } from '@/lib/pdf-template';
 import {
   BusinessRow,
@@ -1307,7 +1307,7 @@ export default function BusinessDetailScreen() {
               <View className="mb-3">
                 <Text className="text-xs font-medium mb-1" style={{ color: COLORS.textMuted }}>Business Address</Text>
                 <View className="flex-row items-center gap-2">
-                  <TextInput
+                  <WebSafeInput
                     value={businessAddress}
                     onChangeText={setBusinessAddress}
                     placeholder="Enter business address"
@@ -1341,12 +1341,12 @@ export default function BusinessDetailScreen() {
               <View className="mb-3 pt-3" style={{ borderTopWidth: 1, borderTopColor: COLORS.glassBorder }}>
                 <Text className="text-xs font-medium mb-1" style={{ color: COLORS.textMuted }}>Manager Password</Text>
                 <View className="flex-row items-center gap-2">
-                  <TextInput
+                  <WebSafeInput
                     value={newPassword}
                     onChangeText={setNewPassword}
                     placeholder="Enter new password"
                     placeholderTextColor={COLORS.textMuted}
-                    secureTextEntry
+                    inputType="password"
                     className="flex-1 rounded-lg px-3 py-2"
                     style={{
                       backgroundColor: COLORS.primaryLight,
@@ -1391,12 +1391,12 @@ export default function BusinessDetailScreen() {
 
                 {/* Update PIN Input */}
                 <View className="flex-row items-center gap-2">
-                  <TextInput
+                  <WebSafeInput
                     value={newUniversalPin}
                     onChangeText={(text) => setNewUniversalPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
                     placeholder="New PIN (4-5 digits)"
                     placeholderTextColor={COLORS.textMuted}
-                    keyboardType="number-pad"
+                    inputType="number"
                     maxLength={5}
                     className="flex-1 rounded-lg px-3 py-2"
                     style={{
@@ -1537,7 +1537,7 @@ export default function BusinessDetailScreen() {
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                   Location Name
                 </Text>
-                <TextInput
+                <WebSafeInput
                   value={newLocationName}
                   onChangeText={setNewLocationName}
                   placeholder="e.g., Lobby Restroom, Floor 2"
@@ -1557,12 +1557,12 @@ export default function BusinessDetailScreen() {
                   <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                     Staff PIN (4-5 digits)
                   </Text>
-                  <TextInput
+                  <WebSafeInput
                     value={newLocationPin}
                     onChangeText={(text) => setNewLocationPin(text.replace(/[^0-9]/g, '').slice(0, 5))}
                     placeholder="e.g., 1234 or 12345"
                     placeholderTextColor={COLORS.textMuted}
-                    keyboardType="number-pad"
+                    inputType="number"
                     maxLength={5}
                     className="rounded-xl px-4 py-3"
                     style={{
@@ -1597,13 +1597,11 @@ export default function BusinessDetailScreen() {
                 <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                   Alert Email (optional)
                 </Text>
-                <TextInput
+                <WebSafeInput
                   value={newLocationAlertEmail}
                   onChangeText={setNewLocationAlertEmail}
                   placeholder="supervisor@example.com"
                   placeholderTextColor={COLORS.textMuted}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
                   className="rounded-xl px-4 py-3"
                   style={{
                     backgroundColor: COLORS.primaryLight,
@@ -1801,13 +1799,11 @@ export default function BusinessDetailScreen() {
                           <Text className="text-sm font-semibold mb-2" style={{ color: COLORS.textDark }}>
                             Alert Email
                           </Text>
-                          <TextInput
+                          <WebSafeInput
                             value={alertEmail}
                             onChangeText={setAlertEmail}
                             placeholder="supervisor@example.com"
                             placeholderTextColor={COLORS.textMuted}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
                             className="rounded-xl px-4 py-3"
                             style={{
                               backgroundColor: '#f1f5f9',
@@ -1876,22 +1872,22 @@ export default function BusinessDetailScreen() {
                                 </View>
                                 {isEnabled && (
                                   <View className="flex-row items-center gap-2 mt-1">
-                                    <TextInput
+                                    <WebSafeInput
                                       value={startTime}
                                       onChangeText={(text) => updateScheduleTime(day.key, 'start', text)}
                                       placeholder="08:00"
                                       placeholderTextColor={COLORS.textMuted}
                                       className="flex-1 rounded-lg px-3 py-2 text-center"
-                                      style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', fontSize: 14, color: COLORS.textDark }}
+                                      style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', fontSize: 14, color: COLORS.textDark, textAlign: 'center' }}
                                     />
                                     <Text style={{ color: COLORS.textMuted }}>to</Text>
-                                    <TextInput
+                                    <WebSafeInput
                                       value={endTime}
                                       onChangeText={(text) => updateScheduleTime(day.key, 'end', text)}
                                       placeholder="18:00"
                                       placeholderTextColor={COLORS.textMuted}
                                       className="flex-1 rounded-lg px-3 py-2 text-center"
-                                      style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', fontSize: 14, color: COLORS.textDark }}
+                                      style={{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', fontSize: 14, color: COLORS.textDark, textAlign: 'center' }}
                                     />
                                   </View>
                                 )}

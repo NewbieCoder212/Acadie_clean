@@ -201,8 +201,8 @@ async function sendAlertEmail(washroom: Washroom, hoursSince: number): Promise<b
     </p>
 
     <div style="text-align: center; margin-top: 30px;">
-      <a href="https://app.acadiacleaniq.ca/manager" style="display: inline-block; background: #2563eb; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600;">
-        View Manager Dashboard
+      <a href="https://app.acadiacleaniq.ca/manage-acadia9511" style="display: inline-block; background: #2563eb; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+        Log in to Manager Dashboard
       </a>
     </div>
 
@@ -228,7 +228,7 @@ Last Cleaned: ${washroom.last_cleaned ? new Date(washroom.last_cleaned).toLocale
 Time Overdue: ${hoursSince} hours since last cleaning
 Alert Threshold: ${washroom.alert_threshold_hours} hours
 
-View Manager Dashboard: https://app.acadiacleaniq.ca/manager
+Log in to Manager Dashboard: https://app.acadiacleaniq.ca/manage-acadia9511
   `;
 
   try {

@@ -41,15 +41,12 @@ export function WebSafeInput({
     }
   }, [value]);
 
-  // Set up native event listener on mount
+  // Set up native event listener once ref is available (after mount)
   useEffect(() => {
     const input = inputRef.current;
-    if (input) {
-      input.addEventListener('input', handleInput);
-      return () => {
-        input.removeEventListener('input', handleInput);
-      };
-    }
+    if (!input) return;
+    input.addEventListener('input', handleInput);
+    return () => input.removeEventListener('input', handleInput);
   }, [handleInput]);
 
   // On web, use native HTML input with uncontrolled pattern
@@ -58,6 +55,7 @@ export function WebSafeInput({
     const flatStyle = Array.isArray(style)
       ? Object.assign({}, ...style)
       : (style || {}) as Record<string, unknown>;
+    const maxLength = rest.maxLength;
 
     return (
       <input
@@ -66,6 +64,7 @@ export function WebSafeInput({
         inputMode={inputType === 'number' ? 'numeric' : undefined}
         defaultValue={value || ''}
         placeholder={placeholder}
+        maxLength={maxLength}
         autoComplete="off"
         autoCorrect="off"
         autoCapitalize="off"
