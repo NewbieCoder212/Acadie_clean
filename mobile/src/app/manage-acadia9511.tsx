@@ -155,7 +155,23 @@ export default function SecureManagerLoginScreen() {
         // Success - clear rate limit and navigate
         await clearRateLimitData();
         await AsyncStorage.setItem('currentBusiness', JSON.stringify(result.data));
-        router.replace('/manager');
+
+        // Navigate to manager - use setTimeout to ensure navigation happens after state updates
+        // This fixes "router is not defined" errors on web/iOS
+        setTimeout(() => {
+          try {
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              window.location.href = '/manager';
+            } else {
+              router.replace('/manager');
+            }
+          } catch (navError) {
+            console.error('[Manager Login] Navigation error:', navError);
+            if (typeof window !== 'undefined') {
+              window.location.href = '/manager';
+            }
+          }
+        }, 100);
       } else {
         await recordFailedAttempt();
         setError(result.error || 'Login failed / Échec de connexion');

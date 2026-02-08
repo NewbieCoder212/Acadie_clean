@@ -114,6 +114,7 @@ function TabBar({ activeTab, onTabPress, openIssueCount }: { activeTab: Dashboar
 // ============================
 function ManagerDashboardContent() {
   const ctx = useManagerContext();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<DashboardTab>('locations');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const isAuthenticated = useStore((s) => s.isManagerAuthenticated);
@@ -123,6 +124,16 @@ function ManagerDashboardContent() {
   const animatedRefreshStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }],
   }));
+
+  const isBusinessAuthenticated = !!ctx.currentBusiness;
+  const showDashboard = isAuthenticated || isBusinessAuthenticated;
+
+  // When not authenticated, redirect to the manager login page so /manager is not a dead link
+  useEffect(() => {
+    if (!ctx.isCheckingAuth && !showDashboard) {
+      router.replace('/manage-acadia9511');
+    }
+  }, [ctx.isCheckingAuth, showDashboard, router]);
 
   const handleRefresh = async () => {
     if (isRefreshing) return;
@@ -149,16 +160,6 @@ function ManagerDashboardContent() {
       </SafeAreaView>
     );
   }
-
-  const isBusinessAuthenticated = !!ctx.currentBusiness;
-  const showDashboard = isAuthenticated || isBusinessAuthenticated;
-
-  // When not authenticated, redirect to the manager login page so /manager is not a dead link
-  useEffect(() => {
-    if (!showDashboard) {
-      router.replace('/manage-acadia9511');
-    }
-  }, [showDashboard, router]);
 
   if (!showDashboard) {
     return (

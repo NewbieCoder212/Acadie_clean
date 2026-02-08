@@ -2,6 +2,29 @@
 
 A mobile-first washroom cleaning compliance tracking app for business owners and their staff.
 
+**Live Site**: https://app.acadiacleaniq.ca
+
+## Deployment (Vibecode -> GitHub -> Vercel)
+
+### IMPORTANT: Vercel Root Directory
+The Vercel project **must** have Root Directory set to `mobile`:
+- Vercel Dashboard > Project > Settings > General > Root Directory = `mobile`
+
+### Deployment Workflow
+1. Make changes in Vibecode
+2. Download zip from Vibecode
+3. Extract and copy files to local GitHub repo
+4. In GitHub Desktop: commit and push to main
+5. Vercel auto-deploys from GitHub
+
+### Project Structure
+```
+/
+├── mobile/      <- Frontend (Expo web) - VERCEL DEPLOYS FROM HERE
+├── backend/     <- Backend API (Hono/Bun)
+└── changelog.txt
+```
+
 ## Brand Colors
 
 The app uses a consistent color palette across all screens:

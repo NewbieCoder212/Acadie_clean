@@ -18,7 +18,9 @@ function getKeyboardProviderWrapper(): React.ComponentType<{ children: ReactNode
   } catch {
     // Module not linked (Expo Go, web, or pod install not run)
   }
-  return ({ children }: { children: ReactNode }) => <>{children}</>;
+  const FallbackKeyboardProvider = ({ children }: { children: ReactNode }) => <>{children}</>;
+  FallbackKeyboardProvider.displayName = 'FallbackKeyboardProvider';
+  return FallbackKeyboardProvider;
 }
 const KeyboardProviderWrapper = getKeyboardProviderWrapper();
 import { AlertTriangle, RefreshCw } from 'lucide-react-native';
